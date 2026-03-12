@@ -51,6 +51,7 @@ export async function completeCheckout(
       { id: validatedData.cartId },
       {
         provider_id: validatedData.paymentMethod,
+        customerEmail: validatedData.email,
       }
     )
 
@@ -73,6 +74,24 @@ export async function completeCheckout(
       return {
         success: false,
         error: error.message || "Failed to create order. Please try again.",
+      }
+    }
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (user) {
+      const { error: profileEmailError } = await supabase
+        .from("profiles")
+        .update({ contact_email: validatedData.email.trim() })
+        .eq("id", user.id)
+
+      if (profileEmailError) {
+        console.warn(
+          "Failed to persist checkout email to profile contact email:",
+          profileEmailError
+        )
       }
     }
 

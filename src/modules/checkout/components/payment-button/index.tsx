@@ -116,7 +116,7 @@ const StripePaymentButton = ({
               card: card,
               billing_details: {
                 name: `${state.shippingAddress.first_name} ${state.shippingAddress.last_name}`,
-                email: cart.email || undefined,
+                email: state.email || undefined,
                 phone: state.shippingAddress.phone || undefined,
                 address: {
                   line1: state.shippingAddress.address_1,

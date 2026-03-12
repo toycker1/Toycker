@@ -10,13 +10,16 @@ import { convertToLocale } from "@lib/util/money"
 import { Package, ArrowRight, ShoppingBag } from "lucide-react"
 import { cn } from "@lib/util/cn"
 import { useCartStore } from "@modules/cart/context/cart-store-context"
+import { getCustomerFacingEmail } from "@/lib/util/customer-email"
 
 type SummaryProps = {
   cart: Cart
 }
 
 function getCheckoutStep(cart: Cart) {
-  if (!cart?.shipping_address?.address_1 || !cart.email) {
+  const checkoutEmail = getCustomerFacingEmail(cart?.email)
+
+  if (!cart?.shipping_address?.address_1 || !checkoutEmail) {
     return "address"
   } else if (!cart.shipping_method) {
     return "delivery"

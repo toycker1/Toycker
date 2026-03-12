@@ -100,9 +100,7 @@ export async function cancelUserOrder(orderId: string) {
     "cancelled",
     "Order Cancelled",
     "Customer cancelled the order.",
-    "customer",
-    {},
-    user.email || (user.user_metadata as any)?.full_name || "Customer"
+    "customer"
   )
 
   return { success: true }

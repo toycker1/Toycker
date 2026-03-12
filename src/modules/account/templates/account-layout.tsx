@@ -26,9 +26,15 @@ const AccountLayout: React.FC<AccountLayoutProps> = ({
                 Account
               </p>
               <h1 className="text-2xl font-semibold">Welcome back, {firstName}</h1>
-              <p className="text-sm text-gray-500">
-                Signed in as <span className="font-semibold text-gray-900">{email}</span>
-              </p>
+              {email ? (
+                <p className="text-sm text-gray-500">
+                  Signed in as <span className="font-semibold text-gray-900">{email}</span>
+                </p>
+              ) : (
+                <p className="text-sm text-gray-500">
+                  Signed in with your WhatsApp number.
+                </p>
+              )}
             </div>
           </div>
         )}

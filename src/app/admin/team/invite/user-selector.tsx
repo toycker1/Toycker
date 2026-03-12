@@ -5,11 +5,13 @@ import { getRegisteredUsers } from "@/lib/data/admin"
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline"
 
 type User = {
-    id: string
-    email: string
-    first_name: string | null
-    last_name: string | null
-    created_at: string
+  id: string
+  email: string | null
+  phone: string | null
+  first_name: string | null
+  last_name: string | null
+  created_at: string
+  display_contact: string
 }
 
 export default function SearchableUserSelect() {
@@ -95,13 +97,13 @@ export default function SearchableUserSelect() {
                 <div className="flex items-center justify-between p-3 border border-indigo-200 bg-indigo-50 rounded-lg">
                     <div className="flex items-center gap-3">
                         <div className="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold">
-                            {(selectedUser.first_name?.[0] || selectedUser.email[0]).toUpperCase()}
+                            {(selectedUser.first_name?.[0] || selectedUser.display_contact[0]).toUpperCase()}
                         </div>
                         <div>
                             <p className="text-sm font-semibold text-gray-900">
-                                {selectedUser.first_name ? `${selectedUser.first_name} ${selectedUser.last_name || ''}` : selectedUser.email.split('@')[0]}
+                                {selectedUser.first_name ? `${selectedUser.first_name} ${selectedUser.last_name || ''}` : selectedUser.display_contact}
                             </p>
-                            <p className="text-xs text-gray-500">{selectedUser.email}</p>
+                            <p className="text-xs text-gray-500">{selectedUser.display_contact}</p>
                         </div>
                     </div>
                     <button
@@ -120,7 +122,7 @@ export default function SearchableUserSelect() {
                     <input
                         type="text"
                         className="w-full rounded-lg border border-gray-300 pl-10 pr-4 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-                        placeholder="Search by name or email..."
+                        placeholder="Search by name, email, or phone..."
                         value={query}
                         onChange={(e) => {
                             setQuery(e.target.value)
@@ -147,13 +149,13 @@ export default function SearchableUserSelect() {
                                 onClick={() => handleSelect(user)}
                             >
                                 <div className="h-8 w-8 flex-shrink-0 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-xs font-bold">
-                                    {(user.first_name?.[0] || user.email[0]).toUpperCase()}
+                                    {(user.first_name?.[0] || user.display_contact[0]).toUpperCase()}
                                 </div>
                                 <div>
                                     <p className="text-sm font-medium text-gray-900 truncate">
                                         {user.first_name ? `${user.first_name} ${user.last_name || ''}` : 'No Name'}
                                     </p>
-                                    <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                                    <p className="text-xs text-gray-500 truncate">{user.display_contact}</p>
                                 </div>
                             </div>
                         ))

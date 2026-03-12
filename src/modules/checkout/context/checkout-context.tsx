@@ -7,6 +7,7 @@ import {
   Address,
 } from "../hooks/useCheckoutState"
 import { Cart } from "@/lib/supabase/types"
+import { getCustomerFacingEmail } from "@/lib/util/customer-email"
 
 import { useCartStore } from "@modules/cart/context/cart-store-context"
 
@@ -39,7 +40,7 @@ export const CheckoutProvider = ({
   // Initialize with cart data if available
   const initialData = cart
     ? {
-        email: cart.email || null,
+        email: getCustomerFacingEmail(cart.email),
         shippingAddress: cart.shipping_address
           ? {
               first_name: cart.shipping_address.first_name || "",
