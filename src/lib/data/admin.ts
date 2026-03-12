@@ -23,6 +23,37 @@ import { revalidatePath, revalidateTag } from "next/cache"
 import { redirect } from "next/navigation"
 import { requirePermission } from "@/lib/permissions/server"
 import { PERMISSIONS } from "@/lib/permissions"
+import { getCustomerFacingEmail } from "@/lib/util/customer-email"
+
+type EmailBackedRow = {
+  email: string | null
+  contact_email?: string | null
+}
+
+type CustomerProfileRow = Omit<CustomerProfile, "email"> &
+  EmailBackedRow & {
+    role?: string | null
+    is_club_member?: boolean | null
+  }
+
+export interface RegisteredUserOption {
+  id: string
+  email: string | null
+  phone: string | null
+  first_name: string | null
+  last_name: string | null
+  created_at: string
+  display_contact: string
+}
+
+function mapEmailBackedRow<T extends EmailBackedRow>(
+  row: T
+): Omit<T, "email"> & { email: string } {
+  return {
+    ...row,
+    email: getCustomerFacingEmail(row.contact_email, row.email) || "",
+  }
+}
 
 // --- Auth Check ---
 export async function ensureAdmin() {
@@ -1827,7 +1858,7 @@ export async function getAdminCustomers(
 
   if (search && search.trim()) {
     countQuery = countQuery.or(
-      `first_name.ilike.%${search}%,last_name.ilike.%${search}%,email.ilike.%${search}%`
+      `first_name.ilike.%${search}%,last_name.ilike.%${search}%,contact_email.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`
     )
   }
 
@@ -1856,15 +1887,17 @@ export async function getAdminCustomers(
 
   if (search && search.trim()) {
     query = query.or(
-      `first_name.ilike.%${search}%,last_name.ilike.%${search}%,email.ilike.%${search}%`
+      `first_name.ilike.%${search}%,last_name.ilike.%${search}%,contact_email.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`
     )
   }
 
   const { data, error } = await query
   if (error) throw error
 
+  const customers = ((data || []) as CustomerProfileRow[]).map(mapEmailBackedRow)
+
   return {
-    customers: (data || []) as CustomerProfile[],
+    customers: customers as CustomerProfile[],
     count: count || 0,
     totalPages,
     currentPage: page,
@@ -1917,9 +1950,10 @@ export async function getAdminCustomer(id: string) {
     (sum, row) => sum + Number(row.total_amount || 0),
     0
   )
+  const mappedProfile = mapEmailBackedRow(profile as CustomerProfileRow)
 
   return {
-    ...profile,
+    ...mappedProfile,
     orders: orders || [],
     order_count: orderCount || 0,
     addresses: addresses || [],
@@ -2997,25 +3031,51 @@ export async function removeStaffAccess(userId: string) {
   revalidatePath("/admin/team")
 }
 
-export async function getRegisteredUsers(searchQuery?: string) {
+export async function getRegisteredUsers(
+  searchQuery?: string
+): Promise<RegisteredUserOption[]> {
   await ensureAdmin()
   const supabase = await createClient()
 
   let query = supabase
     .from("profiles")
-    .select("id, email, first_name, last_name, created_at")
+    .select("id, email, contact_email, phone, first_name, last_name, created_at")
     .is("admin_role_id", null) // Only non-staff users
     .order("email")
 
   if (searchQuery && searchQuery.trim()) {
     query = query.or(
-      `email.ilike.%${searchQuery}%,first_name.ilike.%${searchQuery}%,last_name.ilike.%${searchQuery}%`
+      `contact_email.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%,phone.ilike.%${searchQuery}%,first_name.ilike.%${searchQuery}%,last_name.ilike.%${searchQuery}%`
     )
   }
 
   const { data, error } = await query.limit(50)
   if (error) throw error
-  return data
+
+  return (((data || []) as Array<
+    EmailBackedRow & {
+      id: string
+      phone: string | null
+      first_name: string | null
+      last_name: string | null
+      created_at: string
+    }
+  >).map((row) => {
+    const resolvedEmail = getCustomerFacingEmail(
+      row.contact_email,
+      row.email
+    )
+
+    return {
+      id: row.id,
+      email: resolvedEmail,
+      phone: row.phone,
+      first_name: row.first_name,
+      last_name: row.last_name,
+      created_at: row.created_at,
+      display_contact: resolvedEmail || row.phone || "No email or phone",
+    }
+  }))
 }
 
 export async function promoteToStaff(userId: string, roleId: string) {

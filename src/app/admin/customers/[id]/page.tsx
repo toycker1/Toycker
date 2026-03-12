@@ -6,7 +6,6 @@ import {
   ShoppingBagIcon,
   StarIcon,
   BanknotesIcon,
-  MapIcon,
   CreditCardIcon,
   UserIcon,
 } from "@heroicons/react/24/outline"
@@ -16,7 +15,6 @@ import { convertToLocale } from "@lib/util/money"
 import DeleteCustomerButton from "@modules/admin/components/delete-customer-button"
 import { ProtectedAction } from "@/lib/permissions/components/protected-action"
 import { PERMISSIONS } from "@/lib/permissions"
-import { cn } from "@lib/util/cn"
 import { formatIST } from "@/lib/util/date"
 import CustomerOrderHistory from "@modules/admin/components/customer-order-history"
 import CustomerRewardHistory from "@modules/admin/components/customer-reward-history"
@@ -58,6 +56,7 @@ export default async function AdminCustomerDetails({
           .join(" ")
       : null) ||
     "N/A"
+  const displayPhone = customer.phone || customer.addresses?.[0]?.phone || ""
 
   return (
     <div className="space-y-6 pb-20">
@@ -198,12 +197,18 @@ export default async function AdminCustomerDetails({
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                     Email
                   </p>
-                  <a
-                    href={`mailto:${customer.email}`}
-                    className="text-sm font-semibold text-blue-600 hover:underline break-all"
-                  >
-                    {customer.email}
-                  </a>
+                  {customer.email ? (
+                    <a
+                      href={`mailto:${customer.email}`}
+                      className="text-sm font-semibold text-blue-600 hover:underline break-all"
+                    >
+                      {customer.email}
+                    </a>
+                  ) : (
+                    <p className="text-sm font-semibold text-gray-500">
+                      Not added yet
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="flex items-start gap-3">
@@ -215,7 +220,7 @@ export default async function AdminCustomerDetails({
                     Phone
                   </p>
                   <p className="text-sm font-semibold text-gray-900">
-                    {customer.phone || customer.addresses?.[0]?.phone || "N/A"}
+                    {displayPhone || "N/A"}
                   </p>
                 </div>
               </div>
@@ -304,19 +309,4 @@ function StatsCard({
       </div>
     </div>
   )
-}
-
-function getStatusVariant(status: string) {
-  switch (status) {
-    case "paid":
-      return "success"
-    case "pending":
-      return "warning"
-    case "failed":
-      return "error"
-    case "cancelled":
-      return "neutral"
-    default:
-      return "neutral"
-  }
 }

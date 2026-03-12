@@ -7,20 +7,7 @@ import { getAuthUser } from "./auth"
 import { redirect } from "next/navigation"
 import { removeCartId } from "./cookies"
 import { CustomerProfile, Address } from "@/lib/supabase/types"
-
-const DEFAULT_WHATSAPP_LOGIN_EMAIL_DOMAIN = "wa.toycker.store"
-
-function isSyntheticWhatsAppEmail(email: string | null | undefined): boolean {
-  if (!email) {
-    return false
-  }
-
-  const emailDomain =
-    process.env.WHATSAPP_LOGIN_EMAIL_DOMAIN?.trim() ||
-    DEFAULT_WHATSAPP_LOGIN_EMAIL_DOMAIN
-
-  return email.endsWith(`@${emailDomain}`)
-}
+import { getCustomerFacingEmail } from "@/lib/util/customer-email"
 
 export const retrieveCustomer = cache(
   async (): Promise<CustomerProfile | null> => {
@@ -40,13 +27,18 @@ export const retrieveCustomer = cache(
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("first_name, last_name, phone")
+      .select("first_name, last_name, phone, email, contact_email")
       .eq("id", user.id)
       .single()
 
     return {
       id: user.id,
-      email: isSyntheticWhatsAppEmail(user.email) ? "" : user.email!,
+      email:
+        getCustomerFacingEmail(
+          profile?.contact_email,
+          profile?.email,
+          user.email
+        ) || "",
       first_name: user.user_metadata?.first_name || profile?.first_name || "",
       last_name: user.user_metadata?.last_name || profile?.last_name || "",
       phone:
@@ -86,16 +78,30 @@ export async function updateCustomer(data: Partial<CustomerProfile>) {
     throw new Error("Not authenticated")
   }
 
+  const { email, ...metadataPatch } = data
+  const normalizedEmail = email?.trim() || null
+
   const { error: updateError } = await supabase.auth.updateUser({
     data: {
       ...user.user_metadata,
-      ...data,
+      ...metadataPatch,
       phone_number: data.phone || user.user_metadata?.phone_number,
     },
   })
 
   if (updateError) {
     throw updateError
+  }
+
+  if (email !== undefined) {
+    const { error: profileUpdateError } = await supabase
+      .from("profiles")
+      .update({ contact_email: normalizedEmail })
+      .eq("id", user.id)
+
+    if (profileUpdateError) {
+      throw profileUpdateError
+    }
   }
 
   revalidateTag("customers", "max")

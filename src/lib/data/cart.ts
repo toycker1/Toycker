@@ -17,6 +17,7 @@ import { redirect } from "next/navigation"
 import { generatePayUHash, PayUHashParams } from "@/lib/payu"
 import { getBaseURL } from "@/lib/util/env"
 import { getAuthUser } from "./auth"
+import { getCustomerFacingEmail } from "@/lib/util/customer-email"
 
 import {
   mapCartItems,
@@ -29,6 +30,11 @@ type CartWriteContext = {
     | Awaited<ReturnType<typeof createClient>>
     | Awaited<ReturnType<typeof createAdminClient>>
   userId: string | null
+  email: string | null
+}
+
+type CustomerEmailProfileRow = {
+  contact_email: string | null
   email: string | null
 }
 
@@ -45,13 +51,45 @@ const getCartClient = async () => {
   return createAdminClient()
 }
 
+const resolveAuthenticatedCustomerEmail = async (
+  userId: string
+): Promise<{
+  supabase: Awaited<ReturnType<typeof createClient>>
+  email: string | null
+}> => {
+  const supabase = await createClient()
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("contact_email, email")
+    .eq("id", userId)
+    .maybeSingle<CustomerEmailProfileRow>()
+
+  if (profileError) {
+    console.warn(
+      "Failed to load profile contact email while resolving cart write context:",
+      profileError
+    )
+  }
+
+  return {
+    supabase,
+    email: getCustomerFacingEmail(
+      profile?.contact_email,
+      profile?.email
+    ),
+  }
+}
+
 const resolveCartWriteContext = async (): Promise<CartWriteContext> => {
   const authUser = await getAuthUser()
   if (authUser) {
+    const resolvedCustomer = await resolveAuthenticatedCustomerEmail(authUser.id)
+
     return {
-      supabase: await createClient(),
+      supabase: resolvedCustomer.supabase,
       userId: authUser.id,
-      email: authUser.email ?? null,
+      email: resolvedCustomer.email || getCustomerFacingEmail(authUser.email),
     }
   }
 
@@ -807,7 +845,11 @@ export async function setPaymentProvider(providerId: string) {
 
 export async function initiatePaymentSession(
   cartInput: { id: string },
-  data: { provider_id: string; data?: Record<string, unknown> }
+  data: {
+    provider_id: string
+    data?: Record<string, unknown>
+    customerEmail?: string
+  }
 ) {
   const supabase = await getCartClient()
   const cart = await retrieveCart(cartInput.id)
@@ -834,7 +876,10 @@ export async function initiatePaymentSession(
     const firstname = (cart.shipping_address?.first_name || "Guest")
       .trim()
       .replace(/[^a-zA-Z0-9 ]/g, "")
-    const email = (cart.email || "guest@toycker.in").trim()
+    const email = (
+      getCustomerFacingEmail(data.customerEmail, cart.email) ||
+      "guest@toycker.in"
+    ).trim()
     const phone = (cart.shipping_address?.phone || "9999999999").replace(
       /\D/g,
       ""
@@ -919,13 +964,15 @@ export async function placeOrder() {
       discount_total -
       gift_card_total -
       rewards_discount
+  const customerEmail =
+    getCustomerFacingEmail(cart.email) || "guest@toycker.in"
 
   const { data: order, error: orderError } = await supabase
     .from("orders")
     .insert({
       user_id: cart.user_id,
-      customer_email: cart.email || "guest@toycker.in",
-      email: cart.email || "guest@toycker.in",
+      customer_email: customerEmail,
+      email: customerEmail,
       total_amount: total,
       total: total,
       subtotal: item_subtotal,

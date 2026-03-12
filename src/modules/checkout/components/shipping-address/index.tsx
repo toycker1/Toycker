@@ -5,6 +5,7 @@ import { useDebounce } from "@lib/hooks/use-debounce"
 import AddressSelect from "../address-select"
 import CountrySelect from "../country-select"
 import { useCheckout } from "../../context/checkout-context"
+import { getCustomerFacingEmail } from "@/lib/util/customer-email"
 
 const ShippingAddress = ({
   customer,
@@ -18,6 +19,7 @@ const ShippingAddress = ({
   onChange: () => void
 }) => {
   const { setEmail, setShippingAddress } = useCheckout()
+  const customerFacingCartEmail = getCustomerFacingEmail(cart?.email)
 
   const [formData, setFormData] = useState<Record<string, string>>({
     "shipping_address.first_name": cart?.shipping_address?.first_name || "",
@@ -30,7 +32,7 @@ const ShippingAddress = ({
       cart?.shipping_address?.country_code || "in", // Fixed to 'in' by default
     "shipping_address.province": cart?.shipping_address?.province || "",
     "shipping_address.phone": cart?.shipping_address?.phone || "",
-    email: cart?.email || "",
+    email: customerFacingCartEmail || "",
   })
 
   // Removed local state: const [saveAddress, setSaveAddress] = useState(true)
@@ -112,13 +114,13 @@ const ShippingAddress = ({
   useEffect(() => {
     // Ensure cart is not null and has a shipping_address before setting form data
     if (cart && cart.shipping_address) {
-      setFormAddress(cart?.shipping_address, cart?.email)
+      setFormAddress(cart.shipping_address, customerFacingCartEmail || undefined)
     }
 
-    if (cart && !cart.email && customer?.email) {
+    if (cart && !customerFacingCartEmail && customer?.email) {
       setFormAddress(undefined, customer.email)
     }
-  }, [cart, customer?.email]) // Add cart and customer.email as dependency
+  }, [cart, customer?.email, customerFacingCartEmail])
 
   const handleChange = (
     e: React.ChangeEvent<

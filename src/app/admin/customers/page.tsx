@@ -100,49 +100,57 @@ export default async function AdminCustomers({
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
-              {customers.length > 0 ? customers.map((customer) => (
-                <tr key={customer.id} className="hover:bg-gray-50/80 transition-colors group">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <Link href={`/admin/customers/${customer.id}`} className="flex items-center">
-                      <div className="h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-full bg-blue-50 text-blue-600 font-bold text-xs border border-blue-100 group-hover:border-blue-200 transition-all">
-                        {customer.first_name ? customer.first_name.charAt(0).toUpperCase() : customer.email.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
-                          {customer.first_name} {customer.last_name}
-                        </div>
-                        <div className="text-xs text-gray-500">{customer.email}</div>
-                      </div>
-                    </Link>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <AdminBadge variant={(customer as any).role === 'admin' ? "info" : ((customer as any).is_club_member ? "success" : "neutral")}>
-                      <span className="capitalize">{(customer as any).role === 'admin' ? 'Administrator' : ((customer as any).is_club_member ? 'Club Member' : 'Customer')}</span>
-                    </AdminBadge>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatIST(customer.created_at, { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <div className="flex justify-end items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                      <Link
-                        href={`/admin/customers/${customer.id}`}
-                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all"
-                        title="View Customer Details"
-                      >
-                        <EyeIcon className="w-5 h-5" />
-                      </Link>
+              {customers.length > 0 ? customers.map((customer) => {
+                const displayContact =
+                  customer.email || customer.phone || "No email added"
+                const displayName =
+                  `${customer.first_name || ""} ${customer.last_name || ""}`.trim() ||
+                  displayContact
 
-                      <ProtectedAction permission={PERMISSIONS.CUSTOMERS_DELETE} hideWhenDisabled>
-                        <DeleteCustomerButton
-                          customerId={customer.id}
-                          customerName={`${customer.first_name || ''} ${customer.last_name || customer.email}`}
-                        />
-                      </ProtectedAction>
-                    </div>
-                  </td>
-                </tr>
-              )) : (
+                return (
+                  <tr key={customer.id} className="hover:bg-gray-50/80 transition-colors group">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <Link href={`/admin/customers/${customer.id}`} className="flex items-center">
+                        <div className="h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-full bg-blue-50 text-blue-600 font-bold text-xs border border-blue-100 group-hover:border-blue-200 transition-all">
+                          {(customer.first_name?.charAt(0) || displayContact.charAt(0)).toUpperCase()}
+                        </div>
+                        <div className="ml-4">
+                          <div className="text-sm font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+                            {customer.first_name} {customer.last_name}
+                          </div>
+                          <div className="text-xs text-gray-500">{displayContact}</div>
+                        </div>
+                      </Link>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <AdminBadge variant={(customer as any).role === 'admin' ? "info" : ((customer as any).is_club_member ? "success" : "neutral")}>
+                        <span className="capitalize">{(customer as any).role === 'admin' ? 'Administrator' : ((customer as any).is_club_member ? 'Club Member' : 'Customer')}</span>
+                      </AdminBadge>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {formatIST(customer.created_at, { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <div className="flex justify-end items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        <Link
+                          href={`/admin/customers/${customer.id}`}
+                          className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all"
+                          title="View Customer Details"
+                        >
+                          <EyeIcon className="w-5 h-5" />
+                        </Link>
+
+                        <ProtectedAction permission={PERMISSIONS.CUSTOMERS_DELETE} hideWhenDisabled>
+                          <DeleteCustomerButton
+                            customerId={customer.id}
+                            customerName={displayName}
+                          />
+                        </ProtectedAction>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              }) : (
                 <tr>
                   <td colSpan={4} className="px-6 py-20 text-center text-gray-500 text-sm">
                     <div className="flex flex-col items-center">

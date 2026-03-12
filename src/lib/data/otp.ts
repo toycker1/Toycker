@@ -8,17 +8,20 @@ import { revalidatePath, revalidateTag } from "next/cache"
 import { redirect } from "next/navigation"
 import { cookies as nextCookies } from "next/headers"
 import { ActionResult } from "@/lib/types/action-result"
+import { getCustomerFacingEmail, isSyntheticWhatsAppEmail } from "@/lib/util/customer-email"
 
 type SendOtpResult = ActionResult<{ cooldownSeconds: number }>
 type ProfileLookup = {
   id: string
   email: string | null
+  contact_email: string | null
   role: string | null
 }
 
 type CartOwnershipLookup = {
   id: string
   user_id: string | null
+  email: string | null
 }
 
 const DEFAULT_RESEND_COOLDOWN_SECONDS = 60
@@ -124,7 +127,7 @@ async function findUniqueProfile(
 ): Promise<{ row: ProfileLookup | null; duplicate: boolean; failed: boolean }> {
   const { data, error } = await adminClient
     .from("profiles")
-    .select("id, email, role")
+    .select("id, email, contact_email, role")
     .eq(field, value)
     .limit(2)
 
@@ -185,7 +188,7 @@ async function syncAuthUserPhone(
 async function claimGuestCartForUser(
   adminClient: Awaited<ReturnType<typeof createAdminClient>>,
   userId: string,
-  loginEmail: string
+  publicEmail: string | null
 ): Promise<void> {
   const cookieStore = await nextCookies()
   const cartId = cookieStore.get("toycker_cart_id")?.value?.trim()
@@ -196,7 +199,7 @@ async function claimGuestCartForUser(
 
   const { data: cartData, error: cartError } = await adminClient
     .from("carts")
-    .select("id, user_id")
+    .select("id, user_id, email")
     .eq("id", cartId)
     .maybeSingle<CartOwnershipLookup>()
 
@@ -220,13 +223,24 @@ async function claimGuestCartForUser(
     return
   }
 
+  const updatePayload: {
+    user_id: string
+    email?: string | null
+    updated_at: string
+  } = {
+    user_id: userId,
+    updated_at: new Date().toISOString(),
+  }
+
+  if (publicEmail) {
+    updatePayload.email = publicEmail
+  } else if (isSyntheticWhatsAppEmail(cartData.email)) {
+    updatePayload.email = null
+  }
+
   const { error: claimError } = await adminClient
     .from("carts")
-    .update({
-      user_id: userId,
-      email: loginEmail,
-      updated_at: new Date().toISOString(),
-    })
+    .update(updatePayload)
     .eq("id", cartId)
     .is("user_id", null)
 
@@ -447,11 +461,16 @@ export async function verifyOtp(
 
   let userId: string
   let loginEmail = syntheticEmail
+  let publicEmail: string | null = null
   let isAdmin = false
 
   if (profileByPhone.row) {
     userId = profileByPhone.row.id
     loginEmail = profileByPhone.row.email || syntheticEmail
+    publicEmail = getCustomerFacingEmail(
+      profileByPhone.row.contact_email,
+      profileByPhone.row.email
+    )
     isAdmin = profileByPhone.row.role === "admin"
 
     const authUserSynced = await syncAuthUserPhone(
@@ -485,6 +504,10 @@ export async function verifyOtp(
     if (profileByEmail.row) {
       userId = profileByEmail.row.id
       loginEmail = profileByEmail.row.email || syntheticEmail
+      publicEmail = getCustomerFacingEmail(
+        profileByEmail.row.contact_email,
+        profileByEmail.row.email
+      )
       isAdmin = profileByEmail.row.role === "admin"
 
       const authUserSynced = await syncAuthUserPhone(
@@ -544,7 +567,7 @@ export async function verifyOtp(
     return { success: false, error: "Failed to sign in. Please try again." }
   }
 
-  await claimGuestCartForUser(adminClient, userId, loginEmail)
+  await claimGuestCartForUser(adminClient, userId, publicEmail)
 
   // Revalidate caches
   revalidatePath("/", "layout")
