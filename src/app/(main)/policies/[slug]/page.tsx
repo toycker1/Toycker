@@ -142,7 +142,7 @@ const POLICY_CONTENT: Record<PolicySlug, { title: string; intro: string; section
   privacy: {
     title: "Privacy Policy",
     intro:
-      "Effective 11 August 2025 – This Privacy Policy explains how TOYCKER INDIAs (Toycker.com) collects, uses, and protects data every time you browse or shop with us.",
+      "Effective 11 August 2025 – This Privacy Policy explains how TOYCKER INDIA (Toycker.com) collects, uses, and protects data every time you browse or shop with us.",
     sections: [
       {
         heading: "What we collect",
