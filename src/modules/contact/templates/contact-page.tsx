@@ -26,7 +26,8 @@ type ContactPageProps = {
 }
 
 const ContactPage = (_props: ContactPageProps) => {
-  const locations = contactLocations
+  // Keep head office data available in shared constants while hiding it on this page for now.
+  const locations = contactLocations.filter((location) => !location.isHeadOffice)
   const socialLinks = [
     {
       id: "facebook",
@@ -96,8 +97,10 @@ const ContactPage = (_props: ContactPageProps) => {
           <p className="text-xs font-semibold uppercase tracking-[0.4em] text-primary">
             Contact Toycker
           </p>
+          {/* Temporary copy while head office details are hidden from the contact page. */}
           <h1 className="text-4xl font-semibold text-ui-fg-base">
-            One head office · One fully-equipped branch
+          {/* One head office · One fully-equipped branch */}
+            Visit our fully-equipped branch
           </h1>
           <p className="mx-auto max-w-3xl text-ui-fg-subtle">
             We’re here to help! Whether you have questions about our products,

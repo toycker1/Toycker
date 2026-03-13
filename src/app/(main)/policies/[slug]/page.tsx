@@ -28,7 +28,7 @@ const POLICY_CONTENT: Record<PolicySlug, { title: string; intro: string; section
           "Eligible products show their return window on the product page, Exchange or Replacement will be done Within 7 days.",
           "Return will be done within 7 business days.",
           "Items must be unused, unwashed, and sent back with original packaging, tags, and accessories for hygiene and quality reasons.",
-          "If Toycker pickup isn’t available in your pin code, self-ship to: Toycker.com Returns Department, Shed No. 7/8, Sardar Campus, Opp. River Kent, Mota Varachha, Surat, Gujarat, 394101.",
+          "If Toycker pickup isn’t available in your pin code, self-ship to: Toycker.com Returns Department, Plot No.C/4,C/5, Geetanagar Co.Op.Hou.Society, Ring Road, Gujarat Gas Circle, Adajan, Surat, Gujarat, 395009.",
         ],
       },
       {
@@ -49,7 +49,7 @@ const POLICY_CONTENT: Record<PolicySlug, { title: string; intro: string; section
         heading: "Need help?",
         body: [
           `Reach Toycker Customer Care at support@toycker.com or ${PRIMARY_CONTACT_DISPLAY}.`,
-          "Postal correspondence: Shed No. 7/8, Sardar Campus, Opp. River Kent, Mota Varachha, Surat, Gujarat, 394101.",
+          "Postal correspondence: Plot No.C/4,C/5, Geetanagar Co.Op.Hou.Society, Ring Road, Gujarat Gas Circle, Adajan, Surat, Gujarat, 395009.",
         ],
       },
     ],
