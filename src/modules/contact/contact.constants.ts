@@ -73,8 +73,8 @@ export const contactLocations: ContactLocation[] = [
   },
   {
     id: "branch-2-adajan",
-    title: "BRANCH 2 - ADAJAN",
-    label: "Branch 2",
+    title: "ADAJAN, SURAT",
+    label: "Address",
     addressLines: [
       "Plot No.C/4,C/5, Geetanagar Co.Op.Hou.Society,",
       "Ring Road, Gujarat Gas Circle,",
