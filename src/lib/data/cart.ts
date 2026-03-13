@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import {
   Cart,
+  Order,
   ShippingOption,
   PaymentCollection,
   Promotion,
@@ -18,6 +19,11 @@ import { generatePayUHash, PayUHashParams } from "@/lib/payu"
 import { getBaseURL } from "@/lib/util/env"
 import { getAuthUser } from "./auth"
 import { getCustomerFacingEmail } from "@/lib/util/customer-email"
+import {
+  getAppliedClubSavings,
+  getOrderPricingMetadata,
+  OrderPricingMetadata,
+} from "@/lib/util/order-pricing"
 
 import {
   mapCartItems,
@@ -1019,16 +1025,41 @@ export async function placeOrder() {
   redirect(`/order/confirmed/${order.id}`)
 }
 
+const getMembershipQualifyingSubtotal = (cart: Cart): number => {
+  if (!Array.isArray(cart.items) || cart.items.length === 0) {
+    return Number(cart.item_subtotal ?? cart.subtotal ?? 0)
+  }
+
+  const qualifyingSubtotal = cart.items.reduce((sum, item) => {
+    if (item.metadata?.gift_wrap_line === true) {
+      return sum
+    }
+
+    return sum + Number(item.original_total ?? item.total ?? 0)
+  }, 0)
+
+  return qualifyingSubtotal > 0
+    ? qualifyingSubtotal
+    : Number(cart.item_subtotal ?? cart.subtotal ?? 0)
+}
+
 /**
  * Reusable helper to handle post-order logic like membership activation,
  * rewards calculation, and event logging.
  */
 export async function handlePostOrderLogic(
-  order: any,
-  cart: any,
+  order: Order,
+  cart: Cart,
   rewards_discount: number
 ) {
   const supabase = await getCartClient()
+  const orderMetadata = getOrderPricingMetadata(order.metadata)
+  const clubSavings = getAppliedClubSavings({
+    metadata: order.metadata,
+    items: order.items,
+    cartClubSavings: cart.club_savings,
+  })
+  const clubSavingsAlreadyCredited = orderMetadata.club_savings_credited === true
 
   // Handle rewards and club functionality for logged-in users
   if (order.user_id) {
@@ -1044,18 +1075,23 @@ export async function handlePostOrderLogic(
     }
 
     // 2. Check for club membership activation (now works — club.ts uses admin client)
+    const qualifyingSubtotal = getMembershipQualifyingSubtotal(cart)
     const activated = await checkAndActivateMembership(
       order.user_id,
-      order.total
+      qualifyingSubtotal
     )
     if (activated) {
       revalidateTag("customers", "max")
     }
 
     // 3. Update order metadata
-    const metadataUpdate: any = {
-      ...(order.metadata || {}),
+    const metadataUpdate: OrderPricingMetadata = {
+      ...getOrderPricingMetadata(order.metadata),
       rewards_used: rewards_discount,
+    }
+
+    if (rewards_discount > 0) {
+      metadataUpdate.rewards_discount = rewards_discount
     }
 
     if (activated) {
@@ -1063,24 +1099,14 @@ export async function handlePostOrderLogic(
       metadataUpdate.club_discount_percentage = settings.discount_percentage
     }
 
-    if (cart.club_savings && cart.club_savings > 0) {
-      metadataUpdate.club_savings_amount = cart.club_savings
-      metadataUpdate.club_savings = cart.club_savings
+    if (clubSavings > 0) {
+      metadataUpdate.club_savings_amount = clubSavings
+      metadataUpdate.club_savings = clubSavings
       metadataUpdate.is_club_member = true
     }
 
-    // Always update metadata if we have something new to add
-    if (activated || rewards_discount > 0 || (cart.club_savings && cart.club_savings > 0)) {
-      await supabase
-        .from("orders")
-        .update({
-          metadata: metadataUpdate,
-        })
-        .eq("id", order.id)
-    }
-
     // 4. Persist Lifetime Club Savings (fixed: use admin API instead of getAuthUser)
-    if (cart.club_savings && cart.club_savings > 0) {
+    if (clubSavings > 0 && !clubSavingsAlreadyCredited) {
       const adminSupabase = await createAdminClient()
       const {
         data: { user },
@@ -1089,7 +1115,7 @@ export async function handlePostOrderLogic(
         const currentSavings = Number(
           user.user_metadata?.total_club_savings || 0
         )
-        const newSavings = currentSavings + cart.club_savings
+        const newSavings = currentSavings + clubSavings
 
         await adminSupabase.auth.admin.updateUserById(order.user_id, {
           user_metadata: {
@@ -1103,12 +1129,31 @@ export async function handlePostOrderLogic(
             total_club_savings: newSavings,
           })
           .eq("id", order.user_id)
+
+        metadataUpdate.club_savings_credited = true
+        revalidateTag("customers", "max")
       }
+    }
+
+    // Always update metadata if we have something new to add
+    if (
+      activated ||
+      rewards_discount > 0 ||
+      clubSavings > 0 ||
+      metadataUpdate.club_savings_credited === true
+    ) {
+      await supabase
+        .from("orders")
+        .update({
+          metadata: metadataUpdate,
+        })
+        .eq("id", order.id)
     }
   }
 
   // 5. Update promotion use count
-  const promo_code = order.promo_code || cart.promotions?.[0]?.code
+  const promo_code =
+    order.promo_code || orderMetadata.promo_code || cart.promotions?.[0]?.code
   if (promo_code) {
     const { data: promotion } = await supabase
       .from("promotions")
