@@ -23,6 +23,8 @@ export const retrieveCustomer = cache(
       .select(
         "id, first_name, last_name, address_1, address_2, city, province, postal_code, country_code, phone, company, is_default_billing, is_default_shipping"
       )
+      .order("is_default_billing", { ascending: false })
+      .order("is_default_shipping", { ascending: false })
       .eq("user_id", user.id)
 
     const { data: profile } = await supabase
@@ -41,13 +43,13 @@ export const retrieveCustomer = cache(
           profile?.email,
           user.email
         ) || "",
-      first_name: user.user_metadata?.first_name || profile?.first_name || "",
-      last_name: user.user_metadata?.last_name || profile?.last_name || "",
+      first_name: profile?.first_name || user.user_metadata?.first_name || "",
+      last_name: profile?.last_name || user.user_metadata?.last_name || "",
       phone:
+        profile?.phone ||
         user.user_metadata?.phone_number ||
         user.user_metadata?.phone ||
         user.phone ||
-        profile?.phone ||
         "",
       created_at: user.created_at,
       addresses: (addresses as Address[]) || [],

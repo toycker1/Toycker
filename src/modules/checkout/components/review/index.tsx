@@ -5,6 +5,7 @@ import { Lock, AlertCircle } from "lucide-react"
 
 import PaymentButton from "../payment-button"
 import { useCheckout } from "../../context/checkout-context"
+import { isAddressValid } from "../../hooks/useCheckoutState"
 
 // Extended cart type with gift_cards property
 type CartWithGiftCards = Cart & {
@@ -16,8 +17,11 @@ const Review = ({ cart }: { cart: CartWithGiftCards }) => {
   const paidByGiftcard =
     cart?.gift_cards && cart?.gift_cards?.length > 0 && (cart?.total ?? 0) === 0
 
-  // Check if all required steps are completed using local state
-  const hasAddress = state.isValid || (state.shippingAddress && state.shippingAddress.address_1)
+  const billingAddressValid = isAddressValid(state.billingAddress)
+  const shippingAddressValid = state.shippingSameAsBilling
+    ? billingAddressValid
+    : isAddressValid(state.shippingAddress)
+  const hasAddress = shippingAddressValid && billingAddressValid
   const hasShipping = Boolean(cart.shipping_methods?.length) || true // Assuming default shipping
   const hasPayment = Boolean(state.paymentMethod) || paidByGiftcard
 
@@ -25,7 +29,11 @@ const Review = ({ cart }: { cart: CartWithGiftCards }) => {
 
   // Generate error messages
   const errors = []
-  if (!hasAddress) errors.push("shipping address")
+  if (!billingAddressValid) {
+    errors.push("billing address")
+  } else if (!shippingAddressValid) {
+    errors.push("shipping address")
+  }
   // if (!hasShipping) errors.push("delivery method")
   if (!hasPayment) errors.push("payment method")
 

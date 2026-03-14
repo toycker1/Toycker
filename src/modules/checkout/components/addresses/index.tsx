@@ -16,10 +16,7 @@ const Addresses = ({
   customer: CustomerProfile | null
   availableShippingMethods?: ShippingOption[] | null
 }) => {
-  const { state, toggleSameAsBilling } = useCheckout()
-
-  // Check if address has been filled (for UI indicator)
-  // const hasShippingAddress = Boolean(state.shippingAddress?.address_1)
+  const { state, toggleShippingSameAsBilling } = useCheckout()
 
   return (
     <div>
@@ -29,28 +26,31 @@ const Addresses = ({
           weight="bold"
           className="text-3xl flex items-center gap-2"
         >
-          Shipping Address
+          Billing Address
         </Text>
       </div>
 
       <div>
-        <ShippingAddress
+        <BillingAddress
           customer={customer}
-          checked={state.sameAsBilling}
-          onChange={toggleSameAsBilling}
+          checked={state.shippingSameAsBilling}
+          onChange={toggleShippingSameAsBilling}
           cart={cart}
         />
 
-        {!state.sameAsBilling && (
+        {!state.shippingSameAsBilling && (
           <div className="mt-6">
             <Text
               as="h2"
               weight="bold"
               className="text-xl mb-4"
             >
-              Billing Address
+              Shipping Address
             </Text>
-            <BillingAddress cart={cart} />
+            <ShippingAddress
+              customer={customer}
+              cart={cart}
+            />
           </div>
         )}
       </div>

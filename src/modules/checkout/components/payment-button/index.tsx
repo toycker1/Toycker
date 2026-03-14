@@ -83,7 +83,11 @@ const StripePaymentButton = ({
       return
     }
 
-    if (!state.shippingAddress || !state.paymentMethod) {
+    const billingAddress = state.billingAddress
+    const shippingAddress = state.shippingAddress
+    const paymentMethod = state.paymentMethod
+
+    if (!billingAddress || !shippingAddress || !paymentMethod) {
       setErrorMessage("Please fill all required fields")
       setSubmitting(false)
       return
@@ -94,9 +98,9 @@ const StripePaymentButton = ({
       const result = await completeCheckout({
         cartId: cart.id,
         email: state.email || "",
-        shippingAddress: state.shippingAddress,
-        billingAddress: state.billingAddress || state.shippingAddress,
-        paymentMethod: state.paymentMethod,
+        shippingAddress,
+        billingAddress,
+        paymentMethod,
         rewardsToApply: state.rewardsToApply,
         saveAddress: state.saveAddress,
       })
@@ -115,15 +119,15 @@ const StripePaymentButton = ({
             payment_method: {
               card: card,
               billing_details: {
-                name: `${state.shippingAddress.first_name} ${state.shippingAddress.last_name}`,
+                name: `${billingAddress.first_name} ${billingAddress.last_name}`,
                 email: state.email || undefined,
-                phone: state.shippingAddress.phone || undefined,
+                phone: billingAddress.phone || undefined,
                 address: {
-                  line1: state.shippingAddress.address_1,
-                  line2: state.shippingAddress.address_2 || undefined,
-                  city: state.shippingAddress.city,
-                  postal_code: state.shippingAddress.postal_code,
-                  country: state.shippingAddress.country_code,
+                  line1: billingAddress.address_1,
+                  line2: billingAddress.address_2 || undefined,
+                  city: billingAddress.city,
+                  postal_code: billingAddress.postal_code,
+                  country: billingAddress.country_code,
                 },
               },
             },
@@ -191,7 +195,11 @@ const ManualTestPaymentButton = ({
     setSubmitting(true)
     setErrorMessage(null)
 
-    if (!state.shippingAddress || !state.paymentMethod) {
+    const billingAddress = state.billingAddress
+    const shippingAddress = state.shippingAddress
+    const paymentMethod = state.paymentMethod
+
+    if (!billingAddress || !shippingAddress || !paymentMethod) {
       setErrorMessage("Please fill all required fields")
       setSubmitting(false)
       return
@@ -201,9 +209,9 @@ const ManualTestPaymentButton = ({
       const result = await completeCheckout({
         cartId: cart.id,
         email: state.email || "",
-        shippingAddress: state.shippingAddress,
-        billingAddress: state.billingAddress || state.shippingAddress,
-        paymentMethod: state.paymentMethod,
+        shippingAddress,
+        billingAddress,
+        paymentMethod,
         rewardsToApply: state.rewardsToApply,
         saveAddress: state.saveAddress,
       })
@@ -259,7 +267,11 @@ const PayUPaymentButton = ({
     setSubmitting(true)
     setErrorMessage(null)
 
-    if (!state.shippingAddress || !state.paymentMethod) {
+    const billingAddress = state.billingAddress
+    const shippingAddress = state.shippingAddress
+    const paymentMethod = state.paymentMethod
+
+    if (!billingAddress || !shippingAddress || !paymentMethod) {
       setErrorMessage("Please fill all required fields")
       setSubmitting(false)
       return
@@ -269,9 +281,9 @@ const PayUPaymentButton = ({
       const result = await completeCheckout({
         cartId: cart.id,
         email: state.email || "",
-        shippingAddress: state.shippingAddress,
-        billingAddress: state.billingAddress || state.shippingAddress,
-        paymentMethod: state.paymentMethod,
+        shippingAddress,
+        billingAddress,
+        paymentMethod,
         rewardsToApply: state.rewardsToApply,
         saveAddress: state.saveAddress,
       })

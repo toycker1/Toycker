@@ -681,59 +681,229 @@ export async function saveAddressesBackground(
   return { message: "Saved", success: true }
 }
 
-export async function saveUserAddress(
-  address: {
-    first_name: string
-    last_name: string
-    address_1: string
-    address_2?: string | null
-    company?: string | null
-    postal_code: string
-    city: string
-    country_code: string
-    province?: string | null
-    phone?: string | null
-  },
-  userId: string
+type SavedAddressInput = {
+  first_name: string
+  last_name: string
+  address_1: string
+  address_2?: string | null
+  company?: string | null
+  postal_code: string
+  city: string
+  country_code: string
+  province?: string | null
+  phone?: string | null
+}
+
+type StoredAddressRow = {
+  id: string
+  is_default_billing: boolean | null
+  is_default_shipping: boolean | null
+}
+
+type AddressDefaults = {
+  makeDefaultBilling: boolean
+  makeDefaultShipping: boolean
+}
+
+function normalizeAddressValue(value: string | null | undefined): string | null {
+  const trimmedValue = value?.trim()
+  return trimmedValue ? trimmedValue : null
+}
+
+function normalizeSavedAddressInput(address: SavedAddressInput): SavedAddressInput {
+  return {
+    first_name: normalizeAddressValue(address.first_name) || "",
+    last_name: normalizeAddressValue(address.last_name) || "",
+    address_1: normalizeAddressValue(address.address_1) || "",
+    address_2: normalizeAddressValue(address.address_2),
+    company: normalizeAddressValue(address.company),
+    postal_code: normalizeAddressValue(address.postal_code) || "",
+    city: normalizeAddressValue(address.city) || "",
+    country_code: (normalizeAddressValue(address.country_code) || "in").toLowerCase(),
+    province: normalizeAddressValue(address.province),
+    phone: normalizeAddressValue(address.phone),
+  }
+}
+
+function areSavedAddressesEqual(
+  leftAddress: SavedAddressInput,
+  rightAddress: SavedAddressInput
+): boolean {
+  const normalizedLeftAddress = normalizeSavedAddressInput(leftAddress)
+  const normalizedRightAddress = normalizeSavedAddressInput(rightAddress)
+
+  return (
+    normalizedLeftAddress.first_name === normalizedRightAddress.first_name &&
+    normalizedLeftAddress.last_name === normalizedRightAddress.last_name &&
+    normalizedLeftAddress.address_1 === normalizedRightAddress.address_1 &&
+    normalizedLeftAddress.address_2 === normalizedRightAddress.address_2 &&
+    normalizedLeftAddress.company === normalizedRightAddress.company &&
+    normalizedLeftAddress.postal_code === normalizedRightAddress.postal_code &&
+    normalizedLeftAddress.city === normalizedRightAddress.city &&
+    normalizedLeftAddress.country_code === normalizedRightAddress.country_code &&
+    normalizedLeftAddress.province === normalizedRightAddress.province &&
+    normalizedLeftAddress.phone === normalizedRightAddress.phone
+  )
+}
+
+async function clearDefaultAddressRole(
+  supabase: Awaited<ReturnType<typeof createAdminClient>>,
+  userId: string,
+  role: "billing" | "shipping"
 ) {
+  const defaultColumn =
+    role === "billing" ? "is_default_billing" : "is_default_shipping"
+
+  await supabase
+    .from("addresses")
+    .update({ [defaultColumn]: false })
+    .eq("user_id", userId)
+}
+
+async function findExistingUserAddress(
+  supabase: Awaited<ReturnType<typeof createAdminClient>>,
+  userId: string,
+  address: SavedAddressInput
+): Promise<StoredAddressRow | null> {
+  const normalizedAddress = normalizeSavedAddressInput(address)
+  const { data, error } = await supabase
+    .from("addresses")
+    .select("id, is_default_billing, is_default_shipping")
+    .eq("user_id", userId)
+    .eq("first_name", normalizedAddress.first_name)
+    .eq("last_name", normalizedAddress.last_name)
+    .eq("address_1", normalizedAddress.address_1)
+    .eq("postal_code", normalizedAddress.postal_code)
+    .eq("city", normalizedAddress.city)
+    .eq("country_code", normalizedAddress.country_code)
+    .limit(1)
+
+  if (error) {
+    return null
+  }
+
+  return ((data || [])[0] as StoredAddressRow | undefined) ?? null
+}
+
+async function upsertUserAddressWithDefaults({
+  supabase,
+  userId,
+  address,
+  makeDefaultBilling,
+  makeDefaultShipping,
+}: {
+  supabase: Awaited<ReturnType<typeof createAdminClient>>
+  userId: string
+  address: SavedAddressInput
+} & AddressDefaults) {
+  const normalizedAddress = normalizeSavedAddressInput(address)
+  const existingAddress = await findExistingUserAddress(
+    supabase,
+    userId,
+    normalizedAddress
+  )
+
+  if (makeDefaultBilling) {
+    await clearDefaultAddressRole(supabase, userId, "billing")
+  }
+
+  if (makeDefaultShipping) {
+    await clearDefaultAddressRole(supabase, userId, "shipping")
+  }
+
+  const addressPayload = {
+    first_name: normalizedAddress.first_name,
+    last_name: normalizedAddress.last_name,
+    address_1: normalizedAddress.address_1,
+    address_2: normalizedAddress.address_2,
+    company: normalizedAddress.company,
+    postal_code: normalizedAddress.postal_code,
+    city: normalizedAddress.city,
+    country_code: normalizedAddress.country_code,
+    province: normalizedAddress.province,
+    phone: normalizedAddress.phone,
+    is_default_billing: makeDefaultBilling
+      ? true
+      : existingAddress?.is_default_billing ?? false,
+    is_default_shipping: makeDefaultShipping
+      ? true
+      : existingAddress?.is_default_shipping ?? false,
+  }
+
+  if (existingAddress) {
+    await supabase.from("addresses").update(addressPayload).eq("id", existingAddress.id)
+    return
+  }
+
+  await supabase.from("addresses").insert({
+    user_id: userId,
+    ...addressPayload,
+  })
+}
+
+export async function saveCheckoutAddresses({
+  billingAddress,
+  shippingAddress,
+  userId,
+}: {
+  billingAddress: SavedAddressInput
+  shippingAddress: SavedAddressInput
+  userId: string
+}) {
   const supabase = await createAdminClient()
 
   try {
-    // Check if this exact address already exists for the user to avoid duplicates
-    const { data: existingAddresses, error: fetchError } = await supabase
-      .from("addresses")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("address_1", address.address_1)
-      .eq("postal_code", address.postal_code)
-      .maybeSingle()
-
-    if (!fetchError && !existingAddresses) {
-      // Check if user already has any addresses
-      const { count } = await supabase
-        .from("addresses")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", userId)
-
-      await supabase.from("addresses").insert({
-        user_id: userId,
-        first_name: address.first_name,
-        last_name: address.last_name,
-        address_1: address.address_1,
-        address_2: address.address_2,
-        company: address.company,
-        postal_code: address.postal_code,
-        city: address.city,
-        country_code: address.country_code,
-        province: address.province,
-        phone: address.phone,
-        is_default_shipping: count === 0,
-        is_default_billing: count === 0,
+    if (areSavedAddressesEqual(billingAddress, shippingAddress)) {
+      await upsertUserAddressWithDefaults({
+        supabase,
+        userId,
+        address: billingAddress,
+        makeDefaultBilling: true,
+        makeDefaultShipping: true,
       })
-
-      // Revalidate to ensure account pages and admin panel update
-      revalidateTag("customers", "max")
+    } else {
+      await upsertUserAddressWithDefaults({
+        supabase,
+        userId,
+        address: billingAddress,
+        makeDefaultBilling: true,
+        makeDefaultShipping: false,
+      })
+      await upsertUserAddressWithDefaults({
+        supabase,
+        userId,
+        address: shippingAddress,
+        makeDefaultBilling: false,
+        makeDefaultShipping: true,
+      })
     }
+
+    revalidateTag("customers", "max")
+    revalidateTag("admin-customers", "max")
+  } catch (e) {
+    console.error("Failed to save address to profile:", e)
+  }
+}
+
+export async function saveUserAddress(address: SavedAddressInput, userId: string) {
+  const supabase = await createAdminClient()
+
+  try {
+    const { count } = await supabase
+      .from("addresses")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId)
+
+    await upsertUserAddressWithDefaults({
+      supabase,
+      userId,
+      address,
+      makeDefaultBilling: count === 0,
+      makeDefaultShipping: count === 0,
+    })
+
+    revalidateTag("customers", "max")
+    revalidateTag("admin-customers", "max")
   } catch (e) {
     console.error("Failed to save address to profile:", e)
   }
@@ -855,6 +1025,10 @@ export async function initiatePaymentSession(
     provider_id: string
     data?: Record<string, unknown>
     customerEmail?: string
+    customerAddress?: {
+      first_name: string
+      phone?: string | null
+    }
   }
 ) {
   const supabase = await getCartClient()
@@ -879,17 +1053,18 @@ export async function initiatePaymentSession(
     const txnid = `txn${Date.now()}`
     const amount = Number(cart.total || 0).toFixed(2) // Strictly 2 decimal places
     const productinfo = "Store_Order"
-    const firstname = (cart.shipping_address?.first_name || "Guest")
+    const checkoutCustomerAddress =
+      data.customerAddress ?? cart.billing_address ?? cart.shipping_address
+    const firstname = (checkoutCustomerAddress?.first_name || "Guest")
       .trim()
       .replace(/[^a-zA-Z0-9 ]/g, "")
     const email = (
       getCustomerFacingEmail(data.customerEmail, cart.email) ||
       "guest@toycker.in"
     ).trim()
-    const phone = (cart.shipping_address?.phone || "9999999999").replace(
-      /\D/g,
-      ""
-    )
+    const phone =
+      (checkoutCustomerAddress?.phone || "9999999999").replace(/\D/g, "") ||
+      "9999999999"
 
     const baseUrl = getBaseURL()
 

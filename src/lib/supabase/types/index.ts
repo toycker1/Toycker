@@ -233,6 +233,8 @@ export interface Address {
   postal_code: string | null;
   phone: string | null;
   company: string | null;
+  is_default_billing?: boolean | null;
+  is_default_shipping?: boolean | null;
 }
 
 export interface Order {
