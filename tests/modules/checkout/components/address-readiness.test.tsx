@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import React from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { Cart } from "@/lib/supabase/types"
+import { Cart, CustomerProfile } from "@/lib/supabase/types"
 import BillingAddress from "@modules/checkout/components/billing_address"
 import PaymentButton from "@modules/checkout/components/payment-button"
 import ShippingAddress from "@modules/checkout/components/shipping-address"
@@ -91,6 +91,32 @@ const cart: Cart = {
       },
     ],
   },
+}
+
+const authenticatedCustomer: CustomerProfile = {
+  id: "user-1",
+  email: "buyer@example.com",
+  first_name: "Kartavya",
+  last_name: "Patel",
+  phone: "919876543210",
+  created_at: "2026-03-13T10:00:00.000Z",
+  addresses: [
+    {
+      id: "addr-1",
+      first_name: "Kartavya",
+      last_name: "Patel",
+      address_1: "Saved Address",
+      address_2: null,
+      city: "Surat",
+      country_code: "in",
+      province: "Gujarat",
+      postal_code: "395009",
+      phone: "9999999999",
+      company: null,
+      is_default_billing: true,
+      is_default_shipping: false,
+    },
+  ],
 }
 
 function createCheckoutContextValue(
@@ -304,5 +330,29 @@ describe("checkout address readiness", () => {
         country_code: "in",
       })
     )
+  })
+
+  it("locks the billing phone to the authenticated account phone", () => {
+    checkoutContextStore.current = createCheckoutContextValue()
+
+    render(
+      <BillingAddress
+        customer={authenticatedCustomer}
+        cart={{
+          ...cart,
+          billing_address: {
+            ...authenticatedCustomer.addresses[0],
+            postal_code: "",
+          },
+        }}
+        checked
+        onChange={vi.fn()}
+      />
+    )
+
+    const billingPhoneInput = screen.getByTestId("billing-phone-input")
+
+    expect(billingPhoneInput).toHaveValue("9876543210")
+    expect(billingPhoneInput).toHaveAttribute("readonly")
   })
 })
