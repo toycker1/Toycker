@@ -17,7 +17,7 @@ interface CheckoutContextType {
   setShippingAddress: (_address: Address) => void
   setBillingAddress: (_address: Address) => void
   setPaymentMethod: (_method: string) => void
-  toggleSameAsBilling: () => void
+  toggleShippingSameAsBilling: () => void
   setSaveAddress: (_save: boolean) => void
   setRewardsToApply: (_points: number) => void
   reset: () => void
@@ -35,38 +35,42 @@ export const CheckoutProvider = ({
   children: ReactNode
   cart?: Cart | null
 }) => {
+  const mapCartAddress = (
+    address: Cart["shipping_address"] | Cart["billing_address"] | null | undefined
+  ): Address | null => {
+    if (!address) {
+      return null
+    }
+
+    return {
+      first_name: address.first_name || "",
+      last_name: address.last_name || "",
+      address_1: address.address_1 || "",
+      address_2: address.address_2,
+      city: address.city || "",
+      province: address.province,
+      postal_code: address.postal_code || "",
+      country_code: address.country_code || "in",
+      phone: address.phone,
+    }
+  }
+
   const [isPaymentUpdating, setIsPaymentUpdating] = React.useState(false)
   const { reloadFromServer } = useCartStore()
+
+  const billingAddress = mapCartAddress(
+    cart?.billing_address ?? cart?.shipping_address
+  )
+  const shippingAddress = mapCartAddress(
+    cart?.shipping_address ?? cart?.billing_address
+  )
+
   // Initialize with cart data if available
   const initialData = cart
     ? {
         email: getCustomerFacingEmail(cart.email),
-        shippingAddress: cart.shipping_address
-          ? {
-              first_name: cart.shipping_address.first_name || "",
-              last_name: cart.shipping_address.last_name || "",
-              address_1: cart.shipping_address.address_1 || "",
-              address_2: cart.shipping_address.address_2,
-              city: cart.shipping_address.city || "",
-              province: cart.shipping_address.province,
-              postal_code: cart.shipping_address.postal_code || "",
-              country_code: cart.shipping_address.country_code || "IN",
-              phone: cart.shipping_address.phone,
-            }
-          : null,
-        billingAddress: cart.billing_address
-          ? {
-              first_name: cart.billing_address.first_name || "",
-              last_name: cart.billing_address.last_name || "",
-              address_1: cart.billing_address.address_1 || "",
-              address_2: cart.billing_address.address_2,
-              city: cart.billing_address.city || "",
-              province: cart.billing_address.province,
-              postal_code: cart.billing_address.postal_code || "",
-              country_code: cart.billing_address.country_code || "IN",
-              phone: cart.billing_address.phone,
-            }
-          : null,
+        shippingAddress,
+        billingAddress,
         paymentMethod:
           cart.payment_collection?.payment_sessions?.find(
             (session) => session.status === "pending"

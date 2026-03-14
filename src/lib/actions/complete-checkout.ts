@@ -1,7 +1,9 @@
 "use server"
 
 import { z } from "zod"
+import { revalidateTag } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
+import { PaymentCollection } from "@/lib/supabase/types"
 
 // Validation schema for checkout data
 const AddressSchema = z.object({
@@ -28,11 +30,48 @@ const CheckoutSchema = z.object({
 
 export type CheckoutData = z.infer<typeof CheckoutSchema>
 
+export interface CheckoutPaymentData {
+  client_secret?: string
+  payment_url?: string
+  params?: Record<string, string | number | boolean | null | undefined>
+  [key: string]: unknown
+}
+
 export interface CheckoutResult {
   success: boolean
   orderId?: string
-  paymentData?: any
+  paymentData?: CheckoutPaymentData | null
   error?: string
+}
+
+type CheckoutProfileRow = {
+  first_name: string | null
+  last_name: string | null
+  phone: string | null
+}
+
+function normalizeOptionalValue(value: string | null | undefined): string | null {
+  const trimmedValue = value?.trim()
+  return trimmedValue ? trimmedValue : null
+}
+
+function isBlank(value: string | null | undefined): boolean {
+  return !value?.trim()
+}
+
+function mapCheckoutAddressToSavedAddress(address: CheckoutData["billingAddress"]) {
+  return {
+    first_name: address.first_name.trim(),
+    last_name: address.last_name.trim(),
+    address_1: address.address_1.trim(),
+    address_2: normalizeOptionalValue(address.address_2),
+    company: normalizeOptionalValue(address.address_2),
+    postal_code: address.postal_code.trim(),
+    city: address.city.trim(),
+    country_code: address.country_code.trim().toLowerCase(),
+    province: normalizeOptionalValue(address.province),
+    phone: normalizeOptionalValue(address.phone),
+  }
 }
 
 export async function completeCheckout(
@@ -52,6 +91,7 @@ export async function completeCheckout(
       {
         provider_id: validatedData.paymentMethod,
         customerEmail: validatedData.email,
+        customerAddress: validatedData.billingAddress,
       }
     )
 
@@ -82,45 +122,73 @@ export async function completeCheckout(
     } = await supabase.auth.getUser()
 
     if (user) {
-      const { error: profileEmailError } = await supabase
+      const { data: existingProfile, error: profileReadError } = await supabase
         .from("profiles")
-        .update({ contact_email: validatedData.email.trim() })
+        .select("first_name, last_name, phone")
+        .eq("id", user.id)
+        .maybeSingle<CheckoutProfileRow>()
+
+      if (profileReadError) {
+        console.warn(
+          "Failed to load profile before checkout profile sync:",
+          profileReadError
+        )
+      }
+
+      const profileUpdate: {
+        contact_email: string
+        first_name?: string
+        last_name?: string
+        phone?: string
+      } = {
+        contact_email: validatedData.email.trim(),
+      }
+
+      if (isBlank(existingProfile?.first_name)) {
+        profileUpdate.first_name = validatedData.billingAddress.first_name.trim()
+      }
+
+      if (isBlank(existingProfile?.last_name)) {
+        profileUpdate.last_name = validatedData.billingAddress.last_name.trim()
+      }
+
+      if (isBlank(existingProfile?.phone)) {
+        const billingPhone = normalizeOptionalValue(validatedData.billingAddress.phone)
+        if (billingPhone) {
+          profileUpdate.phone = billingPhone
+        }
+      }
+
+      const { error: profileUpdateError } = await supabase
+        .from("profiles")
+        .update(profileUpdate)
         .eq("id", user.id)
 
-      if (profileEmailError) {
+      if (profileUpdateError) {
         console.warn(
-          "Failed to persist checkout email to profile contact email:",
-          profileEmailError
+          "Failed to persist checkout profile details:",
+          profileUpdateError
         )
+      } else {
+        revalidateTag("customers", "max")
+        revalidateTag("admin-customers", "max")
       }
     }
 
     // Auto-save address if requested
-    if (validatedData.saveAddress) {
+    if (validatedData.saveAddress && user) {
       try {
-        const { saveUserAddress } = await import("@lib/data/cart")
-        const { getAuthUser } = await import("@lib/data/auth")
+        const { saveCheckoutAddresses } = await import("@lib/data/cart")
 
-        const user = await getAuthUser()
-        const userId = user?.id
-
-        if (userId) {
-          await saveUserAddress(
-            {
-              first_name: validatedData.shippingAddress.first_name,
-              last_name: validatedData.shippingAddress.last_name,
-              address_1: validatedData.shippingAddress.address_1,
-              address_2: validatedData.shippingAddress.address_2,
-              company: validatedData.shippingAddress.address_2, // Map 'Company' input from context (address_2) to company column
-              postal_code: validatedData.shippingAddress.postal_code,
-              city: validatedData.shippingAddress.city,
-              country_code: validatedData.shippingAddress.country_code,
-              province: validatedData.shippingAddress.province,
-              phone: validatedData.shippingAddress.phone,
-            },
-            userId
-          )
-        }
+        await saveCheckoutAddresses({
+          billingAddress: mapCheckoutAddressToSavedAddress(
+            validatedData.billingAddress
+          ),
+          shippingAddress: mapCheckoutAddressToSavedAddress(
+            validatedData.shippingAddress
+          ),
+          userId: user.id,
+        })
       } catch (err) {
         console.error("Failed to auto-save address during checkout:", err)
       }
@@ -157,9 +225,11 @@ export async function completeCheckout(
     return {
       success: true,
       orderId: result.order_id,
-      paymentData: orderData?.payment_collection?.payment_sessions?.find(
-        (s: any) => s.provider_id === validatedData.paymentMethod
-      )?.data,
+      paymentData:
+        (((orderData?.payment_collection as PaymentCollection | null | undefined)
+          ?.payment_sessions.find(
+            (session) => session.provider_id === validatedData.paymentMethod
+          )?.data as CheckoutPaymentData | undefined) ?? null),
     }
   } catch (error) {
     console.error("Checkout error:", error)

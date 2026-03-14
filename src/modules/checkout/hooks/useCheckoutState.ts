@@ -21,7 +21,7 @@ export interface CheckoutState {
   shippingAddress: Address | null
   billingAddress: Address | null
   paymentMethod: string | null
-  sameAsBilling: boolean
+  shippingSameAsBilling: boolean
   saveAddress: boolean
   rewardsToApply: number
   isValid: boolean
@@ -33,7 +33,7 @@ export type CheckoutAction =
   | { type: "SET_SHIPPING_ADDRESS"; payload: Address }
   | { type: "SET_BILLING_ADDRESS"; payload: Address }
   | { type: "SET_PAYMENT_METHOD"; payload: string }
-  | { type: "TOGGLE_SAME_AS_BILLING" }
+  | { type: "TOGGLE_SHIPPING_SAME_AS_BILLING" }
   | { type: "SET_SAVE_ADDRESS"; payload: boolean }
   | { type: "SET_REWARDS_TO_APPLY"; payload: number }
   | { type: "RESET" }
@@ -44,14 +44,13 @@ const initialState: CheckoutState = {
   shippingAddress: null,
   billingAddress: null,
   paymentMethod: null,
-  sameAsBilling: true,
+  shippingSameAsBilling: true,
   saveAddress: true,
   rewardsToApply: 0,
   isValid: false,
 }
 
-// Validation helper
-function validateAddress(address: Address | null): boolean {
+export function isAddressValid(address: Address | null): boolean {
   if (!address) return false
   return !!(
     address.first_name &&
@@ -63,6 +62,85 @@ function validateAddress(address: Address | null): boolean {
   )
 }
 
+function areAddressesEqual(
+  addressA: Address | null,
+  addressB: Address | null
+): boolean {
+  if (!addressA || !addressB) return false
+
+  return (
+    addressA.first_name === addressB.first_name &&
+    addressA.last_name === addressB.last_name &&
+    addressA.address_1 === addressB.address_1 &&
+    addressA.address_2 === addressB.address_2 &&
+    addressA.city === addressB.city &&
+    addressA.province === addressB.province &&
+    addressA.postal_code === addressB.postal_code &&
+    addressA.country_code === addressB.country_code &&
+    addressA.phone === addressB.phone
+  )
+}
+
+function inferShippingSameAsBilling(state: CheckoutState): boolean {
+  if (!state.billingAddress || !state.shippingAddress) {
+    return true
+  }
+
+  return areAddressesEqual(state.shippingAddress, state.billingAddress)
+}
+
+function withMirroredShipping(state: CheckoutState): CheckoutState {
+  if (!state.shippingSameAsBilling) {
+    return state
+  }
+
+  const sharedAddress = state.billingAddress ?? state.shippingAddress
+
+  return {
+    ...state,
+    billingAddress: sharedAddress,
+    shippingAddress: sharedAddress,
+  }
+}
+
+function computeCheckoutValidity(state: CheckoutState): boolean {
+  const normalizedState = withMirroredShipping(state)
+  const hasValidBilling = isAddressValid(normalizedState.billingAddress)
+  const hasValidShipping = normalizedState.shippingSameAsBilling
+    ? hasValidBilling
+    : isAddressValid(normalizedState.shippingAddress)
+
+  return Boolean(
+    normalizedState.email?.trim() &&
+      hasValidShipping &&
+      hasValidBilling &&
+      normalizedState.paymentMethod
+  )
+}
+
+function withComputedValidity(state: CheckoutState): CheckoutState {
+  const normalizedState = withMirroredShipping(state)
+
+  return {
+    ...normalizedState,
+    isValid: computeCheckoutValidity(normalizedState),
+  }
+}
+
+function createInitialCheckoutState(
+  initialData?: Partial<CheckoutState>
+): CheckoutState {
+  const state = initialData
+    ? { ...initialState, ...initialData }
+    : { ...initialState }
+
+  if (initialData?.shippingSameAsBilling === undefined) {
+    state.shippingSameAsBilling = inferShippingSameAsBilling(state)
+  }
+
+  return withComputedValidity(state)
+}
+
 // Reducer function
 function checkoutReducer(
   state: CheckoutState,
@@ -70,82 +148,45 @@ function checkoutReducer(
 ): CheckoutState {
   switch (action.type) {
     case "SET_EMAIL": {
-      const newState = {
+      return withComputedValidity({
         ...state,
         email: action.payload,
-      }
-      newState.isValid =
-        !!newState.email &&
-        validateAddress(newState.shippingAddress) &&
-        validateAddress(newState.billingAddress) &&
-        !!newState.paymentMethod
-      return newState
+      })
     }
 
     case "SET_SHIPPING_ADDRESS": {
-      const newState = {
+      return withComputedValidity({
         ...state,
         shippingAddress: action.payload,
-        // If same as billing, also update billing
-        billingAddress: state.sameAsBilling
-          ? action.payload
-          : state.billingAddress,
-      }
-      // Recalculate validity
-      newState.isValid =
-        !!newState.email &&
-        validateAddress(newState.shippingAddress) &&
-        validateAddress(newState.billingAddress) &&
-        !!newState.paymentMethod
-      return newState
+      })
     }
 
     case "SET_BILLING_ADDRESS": {
-      const newState = {
+      return withComputedValidity({
         ...state,
         billingAddress: action.payload,
-      }
-      newState.isValid =
-        !!newState.email &&
-        validateAddress(newState.shippingAddress) &&
-        validateAddress(newState.billingAddress) &&
-        !!newState.paymentMethod
-      return newState
+        shippingAddress: state.shippingSameAsBilling
+          ? action.payload
+          : state.shippingAddress,
+      })
     }
 
     case "SET_PAYMENT_METHOD": {
-      const newState = {
+      return withComputedValidity({
         ...state,
         paymentMethod: action.payload,
-      }
-      newState.isValid =
-        !!newState.email &&
-        validateAddress(newState.shippingAddress) &&
-        (state.sameAsBilling
-          ? validateAddress(newState.shippingAddress)
-          : validateAddress(newState.billingAddress)) &&
-        !!newState.paymentMethod
-      return newState
+      })
     }
 
-    case "TOGGLE_SAME_AS_BILLING": {
-      const newSameAsBilling = !state.sameAsBilling
-      const newState = {
+    case "TOGGLE_SHIPPING_SAME_AS_BILLING": {
+      const shippingSameAsBilling = !state.shippingSameAsBilling
+      return withComputedValidity({
         ...state,
-        sameAsBilling: newSameAsBilling,
-        // If toggling to same, copy shipping to billing
-        billingAddress: newSameAsBilling
-          ? state.shippingAddress
-          : state.billingAddress,
-      }
-      newState.isValid =
-        !!newState.email &&
-        validateAddress(newState.shippingAddress) &&
-        (newSameAsBilling
-          ? validateAddress(newState.shippingAddress)
-          : validateAddress(newState.billingAddress)) &&
-        !!newState.paymentMethod
-      return newState
+        shippingSameAsBilling,
+        shippingAddress: shippingSameAsBilling
+          ? state.billingAddress ?? state.shippingAddress
+          : state.shippingAddress ?? state.billingAddress,
+      })
     }
 
     case "SET_SAVE_ADDRESS": {
@@ -174,7 +215,8 @@ function checkoutReducer(
 export function useCheckoutState(initialData?: Partial<CheckoutState>) {
   const [state, dispatch] = useReducer(
     checkoutReducer,
-    initialData ? { ...initialState, ...initialData } : initialState
+    initialData,
+    createInitialCheckoutState
   )
 
   // Memoized helper functions
@@ -194,8 +236,8 @@ export function useCheckoutState(initialData?: Partial<CheckoutState>) {
     dispatch({ type: "SET_PAYMENT_METHOD", payload: method })
   }, [])
 
-  const toggleSameAsBilling = useCallback(() => {
-    dispatch({ type: "TOGGLE_SAME_AS_BILLING" })
+  const toggleShippingSameAsBilling = useCallback(() => {
+    dispatch({ type: "TOGGLE_SHIPPING_SAME_AS_BILLING" })
   }, [])
 
   const setSaveAddress = useCallback((save: boolean) => {
@@ -218,7 +260,7 @@ export function useCheckoutState(initialData?: Partial<CheckoutState>) {
       setShippingAddress,
       setBillingAddress,
       setPaymentMethod,
-      toggleSameAsBilling,
+      toggleShippingSameAsBilling,
       setSaveAddress,
       setRewardsToApply,
       reset,
@@ -229,7 +271,7 @@ export function useCheckoutState(initialData?: Partial<CheckoutState>) {
       setShippingAddress,
       setBillingAddress,
       setPaymentMethod,
-      toggleSameAsBilling,
+      toggleShippingSameAsBilling,
       setSaveAddress,
       setRewardsToApply,
       reset,

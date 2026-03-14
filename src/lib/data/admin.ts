@@ -1924,10 +1924,12 @@ export async function getAdminCustomer(id: string) {
     .order("created_at", { ascending: false })
     .range(0, 4)
 
-  const { data: addresses } = await supabase
-    .from("addresses")
-    .select("*")
-    .eq("user_id", id)
+    const { data: addresses } = await supabase
+      .from("addresses")
+      .select("*")
+      .order("is_default_billing", { ascending: false })
+      .order("is_default_shipping", { ascending: false })
+      .eq("user_id", id)
   const { data: wallet } = await supabase
     .from("reward_wallets")
     .select("*")

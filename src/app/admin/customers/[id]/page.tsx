@@ -46,17 +46,20 @@ export default async function AdminCustomerDetails({
   // Determine membership status
   const isMember = customer.is_club_member
   const membershipVariant = isMember ? "success" : "neutral"
+  const defaultBillingAddress =
+    customer.addresses?.find((address) => address.is_default_billing) ||
+    customer.addresses?.[0]
 
   // Calculate display name with fallbacks
   const displayName =
     [customer.first_name, customer.last_name].filter(Boolean).join(" ") ||
-    (customer.addresses?.[0]
-      ? [customer.addresses[0].first_name, customer.addresses[0].last_name]
+    (defaultBillingAddress
+      ? [defaultBillingAddress.first_name, defaultBillingAddress.last_name]
           .filter(Boolean)
           .join(" ")
       : null) ||
     "N/A"
-  const displayPhone = customer.phone || customer.addresses?.[0]?.phone || ""
+  const displayPhone = customer.phone || defaultBillingAddress?.phone || ""
 
   return (
     <div className="space-y-6 pb-20">
