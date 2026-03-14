@@ -24,6 +24,7 @@ import { redirect } from "next/navigation"
 import { requirePermission } from "@/lib/permissions/server"
 import { PERMISSIONS } from "@/lib/permissions"
 import { getCustomerFacingEmail } from "@/lib/util/customer-email"
+import { resolveCustomerPhone } from "@/lib/util/customer-contact-phone"
 
 type EmailBackedRow = {
   email: string | null
@@ -35,6 +36,14 @@ type CustomerProfileRow = Omit<CustomerProfile, "email"> &
     role?: string | null
     is_club_member?: boolean | null
   }
+
+type CustomerPhoneRow = {
+  phone: string | null
+}
+
+export type AdminOrder = Order & {
+  customer_phone: string | null
+}
 
 export interface RegisteredUserOption {
   id: string
@@ -1770,16 +1779,62 @@ export async function getAdminOrders(
   }
 }
 
-export async function getAdminOrder(id: string) {
+export async function getAdminOrder(id: string): Promise<AdminOrder | null> {
   await ensureAdmin()
   const supabase = await createClient()
   const { data, error } = await supabase
     .from("orders")
     .select("*")
     .eq("id", id)
-    .single()
+    .maybeSingle()
+
   if (error) throw error
-  return data as Order
+  if (!data) return null
+
+  let customerPhone: string | null = null
+
+  if (data.user_id) {
+    const { data: profileRow, error: profileError } = await supabase
+      .from("profiles")
+      .select("phone")
+      .eq("id", data.user_id)
+      .maybeSingle<CustomerPhoneRow>()
+
+    if (profileError) {
+      console.warn(
+        `Failed to load profile phone for admin order ${id}:`,
+        profileError
+      )
+    }
+
+    customerPhone = resolveCustomerPhone({
+      profilePhone: profileRow?.phone ?? null,
+    })
+
+    if (!customerPhone) {
+      const adminSupabase = await createAdminClient()
+      const { data: authUserData, error: authUserError } =
+        await adminSupabase.auth.admin.getUserById(data.user_id)
+
+      if (authUserError) {
+        console.warn(
+          `Failed to load auth phone for admin order ${id}:`,
+          authUserError
+        )
+      } else {
+        customerPhone = resolveCustomerPhone({
+          profilePhone: profileRow?.phone ?? null,
+          userMetadata: authUserData.user?.user_metadata,
+          authPhone: authUserData.user?.phone ?? null,
+        })
+      }
+    }
+  }
+
+  return {
+    ...(data as Order),
+    customer_phone: customerPhone,
+  } satisfies AdminOrder
 }
 
 export async function updateOrderStatus(id: string, status: string) {

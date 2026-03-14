@@ -50,8 +50,6 @@ export default async function AdminOrderDetails({ params }: Props) {
     order.user_id ? getCustomerDisplayId(order.user_id).catch(() => null) : null
   ])
 
-  const canFulfill = order.fulfillment_status === "not_shipped" || order.fulfillment_status === "not_fulfilled"
-
   const actions = (
     <div className="flex gap-2">
       {(order.status === 'order_placed' || order.status === 'pending') && (
@@ -320,7 +318,7 @@ export default async function AdminOrderDetails({ params }: Props) {
                 </div>
                 <div className="flex items-center text-sm text-gray-600 gap-3">
                   <PhoneIcon className="h-4 w-4 text-gray-400" />
-                  <span>{order.shipping_address?.phone || 'No phone'}</span>
+                  <span>{order.customer_phone || 'No phone'}</span>
                 </div>
               </div>
             </div>
@@ -358,6 +356,9 @@ export default async function AdminOrderDetails({ params }: Props) {
                     {order.shipping_address?.province ? `, ${order.shipping_address.province}` : ""}
                     {` ${order.shipping_address?.postal_code}`}
                   </p>
+                  <div className="text-sm text-gray-600">
+                    <span>{order.shipping_address?.phone || "No delivery phone"}</span>
+                  </div>
                   <p className="text-xs font-bold text-gray-400 mt-2">{order.shipping_address?.country_code?.toUpperCase()}</p>
                 </div>
               </div>

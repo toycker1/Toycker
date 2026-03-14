@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from "vitest"
 import { Order } from "@/lib/supabase/types"
 import OrderCompletedTemplate from "@modules/order/templates/order-completed-template"
 
+const orderDetailsSpy = vi.fn()
+
 vi.mock("@modules/common/components/cart-totals", () => ({
   default: () => <div>CartTotals</div>,
 }))
@@ -29,7 +31,13 @@ vi.mock("@modules/order/components/cancel-order-button", () => ({
 }))
 
 vi.mock("@modules/order/components/order-details", () => ({
-  default: () => <div>OrderDetails</div>,
+  default: (props: {
+    order: Order
+    customerPhone?: string | null
+  }) => {
+    orderDetailsSpy(props)
+    return <div>OrderDetails</div>
+  },
 }))
 
 vi.mock("@modules/order/components/order-tracking", () => ({
@@ -78,6 +86,7 @@ const buildOrder = (overrides: Partial<Order> = {}): Order => ({
 
 describe("OrderCompletedTemplate", () => {
   it("shows payment pending without clearing cart in account context", async () => {
+    orderDetailsSpy.mockClear()
     const order = buildOrder({
       status: "pending",
       payment_status: "pending",
@@ -99,6 +108,7 @@ describe("OrderCompletedTemplate", () => {
   })
 
   it("clears cart only for confirmed post-checkout orders", async () => {
+    orderDetailsSpy.mockClear()
     const order = buildOrder({
       status: "order_placed",
       payment_status: "captured",
@@ -112,5 +122,25 @@ describe("OrderCompletedTemplate", () => {
     ).toBeInTheDocument()
     expect(screen.getByTestId("clear-cart-on-mount")).toBeInTheDocument()
     expect(screen.getByText("Stay updated on every step")).toBeInTheDocument()
+  })
+
+  it("passes the customer phone to the shared order details component", async () => {
+    orderDetailsSpy.mockClear()
+    const order = buildOrder()
+
+    render(
+      await OrderCompletedTemplate({
+        order,
+        customerPhone: "919876543210",
+        context: "account",
+      })
+    )
+
+    expect(orderDetailsSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        order,
+        customerPhone: "919876543210",
+      })
+    )
   })
 })
