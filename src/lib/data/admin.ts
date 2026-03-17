@@ -561,6 +561,7 @@ export async function getAdminCategories(
 
   // If limit is -1, we want all items, but we skip pagination logic
   const isFetchAll = limit === -1
+  const currentPage = isFetchAll ? 1 : page
 
   if (search && search.trim()) {
     countQuery = countQuery.or(
@@ -571,10 +572,7 @@ export async function getAdminCategories(
   const { count } = await countQuery
 
   // Calculate pagination
-  const offset = (page - 1) * limit
-  const from = offset
-  const to = offset + limit - 1
-  const totalPages = count ? Math.ceil(count / limit) : 1
+  const totalPages = isFetchAll ? 1 : count ? Math.ceil(count / limit) : 1
 
   // Fetch paginated data
   let query = supabase
@@ -588,6 +586,9 @@ export async function getAdminCategories(
     .order("name")
 
   if (!isFetchAll) {
+    const offset = (page - 1) * limit
+    const from = offset
+    const to = offset + limit - 1
     query = query.range(from, to)
   }
 
@@ -604,7 +605,7 @@ export async function getAdminCategories(
     })[],
     count: count || 0,
     totalPages,
-    currentPage: page,
+    currentPage,
   }
 }
 
@@ -1565,6 +1566,7 @@ export async function getAdminCollections(
 
   // If limit is -1, we want all items
   const isFetchAll = limit === -1
+  const currentPage = isFetchAll ? 1 : page
 
   // Calculate total count first
   let countQuery = supabase
@@ -1580,10 +1582,7 @@ export async function getAdminCollections(
   const { count } = await countQuery
 
   // Calculate pagination
-  const offset = (page - 1) * limit
-  const from = offset
-  const to = offset + limit - 1
-  const totalPages = count ? Math.ceil(count / limit) : 1
+  const totalPages = isFetchAll ? 1 : count ? Math.ceil(count / limit) : 1
 
   // Fetch paginated data
   let query = supabase
@@ -1597,6 +1596,9 @@ export async function getAdminCollections(
     .order("created_at", { ascending: false })
 
   if (!isFetchAll) {
+    const offset = (page - 1) * limit
+    const from = offset
+    const to = offset + limit - 1
     query = query.range(from, to)
   }
 
@@ -1613,7 +1615,7 @@ export async function getAdminCollections(
     })[],
     count: count || 0,
     totalPages,
-    currentPage: page,
+    currentPage,
   }
 }
 

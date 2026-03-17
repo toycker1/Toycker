@@ -6,23 +6,26 @@ import { Search, Tag } from "lucide-react"
 interface Category {
   id: string
   name: string
+  handle?: string | null
 }
 
 interface CategoryCheckboxListProps {
   categories: Category[]
   selectedIds: string[]
   name: string
+  defaultVisibleCount?: number
 }
 
 export default function CategoryCheckboxList({
   categories,
   selectedIds,
-  name
+  name,
+  defaultVisibleCount
 }: CategoryCheckboxListProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [currentSelectedIds, setCurrentSelectedIds] = useState<string[]>(selectedIds)
+  const normalizedQuery = searchQuery.trim().toLowerCase()
 
-  // Sync with props if they change
   useEffect(() => {
     setCurrentSelectedIds(selectedIds)
   }, [selectedIds])
@@ -35,11 +38,41 @@ export default function CategoryCheckboxList({
     )
   }
 
+  const selectedIdSet = useMemo(() => {
+    return new Set(currentSelectedIds)
+  }, [currentSelectedIds])
+
   const filteredCategories = useMemo(() => {
     return categories.filter(c =>
-      c.name.toLowerCase().includes(searchQuery.toLowerCase())
+      c.name.toLowerCase().includes(normalizedQuery) ||
+      (c.handle ?? "").toLowerCase().includes(normalizedQuery)
     )
-  }, [categories, searchQuery])
+  }, [categories, normalizedQuery])
+
+  const visibleCategories = useMemo(() => {
+    if (normalizedQuery) {
+      return filteredCategories
+    }
+
+    if (typeof defaultVisibleCount !== "number") {
+      return categories
+    }
+
+    return categories.filter((category, index) => {
+      return index < defaultVisibleCount || selectedIdSet.has(category.id)
+    })
+  }, [
+    categories,
+    defaultVisibleCount,
+    filteredCategories,
+    normalizedQuery,
+    selectedIdSet,
+  ])
+
+  const overflowSelectedCount = Math.max(
+    visibleCategories.length - Math.min(defaultVisibleCount ?? categories.length, categories.length),
+    0
+  )
 
   return (
     <div className="space-y-4">
@@ -56,13 +89,23 @@ export default function CategoryCheckboxList({
         </div>
       )}
 
+      {((typeof defaultVisibleCount === "number" && categories.length > defaultVisibleCount) || normalizedQuery) && (
+        <p className="text-[10px] font-medium text-gray-400">
+          {normalizedQuery
+            ? `Showing ${visibleCategories.length} matching result${visibleCategories.length === 1 ? "" : "s"}.`
+            : overflowSelectedCount > 0
+              ? `Showing first ${Math.min(defaultVisibleCount ?? categories.length, categories.length)} of ${categories.length}. ${overflowSelectedCount} selected item${overflowSelectedCount === 1 ? "" : "s"} kept visible.`
+              : `Showing first ${Math.min(defaultVisibleCount ?? categories.length, categories.length)} of ${categories.length}. Search to find more.`}
+        </p>
+      )}
+
       <div className="flex flex-wrap gap-2 max-h-64 overflow-y-auto pr-2 custom-scrollbar py-1">
-        {filteredCategories.length === 0 ? (
+        {visibleCategories.length === 0 ? (
           <p className="text-gray-400 text-[10px] italic py-2">
-            {searchQuery ? "No categories match your search." : "No categories available."}
+            {normalizedQuery ? "No categories match your search." : "No categories available."}
           </p>
         ) : (
-          filteredCategories.map(c => {
+          visibleCategories.map(c => {
             const isSelected = currentSelectedIds.includes(c.id)
             return (
               <label
