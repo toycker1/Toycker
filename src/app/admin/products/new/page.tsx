@@ -6,8 +6,8 @@ import NewProductForm from "@modules/admin/components/new-product-form"
 
 export default async function NewProduct() {
   const [collectionsData, categoriesData] = await Promise.all([
-    getAdminCollections(),
-    getAdminCategories()
+    getAdminCollections({ limit: -1 }),
+    getAdminCategories({ limit: -1 })
   ])
 
   const collections = collectionsData.collections

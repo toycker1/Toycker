@@ -3,7 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { revalidatePath } from "next/cache"
-import { getAdminUser, getStaffMembers, promoteToStaff } from "@/lib/data/admin"
+import {
+  getAdminCategories,
+  getAdminCollections,
+  getAdminUser,
+  getStaffMembers,
+  promoteToStaff,
+} from "@/lib/data/admin"
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
@@ -53,6 +59,54 @@ function buildEnsureAdminClient() {
         select,
       }
     }),
+  }
+}
+
+function buildAdminListClient<T>({
+  table,
+  count,
+  data,
+}: {
+  table: string
+  count: number
+  data: T[]
+}) {
+  const dataQuery = {
+    data,
+    error: null,
+    range: vi.fn(),
+    or: vi.fn(),
+  }
+
+  dataQuery.range.mockReturnValue(dataQuery)
+  dataQuery.or.mockReturnValue(dataQuery)
+
+  const order = vi.fn().mockReturnValue(dataQuery)
+  const select = vi.fn((_columns: string, options?: { head?: boolean }) => {
+    if (options?.head) {
+      return { count }
+    }
+
+    return {
+      order,
+    }
+  })
+
+  return {
+    client: {
+      from: vi.fn((requestedTable: string) => {
+        if (requestedTable !== table) {
+          throw new Error(`Unexpected table: ${requestedTable}`)
+        }
+
+        return {
+          select,
+        }
+      }),
+    },
+    dataQuery,
+    order,
+    select,
   }
 }
 
@@ -353,5 +407,100 @@ describe("admin data identity handling", () => {
     )
 
     expect(createAdminClient).not.toHaveBeenCalled()
+  })
+})
+describe("admin list fetching", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("returns all categories without pagination metadata issues when limit is -1", async () => {
+    const ensureAdminClient = buildEnsureAdminClient()
+    const categories = [
+      {
+        id: "cat-1",
+        name: "Category 1",
+        handle: "category-1",
+        description: null,
+        parent_category_id: null,
+        created_at: "2026-03-17T00:00:00.000Z",
+        image_url: null,
+        products: [{ count: 3 }],
+      },
+      {
+        id: "cat-2",
+        name: "Category 2",
+        handle: "category-2",
+        description: null,
+        parent_category_id: null,
+        created_at: "2026-03-17T00:00:00.000Z",
+        image_url: null,
+        products: [{ count: 1 }],
+      },
+    ]
+    const { client, dataQuery } = buildAdminListClient({
+      table: "categories",
+      count: categories.length,
+      data: categories,
+    })
+
+    vi.mocked(createClient)
+      .mockResolvedValueOnce(
+        ensureAdminClient as unknown as Awaited<ReturnType<typeof createClient>>
+      )
+      .mockResolvedValueOnce(
+        client as unknown as Awaited<ReturnType<typeof createClient>>
+      )
+
+    const result = await getAdminCategories({ limit: -1 })
+
+    expect(dataQuery.range).not.toHaveBeenCalled()
+    expect(result.categories).toEqual(categories)
+    expect(result.count).toBe(categories.length)
+    expect(result.currentPage).toBe(1)
+    expect(result.totalPages).toBe(1)
+  })
+
+  it("returns all collections without pagination metadata issues when limit is -1", async () => {
+    const ensureAdminClient = buildEnsureAdminClient()
+    const collections = [
+      {
+        id: "col-1",
+        title: "Collection 1",
+        handle: "collection-1",
+        created_at: "2026-03-17T00:00:00.000Z",
+        image_url: null,
+        products: [{ count: 4 }],
+      },
+      {
+        id: "col-2",
+        title: "Collection 2",
+        handle: "collection-2",
+        created_at: "2026-03-17T00:00:00.000Z",
+        image_url: null,
+        products: [{ count: 2 }],
+      },
+    ]
+    const { client, dataQuery } = buildAdminListClient({
+      table: "collections",
+      count: collections.length,
+      data: collections,
+    })
+
+    vi.mocked(createClient)
+      .mockResolvedValueOnce(
+        ensureAdminClient as unknown as Awaited<ReturnType<typeof createClient>>
+      )
+      .mockResolvedValueOnce(
+        client as unknown as Awaited<ReturnType<typeof createClient>>
+      )
+
+    const result = await getAdminCollections({ limit: -1 })
+
+    expect(dataQuery.range).not.toHaveBeenCalled()
+    expect(result.collections).toEqual(collections)
+    expect(result.count).toBe(collections.length)
+    expect(result.currentPage).toBe(1)
+    expect(result.totalPages).toBe(1)
   })
 })
