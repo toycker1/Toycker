@@ -2508,6 +2508,47 @@ export async function deletePaymentMethod(id: string) {
   revalidatePath("/admin/payments")
 }
 
+const ONLINE_GATEWAY_IDS = ["pp_payu_payu", "pp_easebuzz_easebuzz"] as const
+type OnlineGatewayId = (typeof ONLINE_GATEWAY_IDS)[number]
+
+export async function setActiveOnlineGateway(
+  gatewayId: string
+): Promise<{ success: boolean; error?: string }> {
+  await ensureAdmin()
+  await requirePermission(PERMISSIONS.PAYMENTS_UPDATE)
+
+  if (!ONLINE_GATEWAY_IDS.includes(gatewayId as OnlineGatewayId)) {
+    return { success: false, error: "Invalid gateway ID." }
+  }
+
+  const supabase = await createClient()
+
+  // Deactivate all online gateways first
+  const { error: deactivateError } = await supabase
+    .from("payment_providers")
+    .update({ is_active: false })
+    .in("id", ONLINE_GATEWAY_IDS)
+
+  if (deactivateError) {
+    return { success: false, error: deactivateError.message }
+  }
+
+  // Activate the chosen gateway
+  const { error: activateError } = await supabase
+    .from("payment_providers")
+    .update({ is_active: true })
+    .eq("id", gatewayId)
+
+  if (activateError) {
+    return { success: false, error: activateError.message }
+  }
+
+  revalidatePath("/admin/settings")
+  revalidatePath("/admin/payments")
+
+  return { success: true }
+}
+
 // --- Shipping Methods ---
 export async function getAdminShippingOptions() {
   await ensureAdmin()

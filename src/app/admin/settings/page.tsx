@@ -1,11 +1,16 @@
 import AdminCard from "@modules/admin/components/admin-card"
 import AdminPageHeader from "@modules/admin/components/admin-page-header"
 import { getGlobalSettings } from "@/lib/data/settings"
+import { getOnlinePaymentGateways } from "@/lib/data/payment"
 import GiftWrapSettings from "@modules/admin/components/settings/gift-wrap-settings"
 import VisualSearchSettings from "@modules/admin/components/settings/visual-search-settings"
+import PaymentGatewaySettings from "@modules/admin/components/settings/payment-gateway-settings"
 
 export default async function AdminSettings() {
-  const globalSettings = await getGlobalSettings()
+  const [globalSettings, onlineGateways] = await Promise.all([
+    getGlobalSettings(),
+    getOnlinePaymentGateways(),
+  ])
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
@@ -37,6 +42,14 @@ export default async function AdminSettings() {
         </div>
         <div className="lg:col-span-2 border-t border-gray-200 pt-8 flex flex-col gap-8">
           <GiftWrapSettings initialSettings={globalSettings} />
+        </div>
+
+        <div className="lg:col-span-1 border-t border-gray-200 pt-8">
+          <h2 className="text-sm font-semibold text-gray-900">Payment Gateway</h2>
+          <p className="text-sm text-gray-500 mt-1">Choose which online payment gateway is active for checkout.</p>
+        </div>
+        <div className="lg:col-span-2 border-t border-gray-200 pt-8">
+          <PaymentGatewaySettings initialGateways={onlineGateways} />
         </div>
 
         <div className="lg:col-span-1 border-t border-gray-200 pt-8">

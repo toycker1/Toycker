@@ -30,11 +30,7 @@ export const paymentInfoMap: Record<
 const temporarilyDisabledPaymentMethods: Record<
   string,
   { badgeLabel: string }
-> = {
-  pp_payu_payu: {
-    badgeLabel: "Coming Soon",
-  },
-}
+> = {}
 
 export const isTemporarilyDisabledPaymentMethod = (
   providerId?: string | null
