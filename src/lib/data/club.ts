@@ -72,7 +72,7 @@ export async function checkAndActivateMembership(userId: string, orderTotal: num
 
     const adminSupabase = await createAdminClient()
 
-    // Use admin API — works without user cookies (e.g. PayU server-to-server callback)
+    // Use admin API — works without user cookies (e.g. payment gateway server-to-server callback)
     const { data: { user }, error } = await adminSupabase.auth.admin.getUserById(userId)
     if (error || !user) return false
 

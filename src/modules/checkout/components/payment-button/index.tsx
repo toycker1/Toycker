@@ -1,6 +1,7 @@
 "use client"
 
 import {
+  isEasebuzz,
   isManual,
   isPayU,
   isStripeLike,
@@ -46,6 +47,14 @@ const PaymentButton: React.FC<PaymentButtonProps> = ({
     case isManual(selectedPaymentMethod):
       return (
         <ManualTestPaymentButton
+          notReady={notReady}
+          cart={cart}
+          data-testid={dataTestId}
+        />
+      )
+    case isEasebuzz(selectedPaymentMethod):
+      return (
+        <EasebuzzPaymentButton
           notReady={notReady}
           cart={cart}
           data-testid={dataTestId}
@@ -346,6 +355,84 @@ const PayUPaymentButton = ({
       <ErrorMessage
         error={errorMessage}
         data-testid="payu-payment-error-message"
+      />
+    </>
+  )
+}
+
+const EasebuzzPaymentButton = ({
+  cart,
+  notReady,
+  "data-testid": dataTestId,
+}: {
+  cart: Cart
+  notReady: boolean
+  "data-testid"?: string
+}) => {
+  const [submitting, setSubmitting] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const { state, isPaymentUpdating } = useCheckout()
+
+  const handlePayment = async () => {
+    setSubmitting(true)
+    setErrorMessage(null)
+
+    const billingAddress = state.billingAddress
+    const shippingAddress = state.shippingAddress
+    const paymentMethod = state.paymentMethod
+
+    if (!billingAddress || !shippingAddress || !paymentMethod) {
+      setErrorMessage("Please fill all required fields")
+      setSubmitting(false)
+      return
+    }
+
+    try {
+      const result = await completeCheckout({
+        cartId: cart.id,
+        email: state.email || "",
+        shippingAddress,
+        billingAddress,
+        paymentMethod,
+        rewardsToApply: state.rewardsToApply,
+        saveAddress: state.saveAddress,
+      })
+
+      if (!result.success) {
+        setErrorMessage(result.error || "Order creation failed")
+        setSubmitting(false)
+        return
+      }
+
+      // Easebuzz: redirect directly to the payment URL (no form POST needed)
+      if (result.paymentData?.payment_url) {
+        window.location.href = result.paymentData.payment_url
+        return
+      }
+
+      setErrorMessage("Unable to start Easebuzz payment. Please try again.")
+      setSubmitting(false)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Payment failed")
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <>
+      <Button
+        disabled={notReady || submitting || isPaymentUpdating}
+        onClick={handlePayment}
+        size="large"
+        isLoading={submitting}
+        className="w-full hover:bg-primary"
+        data-testid={dataTestId}
+      >
+        Place order
+      </Button>
+      <ErrorMessage
+        error={errorMessage}
+        data-testid="easebuzz-payment-error-message"
       />
     </>
   )

@@ -42,7 +42,7 @@ const PaymentDetails = ({ order }: PaymentDetailsProps) => {
           title: "Cash on Delivery",
           icon: <Wallet className="h-4 w-4" />,
         }
-      } else if (methodKey.includes("payu") || methodKey.includes("online") || methodKey.includes("upi")) {
+      } else if (methodKey.includes("easebuzz") || methodKey.includes("payu") || methodKey.includes("online") || methodKey.includes("upi")) {
         return {
           providerId: "online",
           title: "Online Payment",

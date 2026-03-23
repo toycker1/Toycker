@@ -12,25 +12,28 @@ import RealtimeOrdersListener from "@modules/admin/components/realtime-orders-li
 import { AdminTableWrapper } from "@modules/admin/components/admin-table-wrapper"
 
 // Helper to format payment status for display
-function normalizePaymentMethod(method?: string | null, hasPayuTxn?: string | null) {
+function normalizePaymentMethod(method?: string | null, hasPayuTxn?: string | null, hasGatewayTxn?: string | null) {
+  if (!method && hasGatewayTxn) return "easebuzz"
   if (!method && hasPayuTxn) return "payu"
   const m = (method || "").toLowerCase()
   if (m.includes("cod") || m.includes("cash") || m.includes("pp_system_default")) return "cod"
+  if (m.includes("easebuzz")) return "easebuzz"
   if (m.includes("payu")) return "payu"
   if (!method) return "manual"
   return method
 }
 
-function formatPaymentMethodDisplay(method?: string | null, hasPayuTxn?: string | null) {
-  const normalized = normalizePaymentMethod(method, hasPayuTxn)
+function formatPaymentMethodDisplay(method?: string | null, hasPayuTxn?: string | null, hasGatewayTxn?: string | null) {
+  const normalized = normalizePaymentMethod(method, hasPayuTxn, hasGatewayTxn)
+  if (normalized === "easebuzz") return "Easebuzz"
   if (normalized === "payu") return "PayU"
   if (normalized === "cod" || normalized === "manual") return "Cash on Delivery (COD)"
   const label = (method || "").replace(/_/g, " ").trim()
   return label ? label.replace(/\b\w/g, c => c.toUpperCase()) : "—"
 }
 
-function getPaymentBadge(paymentStatus: string, paymentMethod?: string | null, hasPayuTxn?: string | null, orderStatus?: string | null) {
-  const normalizedMethod = normalizePaymentMethod(paymentMethod, hasPayuTxn)
+function getPaymentBadge(paymentStatus: string, paymentMethod?: string | null, hasPayuTxn?: string | null, orderStatus?: string | null, hasGatewayTxn?: string | null) {
+  const normalizedMethod = normalizePaymentMethod(paymentMethod, hasPayuTxn, hasGatewayTxn)
   const isCOD = normalizedMethod === "cod" || normalizedMethod === "manual"
   const isCancelled = orderStatus === "cancelled" || paymentStatus === "cancelled" || paymentStatus === "failed"
 
@@ -134,12 +137,12 @@ export default async function AdminOrders({
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
               {orders.length > 0 ? orders.map((order) => {
-                const normalizedMethod = normalizePaymentMethod(order.payment_method, order.payu_txn_id)
-                const isCOD = normalizedMethod === "cod" || normalizedMethod === "manual"
+                const normalizedMethod = normalizePaymentMethod(order.payment_method, order.payu_txn_id, order.gateway_txn_id)
+                const _isCOD = normalizedMethod === "cod" || normalizedMethod === "manual"
 
-                const paymentBadge = getPaymentBadge(order.payment_status, order.payment_method, order.payu_txn_id, order.status)
+                const paymentBadge = getPaymentBadge(order.payment_status, order.payment_method, order.payu_txn_id, order.status, order.gateway_txn_id)
                 const fulfillmentBadge = getFulfillmentBadge(order.fulfillment_status)
-                const paymentMethodDisplay = formatPaymentMethodDisplay(order.payment_method, order.payu_txn_id)
+                const paymentMethodDisplay = formatPaymentMethodDisplay(order.payment_method, order.payu_txn_id, order.gateway_txn_id)
 
                 return (
                   <ClickableTableRow

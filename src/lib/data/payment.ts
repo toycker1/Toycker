@@ -16,9 +16,9 @@ export const listCartPaymentMethods = async (_regionId: string) => {
     // Fallback if DB query fails
     return [
       {
-        id: "pp_payu_payu",
-        name: "PayU",
-      }
+        id: "pp_easebuzz_easebuzz",
+        name: "Easebuzz",
+      },
     ]
   }
 

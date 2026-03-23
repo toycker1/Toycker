@@ -135,7 +135,7 @@ Pay securely using any of these methods:
 4️⃣ Complete payment securely
 5️⃣ Order confirmed instantly! ✅
 
-Payment is processed by **PayU** - a trusted payment gateway.`,
+Payment is processed by **Easebuzz** - a trusted payment gateway.`,
 
     payment_security: `🔒 **100% Secure Payments**
 
@@ -145,7 +145,7 @@ Your payment security is our top priority!
 ✅ **256-bit SSL Encryption** - Bank-level security
 ✅ **PCI DSS Compliant** - International security standards
 ✅ **3D Secure** - Extra verification for cards
-✅ **Trusted Gateway** - Powered by PayU
+✅ **Trusted Gateway** - Powered by Easebuzz
 
 **What this means for you:**
 • Your card details are never stored on our servers

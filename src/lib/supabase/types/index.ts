@@ -256,6 +256,7 @@ export interface Order {
   fulfillment_status: string
   payment_status: string
   payu_txn_id: string | null
+  gateway_txn_id?: string | null
   shipping_address: Address | null
   billing_address: Address | null
   shipping_method: string | null
