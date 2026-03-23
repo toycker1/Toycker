@@ -16,6 +16,7 @@ export { removeCartId }
 import { randomUUID } from "crypto"
 import { redirect } from "next/navigation"
 import { generatePayUHash, PayUHashParams } from "@/lib/payu"
+import { generateEasebuzzHash, EasebuzzHashParams } from "@/lib/easebuzz"
 import { getBaseURL } from "@/lib/util/env"
 import { getAuthUser } from "./auth"
 import { getCustomerFacingEmail } from "@/lib/util/customer-email"
@@ -1098,6 +1099,110 @@ export async function initiatePaymentSession(
         phone,
         // Note: service_provider: "payu_paisa" removed - deprecated since 2016
       },
+    }
+  } else if (data.provider_id === "pp_easebuzz_easebuzz") {
+    // Easebuzz payment gateway integration
+    // Step 1: Read credentials from environment
+    const key = process.env.EASEBUZZ_MERCHANT_KEY
+    const salt = process.env.EASEBUZZ_MERCHANT_SALT
+    const isTestMode = process.env.EASEBUZZ_ENVIRONMENT === "test"
+
+    if (!key || !salt) {
+      throw new Error(
+        "Easebuzz configuration missing: EASEBUZZ_MERCHANT_KEY or EASEBUZZ_MERCHANT_SALT not set."
+      )
+    }
+
+    // Step 2: Format payment data
+    const txnid = `txn${Date.now()}`
+    const amount = Number(cart.total || 0).toFixed(2)
+    const productinfo = "Store Order"
+    const checkoutCustomerAddress =
+      data.customerAddress ?? cart.billing_address ?? cart.shipping_address
+    const firstname = (checkoutCustomerAddress?.first_name || "Guest")
+      .trim()
+      .replace(/[^a-zA-Z0-9 ]/g, "")
+    const email = (
+      getCustomerFacingEmail(data.customerEmail, cart.email) ||
+      "guest@toycker.in"
+    ).trim()
+    const phone =
+      (checkoutCustomerAddress?.phone || "9999999999").replace(/\D/g, "") ||
+      "9999999999"
+
+    const baseUrl = getBaseURL()
+    const callbackUrl = `${baseUrl}/api/easebuzz/callback`
+
+    // Step 3: Generate hash (same algorithm as PayU)
+    const hashParams: EasebuzzHashParams = {
+      key,
+      txnid,
+      amount,
+      productinfo,
+      firstname,
+      email,
+      udf1: cart.id, // Cart ID stored in UDF1 for callback tracking
+      udf2: "",
+      udf3: "",
+      udf4: "",
+      udf5: "",
+    }
+
+    const hash = generateEasebuzzHash(hashParams, salt)
+
+    // Step 4: Call Easebuzz initiate payment API (server-to-server)
+    const apiBaseUrl = isTestMode
+      ? "https://testpay.easebuzz.in"
+      : "https://pay.easebuzz.in"
+
+    const formBody = new URLSearchParams({
+      key,
+      txnid,
+      amount,
+      productinfo,
+      firstname,
+      email,
+      phone,
+      surl: callbackUrl,
+      furl: callbackUrl,
+      hash,
+      udf1: cart.id,
+      udf2: "",
+      udf3: "",
+      udf4: "",
+      udf5: "",
+    })
+
+    const apiResponse = await fetch(`${apiBaseUrl}/payment/initiateLink`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: formBody.toString(),
+    })
+
+    if (!apiResponse.ok) {
+      throw new Error(
+        `Easebuzz API request failed with status ${apiResponse.status}`
+      )
+    }
+
+    const apiResult = (await apiResponse.json()) as {
+      status: number
+      data: string
+      error_desc?: string
+    }
+
+    if (apiResult.status !== 1 || !apiResult.data) {
+      throw new Error(
+        `Easebuzz initiate payment failed: ${apiResult.error_desc || "Unknown error"}`
+      )
+    }
+
+    const accessKey = apiResult.data
+    const paymentUrl = `${apiBaseUrl}/pay/${accessKey}`
+
+    // Step 5: Store only the redirect URL (no form params needed for Easebuzz)
+    sessionData = {
+      payment_url: paymentUrl,
     }
   }
 

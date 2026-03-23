@@ -685,7 +685,7 @@ export function ChatbotProvider({ children }: { children: React.ReactNode }) {
             ],
             payment_info: [
                 "payment info", "how to pay", "online payment", "is payment secure", "payment methods",
-                "upi payment", "card payment", "payment help", "payu info", "gpay support",
+                "upi payment", "card payment", "payment help", "payu info", "easebuzz info", "gpay support",
                 "apple pay info", "payment options", "billing help", "secure checkout info", "payment problems",
                 "pay online guide", "bank transfer details", "prepaid orders", "payment discounts", "how to use coupon",
                 "payment kaise karein", "online pay kaise hoga", "cod option h?", "gpay se pay karein", "upi payment support",

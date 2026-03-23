@@ -15,6 +15,11 @@ export const paymentInfoMap: Record<
     icon: <Wallet className="text-blue-600" />,
     description: "Pay securely using cards, UPI, net banking, or wallets.",
   },
+  pp_easebuzz_easebuzz: {
+    title: "Online Payment",
+    icon: <Wallet className="text-blue-600" />,
+    description: "Pay securely using cards, UPI, net banking, or wallets.",
+  },
   pp_system_default: {
     title: "Cash on Delivery",
     icon: <Package className="text-green-600" />,
@@ -25,11 +30,7 @@ export const paymentInfoMap: Record<
 const temporarilyDisabledPaymentMethods: Record<
   string,
   { badgeLabel: string }
-> = {
-  pp_payu_payu: {
-    badgeLabel: "Coming Soon",
-  },
-}
+> = {}
 
 export const isTemporarilyDisabledPaymentMethod = (
   providerId?: string | null
@@ -60,6 +61,10 @@ export const isPaypal = (providerId?: string) => {
 
 export const isPayU = (providerId?: string) => {
   return providerId?.startsWith("pp_payu")
+}
+
+export const isEasebuzz = (providerId?: string) => {
+  return providerId?.startsWith("pp_easebuzz")
 }
 
 export const isManual = (providerId?: string) => {

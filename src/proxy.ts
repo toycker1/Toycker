@@ -74,8 +74,11 @@ export async function updateSession(request: NextRequest) {
 }
 
 export async function proxy(request: NextRequest) {
-  // CRITICAL: Bypass middleware for PayU callbacks to prevent auth errors on POST requests
-  if (request.nextUrl.pathname.startsWith('/api/payu/callback')) {
+  // CRITICAL: Bypass middleware for payment gateway callbacks to prevent auth errors on POST requests
+  if (
+    request.nextUrl.pathname.startsWith('/api/payu/callback') ||
+    request.nextUrl.pathname.startsWith('/api/easebuzz/callback')
+  ) {
     return NextResponse.next()
   }
 
@@ -89,6 +92,7 @@ export const config = {
     /*
      * Match all request paths except for the ones starting with:
      * - api/payu/callback (payment callback needs to be clean)
+     * - api/easebuzz/callback (payment callback needs to be clean)
      * - api/auth/callback (Supabase auth callback)
      * - auth/confirm (email confirmation)
      * - _next/static (static files)
@@ -97,6 +101,6 @@ export const config = {
      * - assets (public assets folder)
      * - All static file extensions (images, fonts, manifests)
      */
-    '/((?!api/payu/callback|api/auth/callback|auth/confirm|_next/static|_next/image|assets|favicon.ico|robots.txt|sitemap.xml|manifest.json|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|avif|woff|woff2|ttf|otf|eot|json)$).*)',
+    '/((?!api/payu/callback|api/easebuzz/callback|api/auth/callback|auth/confirm|_next/static|_next/image|assets|favicon.ico|robots.txt|sitemap.xml|manifest.json|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|avif|woff|woff2|ttf|otf|eot|json)$).*)',
   ],
 }

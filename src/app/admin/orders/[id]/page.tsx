@@ -22,17 +22,20 @@ import { RealtimeOrderManager } from "@modules/common/components/realtime-order-
 import { ProtectedAction } from "@/lib/permissions/components/protected-action"
 import { PERMISSIONS } from "@/lib/permissions"
 
-const normalizePaymentMethod = (method?: string | null, hasPayuTxn?: string | null) => {
+const normalizePaymentMethod = (method?: string | null, hasPayuTxn?: string | null, hasGatewayTxn?: string | null) => {
+  if (!method && hasGatewayTxn) return "easebuzz"
   if (!method && hasPayuTxn) return "payu"
   const m = (method || "").toLowerCase()
   if (m.includes("cod") || m.includes("cash") || m.includes("pp_system_default")) return "cod"
+  if (m.includes("easebuzz")) return "easebuzz"
   if (m.includes("payu")) return "payu"
   if (!method) return "manual"
   return method
 }
 
-const formatPaymentMethodDisplay = (method?: string | null, hasPayuTxn?: string | null) => {
-  const normalized = normalizePaymentMethod(method, hasPayuTxn)
+const formatPaymentMethodDisplay = (method?: string | null, hasPayuTxn?: string | null, hasGatewayTxn?: string | null) => {
+  const normalized = normalizePaymentMethod(method, hasPayuTxn, hasGatewayTxn)
+  if (normalized === "easebuzz") return "Easebuzz"
   if (normalized === "payu") return "PayU"
   if (normalized === "cod" || normalized === "manual") return "Cash on Delivery (COD)"
   const label = (method || "").replace(/_/g, " ").trim()
@@ -81,19 +84,25 @@ export default async function AdminOrderDetails({ params }: Props) {
     </div>
   )
 
-  // Determine payment method display with specific sub-method for PayU
-  let paymentMethod = formatPaymentMethodDisplay(order.payment_method, order.payu_txn_id)
-  if (order.payu_txn_id && order.metadata?.payu_payload) {
-    const payload = order.metadata.payu_payload as any
-    const modeMap: Record<string, string> = {
-      'CC': 'Credit Card',
-      'DC': 'Debit Card',
-      'NB': 'Net Banking',
-      'UPI': 'UPI',
-      'UP': 'UPI',
-      'CASH': 'Cash Card',
-      'EMI': 'EMI'
-    }
+  const modeMap: Record<string, string> = {
+    'CC': 'Credit Card',
+    'DC': 'Debit Card',
+    'NB': 'Net Banking',
+    'UPI': 'UPI',
+    'UP': 'UPI',
+    'CASH': 'Cash Card',
+    'EMI': 'EMI',
+  }
+
+  // Determine payment method display with specific sub-method for gateway payments
+  let paymentMethod = formatPaymentMethodDisplay(order.payment_method, order.payu_txn_id, order.gateway_txn_id)
+  if (order.gateway_txn_id && order.metadata?.easebuzz_payload) {
+    const payload = order.metadata.easebuzz_payload as Record<string, string>
+    const mode = payload.mode ? (modeMap[payload.mode] || payload.mode) : ""
+    const bank = payload.bankcode && payload.bankcode !== 'UPI' ? ` (${payload.bankcode})` : ""
+    paymentMethod = `Easebuzz - ${mode}${bank}`.trim()
+  } else if (order.payu_txn_id && order.metadata?.payu_payload) {
+    const payload = order.metadata.payu_payload as Record<string, string>
     const mode = payload.mode ? (modeMap[payload.mode] || payload.mode) : ""
     const bank = payload.bankcode && payload.bankcode !== 'UPI' ? ` (${payload.bankcode})` : ""
     paymentMethod = `PayU - ${mode}${bank}`.trim()
@@ -107,7 +116,7 @@ export default async function AdminOrderDetails({ params }: Props) {
     return ps || (order.status === "cancelled" || order.status === "failed" ? "cancelled" : "pending")
   })()
 
-  const normalizedMethod = normalizePaymentMethod(order.payment_method, order.payu_txn_id)
+  const normalizedMethod = normalizePaymentMethod(order.payment_method, order.payu_txn_id, order.gateway_txn_id)
   const isCodPayment = normalizedMethod === "cod" || normalizedMethod === "manual"
   const paymentStatusPending = ["pending", "awaiting", "unpaid"].includes(normalizedPaymentStatus)
   const canMarkAsPaid = !isCodPayment && paymentStatusPending && order.status === "delivered"
@@ -286,7 +295,13 @@ export default async function AdminOrderDetails({ params }: Props) {
                   </p>
                 </div>
               </div>
-              {order.payu_txn_id && (
+              {order.gateway_txn_id && (
+                <div className="pt-3 border-t border-gray-100">
+                  <p className="text-xs text-gray-500">Transaction ID</p>
+                  <p className="text-sm font-mono text-gray-700 mt-1">{order.gateway_txn_id}</p>
+                </div>
+              )}
+              {!order.gateway_txn_id && order.payu_txn_id && (
                 <div className="pt-3 border-t border-gray-100">
                   <p className="text-xs text-gray-500">Transaction ID</p>
                   <p className="text-sm font-mono text-gray-700 mt-1">{order.payu_txn_id}</p>

@@ -137,7 +137,7 @@ export async function completeCheckout(
       },
     }
 
-    // Step 1: Initialize payment session (generates client secrets, PayU hashes, etc.)
+    // Step 1: Initialize payment session (generates client secrets, PayU/Easebuzz hashes, etc.)
     // This updates the cart in the DB with the necessary payment data
     const { initiatePaymentSession } = await import("@lib/data/cart")
     await initiatePaymentSession(
@@ -251,8 +251,10 @@ export async function completeCheckout(
       .single()
 
     // Step 3: For non-gateway payments (COD, manual), run post-order logic now.
-    // Gateway payments (PayU) handle this in their callback after payment verification.
-    const isGatewayPayment = checkoutData.paymentMethod.includes("payu")
+    // Gateway payments (PayU, Easebuzz) handle this in their callback after payment verification.
+    const isGatewayPayment =
+      checkoutData.paymentMethod.includes("payu") ||
+      checkoutData.paymentMethod.includes("easebuzz")
 
     if (!isGatewayPayment && orderData) {
       const { handlePostOrderLogic, retrieveCart } = await import(

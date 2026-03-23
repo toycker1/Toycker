@@ -1,4 +1,5 @@
 import { PayUCallbackPayload } from "@/lib/payu"
+import { EasebuzzCallbackPayload } from "@/lib/easebuzz"
 
 type UnknownRecord = Record<string, unknown>
 
@@ -18,6 +19,7 @@ export interface OrderPricingMetadata {
   payment_discount_percentage?: number
   payment_method?: string
   payu_payload?: Partial<PayUCallbackPayload>
+  easebuzz_payload?: Partial<EasebuzzCallbackPayload>
   club_savings_credited?: boolean
   club_savings_deducted?: boolean
   deducted_amount?: number
