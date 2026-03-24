@@ -11,7 +11,6 @@ import {
 } from "@/lib/util/order-pricing"
 import { getCustomerFacingEmail } from "@/lib/util/customer-email"
 
-export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 const RECENT_CALLBACKS = new Map<string, number>()
@@ -157,7 +156,13 @@ export async function POST(request: NextRequest) {
   RECENT_CALLBACKS.set(ip, now)
 
   if (RECENT_CALLBACKS.size > 1000) {
-    RECENT_CALLBACKS.clear()
+    // Delete only expired entries instead of wiping the whole map.
+    // Clearing everything would reset throttle protection for all IPs simultaneously,
+    // which a flood of 1000 unique IPs could exploit intentionally.
+    const cutoff = now - THROTTLE_MS
+    RECENT_CALLBACKS.forEach((ts, key) => {
+      if (ts < cutoff) RECENT_CALLBACKS.delete(key)
+    })
   }
 
   try {
@@ -335,21 +340,32 @@ export async function POST(request: NextRequest) {
       }
 
       if (!orderAlreadyCaptured) {
-        const { handlePostOrderLogic } = await import("@lib/data/cart")
-        const { logOrderEvent } = await import("@/lib/data/admin")
-        const finalizedMetadata = getOrderPricingMetadata(
-          finalizedOrderData.metadata
-        )
-        const rewardsToApply = Number(finalizedMetadata.rewards_used ?? 0)
+        // Wrap in try/catch: the order is already captured in the DB at this point.
+        // A failure here (email, rewards, timeline) must NOT redirect the user back to
+        // checkout — they paid successfully. Log the error for manual recovery instead.
+        try {
+          const { handlePostOrderLogic } = await import("@lib/data/cart")
+          const { logOrderEvent } = await import("@/lib/data/admin")
+          const finalizedMetadata = getOrderPricingMetadata(
+            finalizedOrderData.metadata
+          )
+          const rewardsToApply = Number(finalizedMetadata.rewards_used ?? 0)
 
-        await handlePostOrderLogic(finalizedOrderData, cart, rewardsToApply)
-        await logOrderEvent(
-          finalizedOrderData.id,
-          "order_placed",
-          "Order Placed",
-          "Order confirmed via Easebuzz payment gateway callback.",
-          "system"
-        )
+          await handlePostOrderLogic(finalizedOrderData, cart, rewardsToApply)
+          await logOrderEvent(
+            finalizedOrderData.id,
+            "order_placed",
+            "Order Placed",
+            "Order confirmed via Easebuzz payment gateway callback.",
+            "system"
+          )
+        } catch (postOrderError) {
+          console.error(
+            "[EASEBUZZ] Post-order logic failed for captured order — manual review required:",
+            finalizedOrderData.id,
+            postOrderError
+          )
+        }
       }
 
       console.log(
@@ -364,37 +380,58 @@ export async function POST(request: NextRequest) {
       return response
     }
 
-    const failureReason = payload.error_Message || payload.error || "payment_failed"
-    console.log("[EASEBUZZ] Payment failed:", { status, reason: failureReason })
+    const failureReason = payload.error_Message || payload.error || "payment_cancelled"
+    console.log("[EASEBUZZ] Payment non-success callback:", { status, reason: failureReason })
 
-    try {
-      const supabase = await createAdminClient()
-      const existingOrder = await fetchLatestOrderForCart(supabase, cartId)
+    if (!cartId) {
+      console.warn("[EASEBUZZ] Empty cartId in failure callback — cannot look up order")
+    }
 
-      if (existingOrder && existingOrder.payment_status !== "captured") {
-        await supabase
-          .from("orders")
-          .update({
-            status: "cancelled",
-            payment_status: "failed",
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", existingOrder.id)
+    // Only cancel the order for definitive failure statuses.
+    // "pending" means the payment is still in progress (e.g. UPI awaiting confirmation,
+    // or the gateway is sending an acknowledgement before the user completes payment).
+    // Cancelling for "pending" would incorrectly mark active orders as cancelled.
+    const DEFINITIVE_FAILURE_STATUSES = [
+      "failure",
+      "userCancelled",
+      "dropped",
+      "bounced",
+      "failed",
+    ]
+    const isDefinitiveFailure = DEFINITIVE_FAILURE_STATUSES.includes(status)
 
-        const { logOrderEvent } = await import("@/lib/data/admin")
-        await logOrderEvent(
-          existingOrder.id,
-          "payment_failed",
-          "Payment Failed",
-          `Payment attempt failed or was cancelled via Easebuzz. Reason: ${failureReason}`,
-          "system"
+    if (isDefinitiveFailure) {
+      try {
+        const supabase = await createAdminClient()
+        const existingOrder = await fetchLatestOrderForCart(supabase, cartId)
+
+        if (existingOrder && existingOrder.payment_status !== "captured") {
+          await supabase
+            .from("orders")
+            .update({
+              status: "cancelled",
+              payment_status: "cancelled",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", existingOrder.id)
+
+          const { logOrderEvent } = await import("@/lib/data/admin")
+          await logOrderEvent(
+            existingOrder.id,
+            "cancelled",
+            "Payment Cancelled",
+            `Payment was not completed via Easebuzz. Reason: ${failureReason}`,
+            "system"
+          )
+        }
+      } catch (updateErr) {
+        console.error(
+          "[EASEBUZZ] Failed to update order status for failure:",
+          updateErr
         )
       }
-    } catch (updateErr) {
-      console.error(
-        "[EASEBUZZ] Failed to update order status for failure:",
-        updateErr
-      )
+    } else {
+      console.log("[EASEBUZZ] Non-definitive status — skipping order cancellation:", status)
     }
 
     return htmlRedirect(

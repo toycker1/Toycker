@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 import { CheckoutProvider } from "@modules/checkout/context/checkout-context"
 
 interface CheckoutProps {
-  searchParams: Promise<{ cartId?: string; step?: string }>
+  searchParams: Promise<{ cartId?: string; step?: string; error?: string; status?: string }>
 }
 
 export default async function Checkout({ searchParams }: CheckoutProps) {
@@ -50,6 +50,19 @@ export default async function Checkout({ searchParams }: CheckoutProps) {
   // No cart found - redirect to cart page instead of showing 404
   if (!cart) {
     redirect("/cart")
+  }
+
+  // Cancel stale pending payment orders when user returns from a failed/expired payment.
+  // This handles Easebuzz link expiry (15 min), browser back from gateway, etc.
+  // Safe now because revalidatePath("/checkout") was removed from setPaymentProvider.
+  if (params.error || params.status) {
+    const { cancelPendingPaymentOrders } = await import(
+      "@/lib/actions/cancel-pending-payment"
+    )
+    // Use a 5-minute minimum age to avoid cancelling a freshly created order.
+    // Next.js re-renders this RSC after revalidateTag() fires inside completeCheckout,
+    // so without the age guard the newly placed order would be immediately cancelled.
+    await cancelPendingPaymentOrders(cart.id, 300)
   }
 
   // Auto-select standard shipping if none selected
