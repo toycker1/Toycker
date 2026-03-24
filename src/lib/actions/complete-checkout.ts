@@ -149,7 +149,21 @@ export async function completeCheckout(
       }
     )
 
-    // Step 2: Call Supabase RPC function for atomic order creation
+    // Step 2: Cancel any stale pending online-payment orders for this cart before
+    // creating a new one. This handles the case where the user abandoned a previous
+    // payment attempt (closed browser, navigated away) without the callback firing.
+    const isGatewayPayment =
+      checkoutData.paymentMethod.includes("payu") ||
+      checkoutData.paymentMethod.includes("easebuzz")
+
+    if (isGatewayPayment) {
+      const { cancelPendingPaymentOrders } = await import(
+        "@/lib/actions/cancel-pending-payment"
+      )
+      await cancelPendingPaymentOrders(checkoutData.cartId)
+    }
+
+    // Step 3: Call Supabase RPC function for atomic order creation
     // The RPC will now find the initialized payment session data in the cart record
     const { data: result, error } = await supabase.rpc(
       "create_order_with_payment",
@@ -250,11 +264,8 @@ export async function completeCheckout(
       .eq("id", result.order_id)
       .single()
 
-    // Step 3: For non-gateway payments (COD, manual), run post-order logic now.
+    // Step 4: For non-gateway payments (COD, manual), run post-order logic now.
     // Gateway payments (PayU, Easebuzz) handle this in their callback after payment verification.
-    const isGatewayPayment =
-      checkoutData.paymentMethod.includes("payu") ||
-      checkoutData.paymentMethod.includes("easebuzz")
 
     if (!isGatewayPayment && orderData) {
       const { handlePostOrderLogic, retrieveCart } = await import(

@@ -1017,7 +1017,32 @@ export async function setPaymentProvider(providerId: string) {
   }
 
   revalidateTag("cart", "max")
-  revalidatePath("/checkout")
+}
+
+async function getPaymentCallbackBaseURL(): Promise<string> {
+  // Always try to detect the real host from request headers first.
+  // This works in all environments:
+  //   - Development: host = "localhost:3000", no x-forwarded-proto → "http://localhost:3000"
+  //   - Vercel production: x-forwarded-host = "toycker.com", x-forwarded-proto = "https"
+  //       → "https://toycker.com"
+  //   - Vercel preview: auto-detects the preview URL correctly
+  // Falls back to NEXT_PUBLIC_BASE_URL env var only if headers are unavailable.
+  try {
+    const { headers } = await import("next/headers")
+    const headersList = await headers()
+    const host =
+      headersList.get("x-forwarded-host") || headersList.get("host")
+    if (host) {
+      const proto =
+        headersList.get("x-forwarded-proto") ||
+        (host.includes("localhost") ? "http" : "https")
+      return `${proto}://${host}`
+    }
+  } catch {
+    // headers() not available in this context (e.g. called outside a request)
+  }
+
+  return getBaseURL()
 }
 
 export async function initiatePaymentSession(
@@ -1067,7 +1092,7 @@ export async function initiatePaymentSession(
       (checkoutCustomerAddress?.phone || "9999999999").replace(/\D/g, "") ||
       "9999999999"
 
-    const baseUrl = getBaseURL()
+    const baseUrl = await getPaymentCallbackBaseURL()
 
     // 3. Prepare Hash Parameters
     const hashParams: PayUHashParams = {
@@ -1130,7 +1155,7 @@ export async function initiatePaymentSession(
       (checkoutCustomerAddress?.phone || "9999999999").replace(/\D/g, "") ||
       "9999999999"
 
-    const baseUrl = getBaseURL()
+    const baseUrl = await getPaymentCallbackBaseURL()
     const callbackUrl = `${baseUrl}/api/easebuzz/callback`
 
     // Step 3: Generate hash (same algorithm as PayU)
