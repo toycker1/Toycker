@@ -5,6 +5,7 @@ import { getOnlinePaymentGateways } from "@/lib/data/payment"
 import GiftWrapSettings from "@modules/admin/components/settings/gift-wrap-settings"
 import VisualSearchSettings from "@modules/admin/components/settings/visual-search-settings"
 import PaymentGatewaySettings from "@modules/admin/components/settings/payment-gateway-settings"
+import AppInstallLinkSettings from "@modules/admin/components/settings/app-install-link-settings"
 
 export default async function AdminSettings() {
   const [globalSettings, onlineGateways] = await Promise.all([
@@ -58,6 +59,14 @@ export default async function AdminSettings() {
         </div>
         <div className="lg:col-span-2 border-t border-gray-200 pt-8">
           <VisualSearchSettings />
+        </div>
+
+        <div className="lg:col-span-1 border-t border-gray-200 pt-8">
+          <h2 className="text-sm font-semibold text-gray-900">App Install Link</h2>
+          <p className="text-sm text-gray-500 mt-1">Share this link with users to let them install the Toycker app.</p>
+        </div>
+        <div className="lg:col-span-2 border-t border-gray-200 pt-8">
+          <AppInstallLinkSettings />
         </div>
 
         <div className="lg:col-span-1 pt-8 border-t border-gray-200">
