@@ -37,6 +37,7 @@ export function PWAProvider({ children }: { children: React.ReactNode }) {
 
         if (ios) {
             setIsInstallable(true);
+            return;
         }
 
         const handler = (e: Event) => {
