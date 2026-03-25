@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, Pause, Play, Star, X } from "lucide-react"
 import useEmblaCarousel from "embla-carousel-react"
 import { cn } from "@lib/util/cn"
 import { getImageUrl } from "@/lib/util/get-image-url"
+import { type HomeReview } from "@/lib/actions/home-reviews"
 
 type ReviewType = "text" | "video" | "image"
 
@@ -209,20 +210,18 @@ const ReviewCard = ({ review }: { review: Review }) => {
   )
 }
 
-const ReviewMediaHub = ({ reviews = [] }: { reviews: any[] }) => {
+const ReviewMediaHub = ({ reviews = [] }: { reviews: HomeReview[] }) => {
   const [isMounted, setIsMounted] = useState(false)
 
   // Map dynamic reviews to the internal types
   const displayReviews: Review[] = useMemo(() => {
     return reviews
-      .filter(hr => {
-        const audioMedia = hr.review.review_media?.some((m: any) => m.file_type === 'audio')
-        return !audioMedia // Exclude audio reviews from carousel
-      })
+      .filter(hr => !hr.review?.review_media?.some(m => m.file_type === 'audio'))
       .map(hr => {
         const r = hr.review
-        const videoMedia = r.review_media?.find((m: any) => m.file_type === 'video')
-        const imageMedia = r.review_media?.find((m: any) => m.file_type === 'image')
+        if (!r) return null
+        const videoMedia = r.review_media?.find(m => m.file_type === 'video')
+        const imageMedia = r.review_media?.find(m => m.file_type === 'image')
 
         const product = r.product
         const price = product?.price ? `₹${product.price.toFixed(2)}` : undefined
@@ -246,13 +245,15 @@ const ReviewMediaHub = ({ reviews = [] }: { reviews: any[] }) => {
           cardBorder: r.rating >= 4 ? "border-[#fde9c8]" : "border-[#cdeefd]"
         }
       })
+      .filter(r => r !== null) as Review[]
   }, [reviews])
 
   const audioReviews: AudioReview[] = useMemo(() => {
     const allAudio: AudioReview[] = []
     reviews.forEach(hr => {
       const r = hr.review
-      const audioMedia = r.review_media?.find((m: any) => m.file_type === 'audio')
+      if (!r) return
+      const audioMedia = r.review_media?.find(m => m.file_type === 'audio')
       if (audioMedia) {
         allAudio.push({
           id: `audio-${r.id}`,
@@ -300,11 +301,6 @@ const ReviewMediaHub = ({ reviews = [] }: { reviews: any[] }) => {
     emblaApi.on("reInit", () => onSelect(emblaApi))
   }, [emblaApi, onSelect])
 
-  // If no reviews, don't render the section
-  if (isMounted && displayReviews.length === 0) {
-    return null
-  }
-
   const scrollPrev = useCallback(() => {
     if (emblaApi) emblaApi.scrollPrev()
   }, [emblaApi])
@@ -333,6 +329,11 @@ const ReviewMediaHub = ({ reviews = [] }: { reviews: any[] }) => {
   useEffect(() => {
     activeAudioRef.current = activeAudioId
   }, [activeAudioId])
+
+  // If no reviews at all, don't render the section
+  if (isMounted && displayReviews.length === 0 && audioReviews.length === 0) {
+    return null
+  }
 
   const startAudio = async (id: string) => {
     const audio = audioRefs.current[id]
@@ -448,6 +449,103 @@ const ReviewMediaHub = ({ reviews = [] }: { reviews: any[] }) => {
     void startAudio(id)
   }
 
+  const renderAudioCards = (gridClassName: string) => (
+    <div className={`grid gap-4 ${gridClassName}`}>
+      {audioReviews.map((audio) => {
+        const progress = audioProgress[audio.id] ?? 0
+        const safeProgress = Math.min(Math.max(progress, 0), 1)
+        const currentTime = audioCurrentTime[audio.id] ?? 0
+        const totalDuration = audioDurations[audio.id]
+        const formattedTotal = totalDuration ? formatTime(totalDuration) : audio.durationLabel
+        const sliderMax = totalDuration ?? 1
+
+        return (
+          <article
+            key={audio.id}
+            className="flex flex-col gap-5 rounded-3xl border border-[#ffe2b8] bg-gradient-to-br from-white via-[#fff8ec] to-[#ffeeda] p-5 text-[#1f2937]"
+          >
+            <div className="flex items-center gap-4">
+              <div className="relative h-20 w-20 overflow-hidden rounded-2xl border border-[#ffd7a0] bg-white">
+                <Image src={audio.coverImage || "/assets/images/placeholder.jpg"} alt={audio.title} fill sizes="80px" className="object-cover" />
+              </div>
+              <div className="flex-1">
+                <p className="text-lg font-semibold text-[#1f2937]">{audio.title}</p>
+                <p className="text-sm text-[#7c5c2e]">{audio.author}</p>
+                <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-[#fff1dc] px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-[#b45309]">
+                  {audio.durationLabel}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => handleAudioToggle(audio.id)}
+                className={`inline-flex w-full items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-semibold transition ${activeAudioId === audio.id
+                  ? "border-transparent bg-[#ff8a00] text-white shadow-[0_12px_30px_rgba(255,138,0,0.35)]"
+                  : "border-[#ffd7a0] bg-white text-[#b45309] hover:bg-[#fff5e5]"
+                  }`}
+                aria-label={`${activeAudioId === audio.id ? "Pause" : "Play"} ${audio.title}`}
+              >
+                {activeAudioId === audio.id ? (
+                  <>
+                    <Pause className="h-4 w-4" />
+                    Pause story
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-4 w-4" />
+                    Play story
+                  </>
+                )}
+              </button>
+
+              <div className="flex items-center gap-3 text-[#9a7a4d]">
+                <span className="text-xs font-semibold">{formatTime(currentTime)}</span>
+                <div
+                  role="slider"
+                  aria-label={`Timeline for ${audio.title}`}
+                  aria-valuemin={0}
+                  aria-valuemax={sliderMax}
+                  aria-valuenow={currentTime}
+                  aria-valuetext={`${formatTime(currentTime)} of ${formattedTotal}`}
+                  tabIndex={0}
+                  onClick={(event) => handleProgressClick(event, audio.id)}
+                  onKeyDown={(event) => handleSliderKeyDown(event, audio.id)}
+                  className="relative h-2 flex-1 cursor-pointer rounded-full bg-[#ffe2b8] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ffbb3d]"
+                >
+                  <div
+                    className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[#ffdd55] to-[#ff8a00]"
+                    style={{ width: `${safeProgress * 100}%` }}
+                  />
+                  <span
+                    className="absolute top-1/2 h-3 w-3 -translate-y-1/2 -translate-x-1/2 rounded-full border border-white bg-[#ffbb3d] shadow"
+                    style={{ left: `${safeProgress * 100}%` }}
+                  />
+                </div>
+                <span className="text-xs font-semibold text-[#b45309]">{formattedTotal}</span>
+              </div>
+            </div>
+
+            <audio
+              ref={(node) => {
+                audioRefs.current[audio.id] = node
+              }}
+              src={audio.audioSrc ?? undefined}
+              preload="metadata"
+              onLoadedMetadata={() => handleAudioLoaded(audio.id)}
+              onTimeUpdate={() => handleAudioTimeUpdate(audio.id)}
+              onEnded={() => handleAudioEnd(audio.id)}
+              className="hidden"
+            >
+              <track kind="captions" />
+            </audio>
+          </article>
+        )
+      })}
+    </div>
+  )
+
   return (
     <>
       <section className="w-full" aria-labelledby="review-media-hub-heading">
@@ -459,73 +557,87 @@ const ReviewMediaHub = ({ reviews = [] }: { reviews: any[] }) => {
                 Trusted by parents and creators across India
               </h2>
             </div>
-            <button
-              type="button"
-              onClick={openAudioModal}
-              className="hidden items-center gap-2 rounded-full border border-[#111827] px-5 py-3 text-sm font-semibold text-[#111827] transition hover:bg-[#111827] hover:text-white lg:inline-flex"
-            >
-              Listen to audio stories
-            </button>
+            {audioReviews.length > 0 && displayReviews.length > 0 && (
+              <button
+                type="button"
+                onClick={openAudioModal}
+                className="hidden items-center gap-2 rounded-full border border-[#111827] px-5 py-3 text-sm font-semibold text-[#111827] transition hover:bg-[#111827] hover:text-white lg:inline-flex"
+              >
+                Listen to audio stories
+              </button>
+            )}
           </div>
 
-          {!isMounted ? (
-            <div className="h-[480px] animate-pulse bg-ui-bg-subtle rounded-3xl" />
-          ) : (
-            <div className="relative">
-              <div className="overflow-hidden" ref={emblaRef}>
-                <div className="flex -ml-8">
-                  {displayReviews.map((review) => (
-                    <div
-                      key={review.id}
-                      className="flex-[0_0_100%] pl-8 min-w-0 sm:flex-[0_0_83.333%] md:flex-[0_0_50%] xl:flex-[0_0_33.333%]"
-                    >
-                      <ReviewCard review={review} />
-                    </div>
-                  ))}
+          {displayReviews.length > 0 && (
+            !isMounted ? (
+              <div className="h-[480px] animate-pulse bg-ui-bg-subtle rounded-3xl" />
+            ) : (
+              <div className="relative">
+                <div className="overflow-hidden" ref={emblaRef}>
+                  <div className="flex -ml-8">
+                    {displayReviews.map((review) => (
+                      <div
+                        key={review.id}
+                        className="flex-[0_0_100%] pl-8 min-w-0 sm:flex-[0_0_83.333%] md:flex-[0_0_50%] xl:flex-[0_0_33.333%]"
+                      >
+                        <ReviewCard review={review} />
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-              {displayReviews.length > 1 && (
-                <div className="absolute -bottom-20 left-0 right-0 flex justify-between px-4 pb-4 z-10 sm:left-auto sm:flex-none sm:justify-normal sm:gap-4 sm:pr-4">
-                  <button
-                    type="button"
-                    onClick={scrollPrev}
-                    aria-label="Previous reviews"
-                    className={cn(
-                      "inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary text-white transition",
-                      !canScrollPrev && "opacity-50 cursor-not-allowed"
-                    )}
-                  >
-                    <ChevronLeft className="h-5 w-5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={scrollNext}
-                    aria-label="Next reviews"
-                    className={cn(
-                      "inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary text-white transition",
-                      !canScrollNext && "opacity-50 cursor-not-allowed"
-                    )}
-                  >
-                    <ChevronRight className="h-5 w-5" />
-                  </button>
-                </div>
-              )}
+                {displayReviews.length > 1 && (
+                  <div className="absolute -bottom-20 left-0 right-0 flex justify-between px-4 pb-4 z-10 sm:left-auto sm:flex-none sm:justify-normal sm:gap-4 sm:pr-4">
+                    <button
+                      type="button"
+                      onClick={scrollPrev}
+                      aria-label="Previous reviews"
+                      className={cn(
+                        "inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary text-white transition",
+                        !canScrollPrev && "opacity-50 cursor-not-allowed"
+                      )}
+                    >
+                      <ChevronLeft className="h-5 w-5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={scrollNext}
+                      aria-label="Next reviews"
+                      className={cn(
+                        "inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary text-white transition",
+                        !canScrollNext && "opacity-50 cursor-not-allowed"
+                      )}
+                    >
+                      <ChevronRight className="h-5 w-5" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            )
+          )}
+
+          {/* Audio-only: show cards inline on the page, no modal needed */}
+          {displayReviews.length === 0 && audioReviews.length > 0 && (
+            <div className="mt-6">
+              {renderAudioCards("md:grid-cols-2 lg:grid-cols-3")}
             </div>
           )}
 
-          <div className="mt-24 flex justify-center sm:mt-20 lg:hidden">
-            <button
-              type="button"
-              onClick={openAudioModal}
-              className="inline-flex w-full max-w-sm items-center justify-center gap-2 rounded-full border border-[#111827] px-5 py-3 text-sm font-semibold text-[#111827] transition hover:bg-[#111827] hover:text-white"
-            >
-              Listen to audio stories
-            </button>
-          </div>
+          {/* Mixed reviews: show "Listen" button for mobile — opens modal */}
+          {audioReviews.length > 0 && displayReviews.length > 0 && (
+            <div className="mt-24 flex justify-center sm:mt-20 lg:hidden">
+              <button
+                type="button"
+                onClick={openAudioModal}
+                className="inline-flex w-full max-w-sm items-center justify-center gap-2 rounded-full border border-[#111827] px-5 py-3 text-sm font-semibold text-[#111827] transition hover:bg-[#111827] hover:text-white"
+              >
+                Listen to audio stories
+              </button>
+            </div>
+          )}
         </div>
 
-        {isAudioModalOpen && (
+        {isAudioModalOpen && displayReviews.length > 0 && (
           <div
             className="fixed inset-0 z-50 flex items-stretch justify-stretch bg-black/45 p-0 sm:items-center sm:justify-center sm:px-4 sm:py-8"
             onClick={closeAudioModal}
@@ -557,100 +669,7 @@ const ReviewMediaHub = ({ reviews = [] }: { reviews: any[] }) => {
                 </div>
               </div>
 
-              <div className="mt-6 grid gap-4 md:grid-cols-2">
-                {audioReviews.map((audio) => {
-                  const progress = audioProgress[audio.id] ?? 0
-                  const safeProgress = Math.min(Math.max(progress, 0), 1)
-                  const currentTime = audioCurrentTime[audio.id] ?? 0
-                  const totalDuration = audioDurations[audio.id]
-                  const formattedTotal = totalDuration ? formatTime(totalDuration) : audio.durationLabel
-                  const sliderMax = totalDuration ?? 1
-
-                  return (
-                    <article
-                      key={audio.id}
-                      className="flex flex-col gap-5 rounded-3xl border border-[#ffe2b8] bg-gradient-to-br from-white via-[#fff8ec] to-[#ffeeda] p-5 text-[#1f2937]"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="relative h-20 w-20 overflow-hidden rounded-2xl border border-[#ffd7a0] bg-white">
-                          <Image src={audio.coverImage || "/assets/images/placeholder.jpg"} alt={audio.title} fill sizes="80px" className="object-cover" />
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-lg font-semibold text-[#1f2937]">{audio.title}</p>
-                          <p className="text-sm text-[#7c5c2e]">{audio.author}</p>
-                          <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-[#fff1dc] px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-[#b45309]">
-                            {audio.durationLabel}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="space-y-3">
-                        <button
-                          type="button"
-                          onClick={() => handleAudioToggle(audio.id)}
-                          className={`inline-flex w-full items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-semibold transition ${activeAudioId === audio.id
-                            ? "border-transparent bg-[#ff8a00] text-white shadow-[0_12px_30px_rgba(255,138,0,0.35)]"
-                            : "border-[#ffd7a0] bg-white text-[#b45309] hover:bg-[#fff5e5]"
-                            }`}
-                          aria-label={`${activeAudioId === audio.id ? "Pause" : "Play"} ${audio.title}`}
-                        >
-                          {activeAudioId === audio.id ? (
-                            <>
-                              <Pause className="h-4 w-4" />
-                              Pause story
-                            </>
-                          ) : (
-                            <>
-                              <Play className="h-4 w-4" />
-                              Play story
-                            </>
-                          )}
-                        </button>
-
-                        <div className="flex items-center gap-3 text-[#9a7a4d]">
-                          <span className="text-xs font-semibold">{formatTime(currentTime)}</span>
-                          <div
-                            role="slider"
-                            aria-label={`Timeline for ${audio.title}`}
-                            aria-valuemin={0}
-                            aria-valuemax={sliderMax}
-                            aria-valuenow={currentTime}
-                            aria-valuetext={`${formatTime(currentTime)} of ${formattedTotal}`}
-                            tabIndex={0}
-                            onClick={(event) => handleProgressClick(event, audio.id)}
-                            onKeyDown={(event) => handleSliderKeyDown(event, audio.id)}
-                            className="relative h-2 flex-1 cursor-pointer rounded-full bg-[#ffe2b8] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ffbb3d]"
-                          >
-                            <div
-                              className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[#ffdd55] to-[#ff8a00]"
-                              style={{ width: `${safeProgress * 100}%` }}
-                            />
-                            <span
-                              className="absolute top-1/2 h-3 w-3 -translate-y-1/2 -translate-x-1/2 rounded-full border border-white bg-[#ffbb3d] shadow"
-                              style={{ left: `${safeProgress * 100}%` }}
-                            />
-                          </div>
-                          <span className="text-xs font-semibold text-[#b45309]">{formattedTotal}</span>
-                        </div>
-                      </div>
-
-                      <audio
-                        ref={(node) => {
-                          audioRefs.current[audio.id] = node
-                        }}
-                        src={audio.audioSrc ?? undefined}
-                        preload="metadata"
-                        onLoadedMetadata={() => handleAudioLoaded(audio.id)}
-                        onTimeUpdate={() => handleAudioTimeUpdate(audio.id)}
-                        onEnded={() => handleAudioEnd(audio.id)}
-                        className="hidden"
-                      >
-                        <track kind="captions" />
-                      </audio>
-                    </article>
-                  )
-                })}
-              </div>
+              {renderAudioCards("md:grid-cols-2")}
             </div>
           </div>
         )}
