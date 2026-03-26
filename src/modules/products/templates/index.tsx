@@ -16,7 +16,6 @@ import RecentlyViewedTracker from "@modules/products/components/recently-viewed-
 import { getProductReviews } from "@/lib/actions/reviews"
 import FrequentlyBoughtTogether from "@modules/products/components/frequently-bought-together"
 
-import { retrieveCustomer } from "@lib/data/customer"
 import { getYoutubeId, getYoutubeEmbedUrl } from "@/lib/util/youtube"
 
 type ProductTemplateProps = {
@@ -38,7 +37,6 @@ const ProductTemplate = async ({
     return notFound()
   }
 
-  const customer = await retrieveCustomer()
   const reviews = await getProductReviews(product.id)
 
   // Compute review stats for the rating badge
@@ -188,8 +186,8 @@ const ProductTemplate = async ({
           <LazyLoadSection minHeight="400px">
             <CustomerReviews
               productId={product.id}
+              productHandle={product.handle}
               reviews={reviews}
-              customer={customer}
               productThumbnail={product.thumbnail || product.image_url}
             />
           </LazyLoadSection>
