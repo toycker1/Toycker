@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, Fragment } from "react"
+import { useState, useMemo, Fragment, useEffect } from "react"
 import { Button } from "@modules/common/components/button"
 import Modal from "@modules/common/components/modal"
 import { Dialog, Transition } from "@headlessui/react"
@@ -8,21 +8,26 @@ import { Star, Image as ImageIcon, Video, Mic, Trash2, Play, Pause, Square, Shie
 import { getPresignedUploadUrl } from "@/lib/actions/storage"
 import { submitReview, type ReviewData, type ReviewWithMedia } from "@/lib/actions/reviews"
 import Image from "next/image"
-import { CustomerProfile } from "@/lib/supabase/types"
 import LocalizedClientLink from "@modules/common/components/localized-client-link"
 import { cn } from "@lib/util/cn"
 import { useVoiceRecorder } from "@/hooks/useVoiceRecorder"
 import SideDrawer from "@modules/common/components/side-drawer"
 
+type CustomerApiResponse = {
+  id?: string
+}
+
+type CustomerLookupState = "loading" | "authenticated" | "guest"
+
 const CustomerReviews = ({
   productId,
+  productHandle,
   reviews = [],
-  customer,
   productThumbnail,
 }: {
   productId: string
+  productHandle: string
   reviews?: ReviewWithMedia[]
-  customer: CustomerProfile | null
   productThumbnail?: string | null
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -37,9 +42,58 @@ const CustomerReviews = ({
   })
   const [files, setFiles] = useState<File[]>([])
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle")
+  const [customerLookupState, setCustomerLookupState] =
+    useState<CustomerLookupState>("loading")
 
   // Voice recording hook
   const voiceRecorder = useVoiceRecorder()
+
+  useEffect(() => {
+    const controller = new AbortController()
+    let isMounted = true
+
+    const loadCustomerState = async () => {
+      try {
+        const response = await fetch("/api/customer", {
+          method: "GET",
+          credentials: "same-origin",
+          cache: "no-store",
+          signal: controller.signal,
+        })
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch customer state: ${response.status}`)
+        }
+
+        const customerData = (await response.json()) as CustomerApiResponse
+
+        if (!isMounted) {
+          return
+        }
+
+        setCustomerLookupState(
+          customerData.id ? "authenticated" : "guest"
+        )
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return
+        }
+
+        console.error("Failed to load review customer state:", error)
+
+        if (isMounted) {
+          setCustomerLookupState("guest")
+        }
+      }
+    }
+
+    void loadCustomerState()
+
+    return () => {
+      isMounted = false
+      controller.abort()
+    }
+  }, [])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -158,9 +212,12 @@ const CustomerReviews = ({
         setFiles([])
         voiceRecorder.resetRecording()
       }, 2000)
-    } catch (error: any) {
+    } catch (error) {
       // Provide user-friendly error if possible
-      const msg = error?.message || "Something went wrong. Please try again."
+      const msg =
+        error instanceof Error
+          ? error.message
+          : "Something went wrong. Please try again."
       setErrorMessage(msg)
       setErrorModalOpen(true)
     }
@@ -192,6 +249,8 @@ const CustomerReviews = ({
   const [activeVideo, setActiveVideo] = useState<{ url: string, quote?: string, author: string } | null>(null)
   const [displayCount, setDisplayCount] = useState(3)
   const visibleReviews = reviews.slice(0, displayCount)
+  const canWriteReview = customerLookupState === "authenticated"
+  const isCustomerStateLoading = customerLookupState === "loading"
 
 
   return (
@@ -219,7 +278,15 @@ const CustomerReviews = ({
               {totalRatings.toLocaleString()} ratings
             </p>
 
-            {customer ? (
+            {isCustomerStateLoading ? (
+              <button
+                type="button"
+                disabled
+                className="mt-6 flex cursor-wait items-center gap-2 rounded-xl bg-gray-200 px-6 py-3.5 text-xs font-bold text-gray-500 transition-all"
+              >
+                Checking account...
+              </button>
+            ) : canWriteReview ? (
               <button
                 type="button"
                 onClick={() => setIsModalOpen(true)}
@@ -229,7 +296,7 @@ const CustomerReviews = ({
               </button>
             ) : (
               <LocalizedClientLink
-                href={`/login?returnUrl=${encodeURIComponent(`/products/${productId}`)}`}
+                href={`/login?returnUrl=${encodeURIComponent(`/products/${productHandle}`)}`}
                 className="mt-6 flex items-center gap-2 rounded-xl bg-gray-900 px-6 py-3.5 text-xs font-bold text-white transition-all hover:bg-gray-800"
               >
                 Login to Write a Review
