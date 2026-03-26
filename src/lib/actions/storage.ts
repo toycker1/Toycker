@@ -4,6 +4,11 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 import { PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3"
 import { r2Client } from "../r2"
 import { v4 as uuidv4 } from "uuid"
+import {
+    UPLOAD_ALLOWED_FILE_TYPES,
+    isAllowedUploadFileType,
+    type UploadFolder,
+} from "@/lib/constants/upload-file-types"
 
 export async function getPresignedUploadUrl({
     fileType,
@@ -11,31 +16,14 @@ export async function getPresignedUploadUrl({
     maxSizeMB: _maxSizeMB = 10,
 }: {
     fileType: string
-    folder?: "reviews" | "banners" | "exclusive-videos" | "products" | "categories" | "collections"
+    folder?: UploadFolder
     maxSizeMB?: number
 }) {
     try {
-        // Validate file type based on folder
-        const allowedTypes: Record<string, string[]> = {
-            reviews: [
-                "image/jpeg",
-                "image/png",
-                "image/webp",
-                "video/mp4",
-                "audio/webm",
-                "audio/mp4",
-                "audio/mpeg",
-                "audio/webm;codecs=opus"
-            ],
-            banners: ["image/jpeg", "image/png", "image/webp"],
-            "exclusive-videos": ["video/mp4", "video/webm"],
-            products: ["image/jpeg", "image/png", "image/webp"],
-            categories: ["image/jpeg", "image/png", "image/webp"],
-            collections: ["image/jpeg", "image/png", "image/webp"],
-        }
+        const allowedTypes = UPLOAD_ALLOWED_FILE_TYPES[folder]
 
-        if (!allowedTypes[folder]?.includes(fileType)) {
-            return { error: `Invalid file type for ${folder}. Allowed: ${allowedTypes[folder]?.join(", ")}` }
+        if (!isAllowedUploadFileType(folder, fileType)) {
+            return { error: `Invalid file type for ${folder}. Allowed: ${allowedTypes.join(", ")}` }
         }
 
         const fileId = uuidv4()

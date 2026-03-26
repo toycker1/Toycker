@@ -21,6 +21,13 @@ import { SortableItem } from "./sortable-item"
 import { getPresignedUploadUrl } from "@/lib/actions/storage"
 import { getFileUrl } from "@/lib/r2"
 import { cn } from "@lib/util/cn"
+import {
+    PRODUCT_MEDIA_ACCEPT_VALUE,
+    PRODUCT_MEDIA_ALLOWED_TYPES_LABEL,
+    PRODUCT_MEDIA_MAX_FILE_SIZE_BYTES,
+    PRODUCT_MEDIA_MAX_FILE_SIZE_MB,
+    isProductMediaImageType,
+} from "@/lib/constants/upload-file-types"
 
 interface MediaGalleryProps {
     initialImages?: string[]
@@ -66,8 +73,46 @@ export default function MediaGallery({ initialImages = [], onOrderChange }: Medi
     }, [onOrderChange])
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const input = e.target
         const files = Array.from(e.target.files || [])
         if (files.length === 0) return
+
+        const validFiles = files.filter(
+            (file) =>
+                isProductMediaImageType(file.type) &&
+                file.size <= PRODUCT_MEDIA_MAX_FILE_SIZE_BYTES
+        )
+        const skippedInvalidTypeCount = files.filter(
+            (file) => !isProductMediaImageType(file.type)
+        ).length
+        const skippedOversizeCount = files.filter(
+            (file) => file.size > PRODUCT_MEDIA_MAX_FILE_SIZE_BYTES
+        ).length
+
+        if (validFiles.length === 0) {
+            if (skippedInvalidTypeCount > 0) {
+                alert(`Only ${PRODUCT_MEDIA_ALLOWED_TYPES_LABEL} files are allowed for product media.`)
+            } else if (skippedOversizeCount > 0) {
+                alert(`Each product media file must be ${PRODUCT_MEDIA_MAX_FILE_SIZE_MB}MB or smaller.`)
+            }
+
+            input.value = ""
+            return
+        }
+
+        if (skippedInvalidTypeCount > 0 || skippedOversizeCount > 0) {
+            const issues: string[] = []
+
+            if (skippedInvalidTypeCount > 0) {
+                issues.push(`only ${PRODUCT_MEDIA_ALLOWED_TYPES_LABEL} files are allowed`)
+            }
+
+            if (skippedOversizeCount > 0) {
+                issues.push(`each file must be ${PRODUCT_MEDIA_MAX_FILE_SIZE_MB}MB or smaller`)
+            }
+
+            alert(`Some files were skipped. ${issues.join(" and ")}.`)
+        }
 
         setIsUploading(true)
         setUploadProgress(0)
@@ -75,11 +120,7 @@ export default function MediaGallery({ initialImages = [], onOrderChange }: Medi
         try {
             const uploadedUrls: string[] = []
 
-            for (const file of files) {
-                // Simple validation
-                if (!file.type.startsWith("image/")) continue
-                if (file.size > 5 * 1024 * 1024) continue
-
+            for (const file of validFiles) {
                 const { url, key, error } = await getPresignedUploadUrl({
                     fileType: file.type,
                     folder: "products",
@@ -122,10 +163,15 @@ export default function MediaGallery({ initialImages = [], onOrderChange }: Medi
             })
         } catch (error) {
             console.error("Upload error:", error)
-            alert("Some files failed to upload. Please try again.")
+            alert(
+                error instanceof Error
+                    ? error.message
+                    : "Some files failed to upload. Please try again."
+            )
         } finally {
             setIsUploading(false)
             setUploadProgress(0)
+            input.value = ""
         }
     }
 
@@ -157,7 +203,7 @@ export default function MediaGallery({ initialImages = [], onOrderChange }: Medi
                         <input
                             type="file"
                             multiple
-                            accept="image/*"
+                            accept={PRODUCT_MEDIA_ACCEPT_VALUE}
                             onChange={handleFileUpload}
                             className="hidden"
                             disabled={isUploading}
