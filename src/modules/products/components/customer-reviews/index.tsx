@@ -49,8 +49,7 @@ const CustomerReviews = ({
   const voiceRecorder = useVoiceRecorder()
 
   useEffect(() => {
-    const controller = new AbortController()
-    let isMounted = true
+    let shouldIgnoreResponse = false
 
     const loadCustomerState = async () => {
       try {
@@ -58,7 +57,6 @@ const CustomerReviews = ({
           method: "GET",
           credentials: "same-origin",
           cache: "no-store",
-          signal: controller.signal,
         })
 
         if (!response.ok) {
@@ -67,7 +65,7 @@ const CustomerReviews = ({
 
         const customerData = (await response.json()) as CustomerApiResponse
 
-        if (!isMounted) {
+        if (shouldIgnoreResponse) {
           return
         }
 
@@ -75,23 +73,20 @@ const CustomerReviews = ({
           customerData.id ? "authenticated" : "guest"
         )
       } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") {
+        if (shouldIgnoreResponse) {
           return
         }
 
         console.error("Failed to load review customer state:", error)
 
-        if (isMounted) {
-          setCustomerLookupState("guest")
-        }
+        setCustomerLookupState("guest")
       }
     }
 
     void loadCustomerState()
 
     return () => {
-      isMounted = false
-      controller.abort()
+      shouldIgnoreResponse = true
     }
   }, [])
 
