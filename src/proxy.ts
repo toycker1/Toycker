@@ -63,12 +63,13 @@ export async function updateSession(request: NextRequest) {
     console.warn("JWT validation error in proxy:", error.message)
   }
 
-  // Early redirect for checkout if not authenticated
-  if (request.nextUrl.pathname.startsWith('/checkout') && !user) {
-    const redirectUrl = new URL('/login', request.url)
-    redirectUrl.searchParams.set('returnUrl', getCheckoutLoginReturnUrl(request))
-    return NextResponse.redirect(redirectUrl)
-  }
+  // TEMPORARY: Guest checkout bypass — uncomment when OTP login is restored
+  // // Early redirect for checkout if not authenticated
+  // if (request.nextUrl.pathname.startsWith('/checkout') && !user) {
+  //   const redirectUrl = new URL('/login', request.url)
+  //   redirectUrl.searchParams.set('returnUrl', getCheckoutLoginReturnUrl(request))
+  //   return NextResponse.redirect(redirectUrl)
+  // }
 
   return supabaseResponse
 }
