@@ -14,7 +14,7 @@ const ProductInfo = ({ product }: ProductInfoProps) => {
       <div className="flex flex-col gap-y-4 lg:max-w-[500px] mx-auto">
         {product.collection && (
           <LocalizedClientLink
-            href={`/collections/${product.collection.handle}`}
+            href={`/collections/${encodeURIComponent(product.collection.handle)}`}
             className="text-sm text-gray-500 hover:text-gray-900"
           >
             {product.collection.title}

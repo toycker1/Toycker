@@ -49,7 +49,7 @@ export default async function CollectionsPage(props: {
                         {collections.map((collection) => (
                             <div key={collection.id} className="w-full sm:w-1/2 lg:w-1/3 xl:w-1/4 px-3 mb-6">
                                 <Link
-                                    href={`/collections/${collection.handle.replace(/^\//, "")}`}
+                                    href={`/collections/${encodeURIComponent(collection.handle.replace(/^\//, ""))}`}
                                     className="group relative flex flex-col h-full overflow-hidden rounded-2xl border border-slate-200 bg-white transition-all duration-300 hover:shadow-xl hover:-translate-y-1"
                                 >
                                     <div className="aspect-[4/3] w-full overflow-hidden bg-slate-100">
