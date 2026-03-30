@@ -22,10 +22,11 @@ export default async function Checkout({ searchParams }: CheckoutProps) {
   const params = await searchParams
   const customer = await retrieveCustomer()
 
-  // Require login for checkout
-  if (!customer) {
-    redirect(`/login?returnUrl=${encodeURIComponent("/checkout?step=address")}`)
-  }
+  // TEMPORARY: Guest checkout bypass — uncomment when OTP login is restored
+  // // Require login for checkout
+  // if (!customer) {
+  //   redirect(`/login?returnUrl=${encodeURIComponent("/checkout?step=address")}`)
+  // }
 
   let cart = await retrieveCart()
 

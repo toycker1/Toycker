@@ -60,14 +60,15 @@ const CartTemplate = ({
             <div className="grid grid-cols-1 xl:grid-cols-[1fr_420px] 2xl:grid-cols-[1fr_450px] gap-6 sm:gap-8 lg:gap-10 xl:gap-12 2xl:gap-14">
               {/* Left Column: Cart Items */}
               <div className="flex flex-col gap-y-4 sm:gap-y-6">
-                {!customer && (
+                {/* TEMPORARY: Guest checkout bypass — uncomment when OTP login is restored */}
+                {/* {!customer && (
                   <>
                     <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border border-slate-100">
                       <SignInPrompt />
                     </div>
                     <Divider />
                   </>
-                )}
+                )} */}
                 <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-5 lg:p-6 shadow-sm border border-gray-200">
                   <ItemsTemplate cart={activeCart} />
                 </div>

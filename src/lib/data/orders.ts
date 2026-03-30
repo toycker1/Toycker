@@ -30,7 +30,12 @@ export const listOrders = cache(async () => {
 })
 
 export async function retrieveOrder(id: string) {
-  const supabase = await createClient()
+  // TEMPORARY: Guest checkout bypass — use admin client when no auth user so that
+  // guests can view their order confirmation page (anon role may be blocked by RLS).
+  // Revert to `const supabase = await createClient()` when OTP login is restored.
+  const user = await getAuthUser()
+  const supabase = user ? await createClient() : await createAdminClient()
+
   const { data, error } = await supabase
     .from("orders")
     .select("*")
@@ -47,17 +52,25 @@ export async function retrieveOrder(id: string) {
 
 export async function cancelUserOrder(orderId: string) {
   const user = await getAuthUser()
-  if (!user) {
-    throw new Error("You must be logged in to cancel an order.")
-  }
 
-  const supabase = await createClient()
-  const { data: order, error } = await supabase
+  // TEMPORARY: Guest checkout bypass — allow cancellation of guest orders (user_id IS NULL).
+  // Security: guests can only cancel orders where user_id is null (their own guest orders).
+  // The order UUID (non-guessable) acts as the possession token.
+  // Revert to requiring auth when OTP login is restored.
+  const fetchClient = user ? await createClient() : await createAdminClient()
+
+  let orderQuery = fetchClient
     .from("orders")
     .select("*")
     .eq("id", orderId)
-    .eq("user_id", user.id)
-    .maybeSingle()
+
+  if (user) {
+    orderQuery = orderQuery.eq("user_id", user.id)
+  } else {
+    orderQuery = orderQuery.is("user_id", null)
+  }
+
+  const { data: order, error } = await orderQuery.maybeSingle()
 
   if (error) throw new Error(error.message)
   if (!order) throw new Error("Order not found.")
