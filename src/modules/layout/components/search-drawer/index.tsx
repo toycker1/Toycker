@@ -410,7 +410,7 @@ const SearchDrawer = ({ isOpen, onClose }: SearchDrawerProps) => {
                           {results.collections.map((collection: SearchCollectionSummary) => (
                             <LocalizedClientLink
                               key={collection.id}
-                              href={`/collections/${collection.handle}`}
+                              href={`/collections/${encodeURIComponent(collection.handle)}`}
                               className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-gradient-to-r from-slate-50 to-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-primary/50 hover:text-primary hover:shadow-sm"
                               onClick={handleClose}
                             >
