@@ -35,6 +35,7 @@ export function SubmitButton({
     loadingText,
     className,
     variant = "primary",
+    disabled,
     ...props
 }: SubmitButtonProps) {
     const { pending } = useFormStatus()
@@ -42,7 +43,7 @@ export function SubmitButton({
     return (
         <button
             type="submit"
-            disabled={pending}
+            disabled={pending || disabled}
             className={cn(
                 "px-4 py-2 text-sm font-bold rounded-lg transition-all inline-flex items-center justify-center gap-2 min-w-[120px]",
                 "disabled:opacity-50 disabled:cursor-not-allowed",

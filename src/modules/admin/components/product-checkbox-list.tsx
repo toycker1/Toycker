@@ -12,9 +12,10 @@ interface Product {
 interface ProductCheckboxListProps {
     products: Product[]
     selectedProductIds: string[]
+    onSelectionChange?: (count: number) => void
 }
 
-export function ProductCheckboxList({ products, selectedProductIds }: ProductCheckboxListProps) {
+export function ProductCheckboxList({ products, selectedProductIds, onSelectionChange }: ProductCheckboxListProps) {
     const [searchQuery, setSearchQuery] = useState("")
     // Maintain local state for checkboxes to ensure UI is responsive and "Select All" works instantly
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(selectedProductIds))
@@ -23,6 +24,11 @@ export function ProductCheckboxList({ products, selectedProductIds }: ProductChe
     useEffect(() => {
         setSelectedIds(new Set(selectedProductIds))
     }, [selectedProductIds])
+
+    // Notify parent of selection count changes
+    useEffect(() => {
+        onSelectionChange?.(selectedIds.size)
+    }, [selectedIds, onSelectionChange])
 
     // Filter products based on search query
     const filteredProducts = useMemo(() =>
