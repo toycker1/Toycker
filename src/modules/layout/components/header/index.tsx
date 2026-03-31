@@ -124,7 +124,7 @@ const Header = ({
 
   return (
     <>
-      {/* <AnnouncementBar /> */}{/* TEMP: offer scroll hidden */}
+      <AnnouncementBar /> {/* TEMP: offer scroll hidden */}
 
       <header className="sticky top-0 z-40 bg-primary text-white">
         {/* Row 1 - Main Header with Primary Background */}
@@ -143,7 +143,7 @@ const Header = ({
 
               {/* Logo - Inline */}
               <LocalizedClientLink href="/" className="flex-shrink-0" prefetch={true}>
-                {/* TEMP: logo hidden - restore by uncommenting below
+                {/* TEMP: logo hidden - restore by uncommenting below */}
                 <div className="relative w-auto h-12">
                   <Image
                     src="/assets/images/toycker.png"
@@ -154,8 +154,8 @@ const Header = ({
                     className="h-full w-auto"
                   />
                 </div>
-                */}
-                <span className="text-2xl font-bold tracking-wide text-white">toycker.com</span>
+               
+                {/* <span className="text-2xl font-bold tracking-wide text-white">toycker.com</span> */}
               </LocalizedClientLink>
             </div>
 
