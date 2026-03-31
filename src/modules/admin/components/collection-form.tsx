@@ -10,6 +10,15 @@ import { ProductCheckboxList } from "./product-checkbox-list"
 import { slugify } from "@/lib/util/slug"
 import { cn } from "@/lib/util/cn"
 
+const POPULAR_COLLECTION_HANDLE = "popular"
+const POPULAR_PRODUCT_COUNT = 10
+
+interface CollectionProduct {
+    id: string
+    name: string
+    thumbnail: string | null
+}
+
 type CollectionFormProps = {
     collection?: {
         id: string
@@ -17,9 +26,9 @@ type CollectionFormProps = {
         handle: string
         image_url: string | null
     }
-    products: any[]
+    products: CollectionProduct[]
     selectedProductIds?: string[]
-    action: (formData: FormData) => Promise<any>
+    action: (formData: FormData) => Promise<void>
 }
 
 export function CollectionForm({ collection, products, selectedProductIds = [], action }: CollectionFormProps) {
@@ -27,6 +36,10 @@ export function CollectionForm({ collection, products, selectedProductIds = [], 
     const [handle, setHandle] = useState(collection?.handle || "")
     const [isHandleManuallyEdited, setIsHandleManuallyEdited] = useState(false)
     const [isEditingHandle, setIsEditingHandle] = useState(false)
+    const [selectedCount, setSelectedCount] = useState(selectedProductIds.length)
+
+    const isPopularCollection = handle === POPULAR_COLLECTION_HANDLE
+    const isCountValid = !isPopularCollection || selectedCount === POPULAR_PRODUCT_COUNT
 
     const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const newTitle = e.target.value
@@ -147,18 +160,37 @@ export function CollectionForm({ collection, products, selectedProductIds = [], 
 
                     {/* Products section */}
                     <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                            Products
-                        </label>
+                        <div className="flex items-center justify-between mb-2">
+                            <label className="block text-sm font-semibold text-gray-700">
+                                Products
+                            </label>
+                            {isPopularCollection && (
+                                <span className={cn(
+                                    "text-xs font-semibold",
+                                    selectedCount === POPULAR_PRODUCT_COUNT ? "text-green-600" : "text-red-600"
+                                )}>
+                                    {selectedCount}/{POPULAR_PRODUCT_COUNT} selected
+                                </span>
+                            )}
+                        </div>
                         <p className="text-xs text-gray-500 mb-3">
-                            Select products to add to this collection
+                            {isPopularCollection
+                                ? `Select exactly ${POPULAR_PRODUCT_COUNT} products for the "Popular Toy Set" homepage section`
+                                : "Select products to add to this collection"
+                            }
                         </p>
                         <div className="h-[450px] border border-gray-300 rounded-lg overflow-hidden bg-white shadow-sm">
                             <ProductCheckboxList
                                 products={products}
                                 selectedProductIds={selectedProductIds}
+                                onSelectionChange={setSelectedCount}
                             />
                         </div>
+                        {isPopularCollection && selectedCount !== POPULAR_PRODUCT_COUNT && (
+                            <p className="text-xs text-red-600 mt-2 font-medium">
+                                Exactly {POPULAR_PRODUCT_COUNT} products required — {selectedCount < POPULAR_PRODUCT_COUNT ? `select ${POPULAR_PRODUCT_COUNT - selectedCount} more` : `deselect ${selectedCount - POPULAR_PRODUCT_COUNT}`}
+                            </p>
+                        )}
                     </div>
                 </div>
             </AdminCard>
@@ -167,7 +199,7 @@ export function CollectionForm({ collection, products, selectedProductIds = [], 
                 <Link href="/admin/collections" className="px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors">
                     {collection ? "Discard" : "Cancel"}
                 </Link>
-                <SubmitButton loadingText="Saving...">
+                <SubmitButton loadingText="Saving..." disabled={!isCountValid}>
                     {collection ? "Save Changes" : "Save Collection"}
                 </SubmitButton>
             </div>

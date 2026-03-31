@@ -1753,6 +1753,14 @@ export async function createCollection(formData: FormData) {
 
   // Handle product associations
   const productIds = formData.getAll("product_ids") as string[]
+
+  // Enforce exactly 10 products for the "popular" collection
+  if (collection.handle === "popular" && productIds.length !== 10) {
+    throw new Error(
+      `The "popular" collection requires exactly 10 products, but ${productIds.length} were provided.`
+    )
+  }
+
   if (productIds.length > 0 && newCollection) {
     const productCollections = productIds.map((productId) => ({
       product_id: productId,
@@ -1796,6 +1804,13 @@ export async function updateCollection(formData: FormData) {
 
   // Update product associations using delete-insert pattern
   const productIds = formData.getAll("product_ids") as string[]
+
+  // Enforce exactly 10 products for the "popular" collection
+  if (updates.handle === "popular" && productIds.length !== 10) {
+    throw new Error(
+      `The "popular" collection requires exactly 10 products, but ${productIds.length} were provided.`
+    )
+  }
 
   // 1. Delete existing associations
   await supabase.from("product_collections").delete().eq("collection_id", id)
