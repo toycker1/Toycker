@@ -69,7 +69,7 @@ const BestSelling = async ({ collectionId }: BestSellingProps) => {
 
         <div className="mt-10 text-center">
           <LocalizedClientLink
-            href="/store"
+            href="/collections/best-selling"
             className="inline-flex items-center justify-center rounded-full bg-primary px-6 py-2 text-sm font-semibold uppercase tracking-wide text-white shadow hover:bg-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
           >
             Load more
