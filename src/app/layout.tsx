@@ -21,6 +21,11 @@ export const metadata: Metadata = {
   icons: {
     icon: "/favicon.png",
   },
+  verification: {
+    other: {
+      "facebook-domain-verification": "yk2zyx544yueqnj36z8yigenhunfer",
+    },
+  },
 }
 
 export default function RootLayout(props: { children: React.ReactNode }) {
