@@ -147,38 +147,6 @@ Because Supabase auth requires an email, phone-only users get a synthetic email:
 
 ---
 
-## Temporary Bypass — Current State
-
-> The AiSensy OTP API was not delivering OTPs from **2026-03-30**. To keep the store operational, login was temporarily bypassed so users can purchase without logging in.
-
-### What was changed (6 files, 7 markers)
-
-Search for **`TEMPORARY: Guest checkout bypass`** to find all changes.
-
-| File | What was changed |
-|------|-----------------|
-| `src/proxy.ts` | Middleware `/checkout` redirect commented out |
-| `src/app/(checkout)/checkout/page.tsx` | Auth gate redirect commented out |
-| `src/lib/actions/complete-checkout.ts` | Admin client used for guest RPC + order fetch |
-| `src/lib/data/orders.ts` | Admin client for guest order retrieval (view) |
-| `src/lib/data/orders.ts` | Guest order cancellation allowed via `user_id IS NULL` check |
-| `src/modules/cart/templates/index.tsx` | SignInPrompt hidden on cart page |
-
-### How to restore login (when OTP is fixed)
-
-1. Search the codebase for: `TEMPORARY: Guest checkout bypass`
-2. In each file — uncomment the original code and remove the temporary additions
-3. Specifically:
-   - `src/proxy.ts` — uncomment the 5-line redirect block
-   - `src/app/(checkout)/checkout/page.tsx` — uncomment the 3-line redirect block
-   - `src/lib/actions/complete-checkout.ts` — remove the `createAdminClient` import, remove the `checkoutClient` line, revert `.rpc()` and `.from("orders")` back to `supabase`
-   - `src/lib/data/orders.ts` → `retrieveOrder()` — revert to `const supabase = await createClient()`
-   - `src/lib/data/orders.ts` → `cancelUserOrder()` — revert to `if (!user) throw new Error(...)` and `.eq("user_id", user.id)`
-   - `src/modules/cart/templates/index.tsx` — uncomment the `SignInPrompt` block
-4. Run `pnpm run build` to verify everything compiles
-
----
-
 ## Key Files Reference
 
 ```

@@ -3,8 +3,6 @@
 import { z } from "zod"
 import { revalidateTag } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
-// TEMPORARY: Guest checkout bypass — remove this import when OTP login is restored
-import { createAdminClient } from "@/lib/supabase/admin"
 import { PaymentCollection } from "@/lib/supabase/types"
 import { resolveCustomerPhone } from "@/lib/util/customer-contact-phone"
 import { getCheckoutPhoneValue } from "@/lib/util/customer-phone"
@@ -104,11 +102,6 @@ export async function completeCheckout(
       data: { user },
     } = await supabase.auth.getUser()
 
-    // TEMPORARY: Guest checkout bypass — use admin client when no auth user so that
-    // the RPC call and order SELECT work regardless of RLS policies for anon role.
-    // Revert to using `supabase` everywhere when OTP login is restored.
-    const checkoutClient = user ? supabase : await createAdminClient()
-
     let existingProfile: CheckoutProfileRow | null = null
 
     if (user) {
@@ -173,7 +166,7 @@ export async function completeCheckout(
 
     // Step 3: Call Supabase RPC function for atomic order creation
     // The RPC will now find the initialized payment session data in the cart record
-    const { data: result, error } = await checkoutClient.rpc(
+    const { data: result, error } = await supabase.rpc(
       "create_order_with_payment",
       {
         p_cart_id: checkoutData.cartId,
@@ -266,7 +259,7 @@ export async function completeCheckout(
     }
 
     // Fetch the created order to get any updated payment data (like Stripe client_secret)
-    const { data: orderData } = await checkoutClient
+    const { data: orderData } = await supabase
       .from("orders")
       .select("*, payment_collection")
       .eq("id", result.order_id)
