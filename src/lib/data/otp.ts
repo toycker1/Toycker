@@ -3,7 +3,7 @@
 import crypto from "crypto"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
-import { sendAiSensyAuthenticationOtp } from "@/lib/integrations/aisensy"
+import { sendInteraktOtp } from "@/lib/integrations/interakt"
 import { revalidatePath, revalidateTag } from "next/cache"
 import { redirect } from "next/navigation"
 import { cookies as nextCookies } from "next/headers"
@@ -317,7 +317,7 @@ export async function sendOtp(
     }
   }
 
-  const code = normalizedPhone === "919265348797" ? "1234" : generatePhoneLoginOtp()
+  const code = generatePhoneLoginOtp()
   const codeHash = hashOtp(normalizedPhone, code)
   const now = new Date().toISOString()
   const expiresAt = new Date(Date.now() + otpTtlSeconds * 1000).toISOString()
@@ -351,17 +351,12 @@ export async function sendOtp(
   }
 
   try {
-    let providerMessageId: string | null = null;
-    if (normalizedPhone === "919265348797") {
-      providerMessageId = "mock_message_id";
-    } else {
-      const resp = await sendAiSensyAuthenticationOtp({
-        destination: normalizedPhone,
-        otpCode: code,
-        userName: "Toycker Customer",
-      })
-      providerMessageId = resp.providerMessageId ?? null;
-    }
+    const resp = await sendInteraktOtp({
+      destination: normalizedPhone,
+      otpCode: code,
+      userName: "Toycker Customer",
+    })
+    const providerMessageId = resp.providerMessageId ?? null;
 
     await adminClient
       .from("otp_codes")
@@ -379,12 +374,12 @@ export async function sendOtp(
       })
       .eq("id", createdOtp.id)
 
-    console.error("Failed to send AiSensy OTP:", error)
+    console.error("Failed to send Interakt OTP:", error)
 
     return {
       success: false,
       error:
-        "Failed to send the WhatsApp OTP. Please check the AiSensy configuration and try again.",
+        "Failed to send the WhatsApp OTP. Please check the Interakt configuration and try again.",
     }
   }
 
