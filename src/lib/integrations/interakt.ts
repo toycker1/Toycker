@@ -40,15 +40,16 @@ function splitDestination(destination: string): {
   return { countryCode: "+91", phoneNumber: destination }
 }
 
-async function parseResponse(
-  response: Response
-): Promise<InteraktSuccessResponse | null> {
-  const text = await response.text()
-  if (!text) return null
+async function parseResponse(response: Response): Promise<{
+  parsed: InteraktSuccessResponse | null
+  raw: string
+}> {
+  const raw = await response.text()
+  if (!raw) return { parsed: null, raw: "" }
   try {
-    return JSON.parse(text) as InteraktSuccessResponse
+    return { parsed: JSON.parse(raw) as InteraktSuccessResponse, raw }
   } catch {
-    return null
+    return { parsed: null, raw }
   }
 }
 
@@ -85,13 +86,20 @@ export async function sendInteraktOtp({
     cache: "no-store",
   })
 
-  const responseBody = await parseResponse(response)
+  const { parsed: responseBody, raw: rawResponse } = await parseResponse(response)
 
   if (!response.ok) {
     const detail =
-      responseBody && typeof responseBody === "object" && "message" in responseBody
+      responseBody &&
+      typeof responseBody === "object" &&
+      "message" in responseBody &&
+      responseBody.message
         ? `: ${String(responseBody.message)}`
-        : ""
+        : rawResponse
+          ? `: ${rawResponse}`
+          : ""
+    console.error("Interakt API error — payload sent:", JSON.stringify({ countryCode, phoneNumber, templateName, languageCode }))
+    console.error("Interakt API error — raw response:", rawResponse)
     throw new Error(`Interakt request failed with status ${response.status}${detail}`)
   }
 
