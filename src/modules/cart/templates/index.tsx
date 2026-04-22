@@ -39,7 +39,7 @@ const CartTemplate = ({
                     </div>
                     <div>
                       <h3 className="text-base sm:text-lg font-bold text-slate-900 mb-1">
-                        Join Toycker Club & Save 10%!
+                        Join Toycker Club & Save 5%!
                       </h3>
                       <p className="text-xs sm:text-sm text-slate-600">
                         Spend ₹999+ on a single order and unlock <strong>lifetime discounts</strong> on everything.

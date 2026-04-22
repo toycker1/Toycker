@@ -79,7 +79,8 @@ const ShippingAddress = ({
   cart: Cart | null
 }) => {
   const { state, setShippingAddress } = useCheckout()
-  const initialAddress = state.shippingAddress ?? cart?.shipping_address ?? null
+  const defaultShippingAddress = customer?.addresses?.find(a => a.is_default_shipping) ?? customer?.addresses?.find(a => a.is_default_billing) ?? null
+  const initialAddress = state.shippingAddress ?? cart?.shipping_address ?? defaultShippingAddress ?? null
 
   const [formData, setFormData] = useState<ShippingFormData>(() =>
     buildFormData(cart, initialAddress)
@@ -231,7 +232,7 @@ const ShippingAddress = ({
           data-testid="shipping-last-name-input"
         />
         <Input
-          label="Address"
+          label="Flat, House no., Building, Company"
           name="shipping_address.address_1"
           autoComplete="address-line1"
           value={formData["shipping_address.address_1"] || ""}
@@ -240,7 +241,7 @@ const ShippingAddress = ({
           data-testid="shipping-address-input"
         />
         <Input
-          label="Company"
+          label="Area, Colony, Street, Sector, Village"
           name="shipping_address.company"
           value={formData["shipping_address.company"] || ""}
           onChange={handleChange}
@@ -248,7 +249,7 @@ const ShippingAddress = ({
           data-testid="shipping-company-input"
         />
         <Input
-          label="Postal code"
+          label="Pincode"
           name="shipping_address.postal_code"
           autoComplete="postal-code"
           value={formData["shipping_address.postal_code"] || ""}

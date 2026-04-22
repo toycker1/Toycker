@@ -27,10 +27,13 @@ export const paymentInfoMap: Record<
   },
 }
 
+// TEMPORARY: Cash on Delivery disabled — re-enable by removing the entry below
 const temporarilyDisabledPaymentMethods: Record<
   string,
   { badgeLabel: string }
-> = {}
+> = {
+  pp_system_default: { badgeLabel: "Unavailable" },
+}
 
 export const isTemporarilyDisabledPaymentMethod = (
   providerId?: string | null

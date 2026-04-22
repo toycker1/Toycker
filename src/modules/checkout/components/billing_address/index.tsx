@@ -110,8 +110,9 @@ const BillingAddress = ({
   const customerPhone = getCheckoutPhoneValue(customer?.phone)
   const isBillingPhoneLocked = Boolean(customer)
   const resolvedCheckoutEmail = customerFacingCartEmail || customer?.email || ""
+  const defaultBillingAddress = customer?.addresses?.find(a => a.is_default_billing) ?? null
   const initialAddress =
-    state.billingAddress ?? cart?.billing_address ?? cart?.shipping_address ?? null
+    state.billingAddress ?? cart?.billing_address ?? cart?.shipping_address ?? defaultBillingAddress ?? null
 
   const [formData, setFormData] = useState<BillingFormData>(() =>
     buildFormData(cart, initialAddress, customerPhone, resolvedCheckoutEmail)
@@ -273,7 +274,7 @@ const BillingAddress = ({
           data-testid="billing-last-name-input"
         />
         <Input
-          label="Address"
+          label="Flat, House no., Building, Company"
           name="billing_address.address_1"
           autoComplete="address-line1"
           value={formData["billing_address.address_1"] || ""}
@@ -282,7 +283,7 @@ const BillingAddress = ({
           data-testid="billing-address-input"
         />
         <Input
-          label="Company"
+          label="Area, Colony, Street, Sector, Village"
           name="billing_address.company"
           value={formData["billing_address.company"] || ""}
           onChange={handleChange}
@@ -290,7 +291,7 @@ const BillingAddress = ({
           data-testid="billing-company-input"
         />
         <Input
-          label="Postal code"
+          label="Pincode"
           name="billing_address.postal_code"
           autoComplete="postal-code"
           value={formData["billing_address.postal_code"] || ""}
