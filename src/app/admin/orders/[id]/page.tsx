@@ -164,7 +164,12 @@ export default async function AdminOrderDetails({ params }: Props) {
               {order.items?.map((item: { id: string; thumbnail?: string; title: string; variant?: { sku?: string }; unit_price: number; quantity: number; total: number }) => (
                 <div key={item.id} className="p-6 flex items-center gap-5 group">
                   <div className="h-20 w-20 relative rounded-xl bg-gray-50 border border-gray-100 overflow-hidden flex-shrink-0 transition-all group-hover:border-gray-300">
-                    {item.thumbnail && <Image src={fixUrl(item.thumbnail)!} alt="" fill className="object-cover" sizes="80px" />}
+                    {item.thumbnail
+                      ? <Image src={fixUrl(item.thumbnail)!} alt="" fill className="object-cover" sizes="80px" />
+                      : item.title?.toLowerCase().includes("gift wrap")
+                        ? <Image src="/assets/images/gift-wrap.png" alt="Gift Wrap" fill className="object-cover" sizes="80px" />
+                        : null
+                    }
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold text-gray-900">{item.title}</p>
