@@ -377,7 +377,7 @@ export default function ProductActions({
       variant: selectedVariant,
       quantity,
       countryCode,
-      metadata: giftWrap ? { gift_wrap: true } : undefined, // flag that it is wrapped, but no fee here
+      metadata: giftWrap ? { gift_wrap: true, gift_wrap_fee: giftWrapSettings.fee } : undefined,
     })
 
     // 2. If gift wrap is selected, add it as a separate line item
@@ -413,7 +413,7 @@ export default function ProductActions({
       variant: undefined,
       quantity,
       countryCode,
-      metadata: giftWrap ? { gift_wrap: true } : undefined,
+      metadata: giftWrap ? { gift_wrap: true, gift_wrap_fee: giftWrapSettings.fee } : undefined,
     })
 
     if (giftWrap) {

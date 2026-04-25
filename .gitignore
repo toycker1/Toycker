@@ -64,3 +64,6 @@ dump.rdb
 
 
 .claude/
+
+# Supabase local dev artifacts
+supabase/.temp/

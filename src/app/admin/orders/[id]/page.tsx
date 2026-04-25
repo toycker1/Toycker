@@ -188,11 +188,17 @@ export default async function AdminOrderDetails({ params }: Props) {
                 <span>Subtotal</span>
                 <span className="text-gray-900 font-bold">
                   {convertToLocale({
-                    amount: (order.subtotal || 0) + Number((order.metadata as any)?.club_savings || 0),
+                    amount: (order.subtotal || 0) + Number((order.metadata as any)?.club_savings || 0) - Number((order.metadata as any)?.gift_wrap_amount || 0),
                     currency_code: order.currency_code
                   })}
                 </span>
               </div>
+              {Number((order.metadata as any)?.gift_wrap_amount || 0) > 0 && (
+                <div className="flex justify-between text-sm font-medium text-pink-600">
+                  <span>Gift Wrap</span>
+                  <span className="font-bold">+{convertToLocale({ amount: Number((order.metadata as any).gift_wrap_amount), currency_code: order.currency_code })}</span>
+                </div>
+              )}
               {Number((order.metadata as any)?.club_savings || 0) > 0 && (
                 <div className="flex justify-between text-sm font-medium">
                   <div className="flex items-center gap-2">
