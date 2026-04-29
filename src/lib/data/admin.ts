@@ -13,6 +13,7 @@ import {
   ShippingOption,
   OrderTimeline,
   ShippingPartner,
+  TrivaraOrderBooking,
   OrderEventType,
   ProductVariant,
   VariantFormData,
@@ -31,6 +32,11 @@ import {
 import { resolveCustomerPhone } from "@/lib/util/customer-contact-phone"
 import { canEditOrderShippingAddress } from "@/lib/util/order-shipping-address-edit"
 import { DEFAULT_MANUAL_PRODUCT_STATUS } from "@/lib/util/product-visibility"
+import {
+  buildTrivaraOrderBookingPayload,
+  getTrivaraConfig,
+  sendTrivaraOrderBooking,
+} from "@/lib/integrations/trivara"
 
 type EmailBackedRow = {
   email: string | null
@@ -2762,6 +2768,196 @@ export async function logOrderEvent(
   }
 }
 
+async function upsertTrivaraBookingRecord(
+  orderId: string,
+  values: Pick<
+    TrivaraOrderBooking,
+    "status" | "request_payload" | "response_payload" | "error_message"
+  > & {
+    trivara_reference_number?: string | null
+    booked_at?: string | null
+  }
+) {
+  const adminSupabase = await createAdminClient()
+
+  const { error } = await adminSupabase.from("trivara_order_bookings").upsert(
+    {
+      order_id: orderId,
+      ...values,
+    },
+    { onConflict: "order_id" }
+  )
+
+  if (error) {
+    console.error(
+      `[TRIVARA] Failed to store booking record for order ${orderId}:`,
+      error
+    )
+  }
+}
+
+async function requestTrivaraBookingForAcceptedOrder(orderId: string) {
+  const adminSupabase = await createAdminClient()
+  const { data: existingBooking, error: existingBookingError } =
+    await adminSupabase
+      .from("trivara_order_bookings")
+      .select("*")
+      .eq("order_id", orderId)
+      .maybeSingle()
+
+  if (existingBookingError) {
+    console.error(
+      `[TRIVARA] Failed to read existing booking for order ${orderId}:`,
+      existingBookingError
+    )
+  }
+
+  const booking = existingBooking as TrivaraOrderBooking | null
+  if (booking?.status === "booked") {
+    return
+  }
+
+  let config: ReturnType<typeof getTrivaraConfig>
+
+  try {
+    config = getTrivaraConfig()
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Invalid Trivara configuration"
+
+    await upsertTrivaraBookingRecord(orderId, {
+      status: "failed",
+      request_payload: {},
+      response_payload: null,
+      error_message: errorMessage,
+      trivara_reference_number: null,
+      booked_at: null,
+    })
+
+    await logOrderEvent(
+      orderId,
+      "note_added",
+      "Trivara Booking Failed",
+      `Order was accepted, but Trivara booking could not start: ${errorMessage}`,
+      "system",
+      { provider: "trivara", error: errorMessage }
+    )
+
+    return
+  }
+
+  if (!config.bookingEnabled) {
+    if (booking?.status !== "skipped") {
+      await upsertTrivaraBookingRecord(orderId, {
+        status: "skipped",
+        request_payload: {
+          reason: "TRIVARA_BOOKING_ENABLED is not true",
+        },
+        response_payload: null,
+        error_message: null,
+        trivara_reference_number: null,
+        booked_at: null,
+      })
+
+      await logOrderEvent(
+        orderId,
+        "note_added",
+        "Trivara Booking Skipped",
+        "Trivara booking is disabled in environment settings.",
+        "system",
+        { provider: "trivara" }
+      )
+    }
+
+    return
+  }
+
+  let requestPayload: Record<string, unknown> = {}
+
+  try {
+    const { data: orderRow, error: orderError } = await adminSupabase
+      .from("orders")
+      .select("*")
+      .eq("id", orderId)
+      .maybeSingle()
+
+    if (orderError || !orderRow) {
+      throw new Error(orderError?.message || "Order not found")
+    }
+
+    const payload = buildTrivaraOrderBookingPayload(orderRow as Order, config)
+    requestPayload = payload
+
+    await upsertTrivaraBookingRecord(orderId, {
+      status: "pending",
+      request_payload: requestPayload,
+      response_payload: null,
+      error_message: null,
+      trivara_reference_number: null,
+      booked_at: null,
+    })
+
+    const response = await sendTrivaraOrderBooking(payload, config)
+
+    if (!response.ok) {
+      throw new Error(`Trivara request failed with status ${response.status}`)
+    }
+
+    await upsertTrivaraBookingRecord(orderId, {
+      status: "booked",
+      request_payload: requestPayload,
+      response_payload: response.responsePayload,
+      error_message: null,
+      trivara_reference_number: response.referenceNumber,
+      booked_at: new Date().toISOString(),
+    })
+
+    await logOrderEvent(
+      orderId,
+      "note_added",
+      "Trivara Pickup Requested",
+      response.referenceNumber
+        ? `Trivara booking created. Reference: ${response.referenceNumber}.`
+        : "Trivara booking request was sent successfully.",
+      "system",
+      {
+        provider: "trivara",
+        reference_number: response.referenceNumber,
+      }
+    )
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown Trivara booking error"
+
+    await upsertTrivaraBookingRecord(orderId, {
+      status: "failed",
+      request_payload: requestPayload,
+      response_payload: null,
+      error_message: errorMessage,
+      trivara_reference_number: null,
+      booked_at: null,
+    })
+
+    await logOrderEvent(
+      orderId,
+      "note_added",
+      "Trivara Booking Failed",
+      `Order was accepted, but Trivara booking failed: ${errorMessage}`,
+      "system",
+      {
+        provider: "trivara",
+        error: errorMessage,
+      }
+    )
+  }
+}
+
+export async function retryTrivaraBookingForOrder(orderId: string) {
+  await ensureAdmin()
+  await requirePermission(PERMISSIONS.SHIPPING_UPDATE)
+  await requestTrivaraBookingForAcceptedOrder(orderId)
+}
+
 // --- Order Actions ---
 export async function acceptOrder(orderId: string) {
   await ensureAdmin()
@@ -2788,6 +2984,8 @@ export async function acceptOrder(orderId: string) {
     {},
     actorDisplay
   )
+
+  await requestTrivaraBookingForAcceptedOrder(orderId)
 
   revalidatePath(`/admin/orders/${orderId}`)
   revalidatePath("/admin/orders")

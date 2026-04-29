@@ -419,6 +419,49 @@ export interface ShippingPartner {
   updated_at: string
 }
 
+export type TrivaraOrderBookingStatus =
+  | "pending"
+  | "booked"
+  | "failed"
+  | "skipped"
+  | "cancelled"
+
+export interface TrivaraOrderBooking {
+  id: string
+  order_id: string
+  status: TrivaraOrderBookingStatus
+  trivara_reference_number: string | null
+  request_payload: Record<string, unknown>
+  response_payload: Record<string, unknown> | null
+  error_message: string | null
+  tracking_status: string | null
+  tracking_payload: Record<string, unknown> | null
+  tracking_synced_at: string | null
+  print_slip_payload: Record<string, unknown> | null
+  print_slip_synced_at: string | null
+  cancel_payload: Record<string, unknown> | null
+  cancel_error_message: string | null
+  cancelled_at: string | null
+  booked_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type TrivaraSyncSnapshotKey =
+  | "total_orders"
+  | "pickup_locations"
+  | "services"
+
+export interface TrivaraSyncSnapshot {
+  sync_key: TrivaraSyncSnapshotKey
+  request_payload: Record<string, unknown>
+  response_payload: Record<string, unknown> | null
+  error_message: string | null
+  synced_at: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface AdminRole {
   id: string
   name: string

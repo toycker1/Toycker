@@ -16,6 +16,7 @@ import {
   StarIcon,
   ReceiptPercentIcon,
   PhotoIcon,
+  MapIcon,
 } from "@heroicons/react/24/outline"
 import { useHasPermission } from "@/lib/permissions/context"
 import { PERMISSIONS, Permission } from "@/lib/permissions"
@@ -35,6 +36,7 @@ const NAV_ITEMS: NavItemConfig[] = [
   { label: "Collections", href: "/admin/collections", icon: RectangleStackIcon, permission: PERMISSIONS.COLLECTIONS_READ },
   { label: "Categories", href: "/admin/categories", icon: FolderIcon, permission: PERMISSIONS.CATEGORIES_READ },
   { label: "Shipping", href: "/admin/shipping", icon: TruckIcon, permission: PERMISSIONS.SHIPPING_READ },
+  { label: "Logistics", href: "/admin/logistics", icon: MapIcon, permission: PERMISSIONS.SHIPPING_READ },
   { label: "Shipping Partners", href: "/admin/shipping-partners", icon: TruckIcon, permission: PERMISSIONS.SHIPPING_PARTNERS_READ },
   { label: "Payments", href: "/admin/payments", icon: CreditCardIcon, permission: PERMISSIONS.PAYMENTS_READ },
   { label: "Customers", href: "/admin/customers", icon: UsersIcon, permission: PERMISSIONS.CUSTOMERS_READ },

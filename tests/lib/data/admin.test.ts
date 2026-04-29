@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { revalidatePath } from "next/cache"
 import {
+  acceptOrder,
   getAdminCategories,
   getAdminCollections,
   getAdminUser,
@@ -502,5 +503,128 @@ describe("admin list fetching", () => {
     expect(result.count).toBe(collections.length)
     expect(result.currentPage).toBe(1)
     expect(result.totalPages).toBe(1)
+  })
+})
+
+describe("admin order Trivara booking", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    delete process.env.TRIVARA_BOOKING_ENABLED
+  })
+
+  it("records a skipped Trivara booking when accepting an order while booking is disabled", async () => {
+    const ensureAdminClient = buildEnsureAdminClient()
+    const updateOrderEq = vi.fn().mockResolvedValue({ error: null })
+    const updateOrder = vi.fn().mockReturnValue({ eq: updateOrderEq })
+    const orderClient = {
+      from: vi.fn((table: string) => {
+        if (table !== "orders") {
+          throw new Error(`Unexpected table: ${table}`)
+        }
+
+        return {
+          update: updateOrder,
+        }
+      }),
+    }
+    const actorMaybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        first_name: "Admin",
+        last_name: "User",
+        email: "admin@example.com",
+        contact_email: null,
+        phone: null,
+      },
+      error: null,
+    })
+    const actorClient = {
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: {
+            user: {
+              id: "admin-user",
+              email: "admin@example.com",
+              phone: null,
+            },
+          },
+        }),
+      },
+      from: vi.fn((table: string) => {
+        if (table !== "profiles") {
+          throw new Error(`Unexpected table: ${table}`)
+        }
+
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({ maybeSingle: actorMaybeSingle }),
+          }),
+        }
+      }),
+    }
+
+    const insertTimeline = vi.fn().mockResolvedValue({ error: null })
+    const existingBookingMaybeSingle = vi.fn().mockResolvedValue({
+      data: null,
+      error: null,
+    })
+    const upsertBooking = vi.fn().mockResolvedValue({ error: null })
+    const adminClient = {
+      from: vi.fn((table: string) => {
+        if (table === "order_timeline") {
+          return {
+            insert: insertTimeline,
+          }
+        }
+
+        if (table === "trivara_order_bookings") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi
+                .fn()
+                .mockReturnValue({ maybeSingle: existingBookingMaybeSingle }),
+            }),
+            upsert: upsertBooking,
+          }
+        }
+
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    }
+
+    vi.mocked(createClient)
+      .mockResolvedValueOnce(
+        ensureAdminClient as unknown as Awaited<ReturnType<typeof createClient>>
+      )
+      .mockResolvedValueOnce(
+        orderClient as unknown as Awaited<ReturnType<typeof createClient>>
+      )
+      .mockResolvedValueOnce(
+        actorClient as unknown as Awaited<ReturnType<typeof createClient>>
+      )
+    vi.mocked(createAdminClient).mockResolvedValue(
+      adminClient as unknown as Awaited<ReturnType<typeof createAdminClient>>
+    )
+
+    await acceptOrder("order-1")
+
+    expect(updateOrder).toHaveBeenCalledWith({
+      status: "accepted",
+      updated_at: expect.any(String),
+    })
+    expect(upsertBooking).toHaveBeenCalledWith(
+      expect.objectContaining({
+        order_id: "order-1",
+        status: "skipped",
+        response_payload: null,
+        error_message: null,
+      }),
+      { onConflict: "order_id" }
+    )
+    expect(insertTimeline).toHaveBeenCalledWith(
+      expect.objectContaining({
+        order_id: "order-1",
+        title: "Trivara Booking Skipped",
+      })
+    )
   })
 })
