@@ -1,6 +1,8 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { PERMISSIONS } from "@/lib/permissions"
+import { checkPermission, requirePermission } from "@/lib/permissions/server"
 import { revalidatePath } from "next/cache"
 
 export type ReviewData = {
@@ -43,6 +45,44 @@ export type ReviewWithMedia = {
     } | null
 }
 
+export type AdminReviewProduct = {
+    id: string
+    name: string
+    handle: string
+    image_url: string | null
+    thumbnail: string | null
+    status: "active" | "draft" | "archived"
+}
+
+type ProductLookup = {
+    id: string
+    handle: string
+}
+
+const validateReviewData = (data: ReviewData) => {
+    if (!data.product_id) {
+        return "Please select a product."
+    }
+
+    if (!Number.isInteger(data.rating) || data.rating < 1 || data.rating > 5) {
+        return "Please select a star rating."
+    }
+
+    if (!data.title.trim()) {
+        return "Please enter a review title."
+    }
+
+    if (!data.content.trim()) {
+        return "Please enter the review details."
+    }
+
+    if (!data.is_anonymous && !data.display_name.trim()) {
+        return "Please enter a display name or post anonymously."
+    }
+
+    return null
+}
+
 export async function submitReview(data: ReviewData) {
     const supabase = await createClient()
 
@@ -53,6 +93,11 @@ export async function submitReview(data: ReviewData) {
     if (!user) {
         // Optional: Allow guest reviews logic here if needed, but for now enforce auth as per plan
         return { error: "You must be logged in to submit a review." }
+    }
+
+    const validationError = validateReviewData(data)
+    if (validationError) {
+        return { error: validationError }
     }
 
     // Verify that the user has purchased the product
@@ -66,20 +111,14 @@ export async function submitReview(data: ReviewData) {
         return { error: "Failed to verify purchase history. Please try again." }
     }
 
-    console.log(`[ReviewVerify] User: ${user.id}, Product: ${data.product_id}`)
-    console.log(`[ReviewVerify] Orders found: ${orders?.length}`)
-
     // Check if product exists in any of the user's orders
     // Use proper type assertion for items which is JSONB in DB but CartItem[] in app
     const hasPurchased = orders?.some((order) => {
         const items = order.items as unknown as { product_id: string }[]
-        const found = items?.some((item) => item.product_id === data.product_id)
-        if (found) console.log(`[ReviewVerify] Match found in order!`)
-        return found
+        return items?.some((item) => item.product_id === data.product_id)
     })
 
     if (!hasPurchased) {
-        console.log(`[ReviewVerify] No matching purchase found.`)
         return { error: "You can only review products you have purchased." }
     }
 
@@ -91,9 +130,9 @@ export async function submitReview(data: ReviewData) {
             product_id: data.product_id,
             user_id: user.id,
             rating: data.rating,
-            title: data.title,
-            content: data.content,
-            display_name: data.display_name,
+            title: data.title.trim(),
+            content: data.content.trim(),
+            display_name: data.is_anonymous ? "" : data.display_name.trim(),
             is_anonymous: data.is_anonymous,
             approval_status: "pending",
         })
@@ -136,6 +175,111 @@ export async function submitReview(data: ReviewData) {
     }
 
     revalidatePath(`/products/${data.product_id}`) // Revalidate product page
+    return { success: true }
+}
+
+export async function getProductsForAdminReview(): Promise<AdminReviewProduct[]> {
+    const canUpdateReviews = await checkPermission(PERMISSIONS.REVIEWS_UPDATE)
+    if (!canUpdateReviews) {
+        return []
+    }
+
+    const supabase = await createClient()
+
+    const { data, error } = await supabase
+        .from("products")
+        .select("id, name, handle, image_url, thumbnail, status")
+        .order("created_at", { ascending: false })
+
+    if (error) {
+        console.error("Error fetching products for admin review:", error)
+        return []
+    }
+
+    return (data || []) as AdminReviewProduct[]
+}
+
+export async function createAdminReview(data: ReviewData) {
+    await requirePermission(PERMISSIONS.REVIEWS_UPDATE)
+    const supabase = await createClient()
+
+    const {
+        data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+        return { error: "You must be logged in as an admin to create a review." }
+    }
+
+    const validationError = validateReviewData(data)
+    if (validationError) {
+        return { error: validationError }
+    }
+
+    const { data: product, error: productError } = await supabase
+        .from("products")
+        .select("id, handle")
+        .eq("id", data.product_id)
+        .maybeSingle()
+
+    if (productError) {
+        console.error("Error validating product for admin review:", productError)
+        return { error: "Failed to validate the selected product." }
+    }
+
+    if (!product) {
+        return { error: "Product not found. Please select another product." }
+    }
+
+    const productLookup = product as ProductLookup
+
+    const { data: insertedReview, error: insertError } = await supabase
+        .from("reviews")
+        .insert({
+            product_id: data.product_id,
+            user_id: user.id,
+            rating: data.rating,
+            title: data.title.trim(),
+            content: data.content.trim(),
+            display_name: data.is_anonymous ? "" : data.display_name.trim(),
+            is_anonymous: data.is_anonymous,
+            approval_status: "approved",
+        })
+        .select("id")
+        .single()
+
+    if (insertError) {
+        console.error("Error creating admin review:", insertError)
+        if (insertError.code === "23503") {
+            return { error: "Product not found. Please refresh and try again." }
+        }
+        return { error: "Failed to save review details. Please try again." }
+    }
+
+    if (!insertedReview) {
+        return { error: "Review created but failed to verify. Please check reviews." }
+    }
+
+    if (data.media.length > 0) {
+        const mediaInserts = data.media.map((item) => ({
+            review_id: insertedReview.id,
+            file_path: item.file_path,
+            file_type: item.file_type,
+            storage_provider: item.storage_provider || "r2",
+        }))
+
+        const { error: mediaError } = await supabase
+            .from("review_media")
+            .insert(mediaInserts)
+
+        if (mediaError) {
+            console.error("Error saving admin review media:", mediaError)
+            return { error: "Review created but failed to save media." }
+        }
+    }
+
+    revalidatePath("/admin/reviews")
+    revalidatePath(`/products/${productLookup.handle}`)
     return { success: true }
 }
 

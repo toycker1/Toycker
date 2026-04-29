@@ -1,7 +1,11 @@
-import { getAllReviewsForAdmin, getReviewStatsForAdmin } from "@/lib/actions/reviews"
+import type { ComponentType, SVGProps } from "react"
+import { getAllReviewsForAdmin, getProductsForAdminReview, getReviewStatsForAdmin } from "@/lib/actions/reviews"
+import { PERMISSIONS } from "@/lib/permissions"
+import { checkPermission } from "@/lib/permissions/server"
 import { AdminPagination } from "@modules/admin/components/admin-pagination"
 import { AdminSearchInput } from "@modules/admin/components/admin-search-input"
 import ReviewsTable from "./reviews-table"
+import AddReviewModal from "./add-review-modal"
 import { ChatBubbleLeftRightIcon, StarIcon, ClockIcon, MicrophoneIcon, ChatBubbleBottomCenterTextIcon } from "@heroicons/react/24/outline"
 
 export const metadata = {
@@ -23,7 +27,11 @@ export default async function ReviewsPage({
         search: search || undefined
     })
 
-    const stats = await getReviewStatsForAdmin()
+    const [stats, products, canCreateReview] = await Promise.all([
+        getReviewStatsForAdmin(),
+        getProductsForAdminReview(),
+        checkPermission(PERMISSIONS.REVIEWS_UPDATE),
+    ])
 
     const hasSearch = search && search.trim().length > 0
     const buildUrl = (newPage?: number, clearSearch = false) => {
@@ -42,6 +50,7 @@ export default async function ReviewsPage({
         <div className="flex flex-col gap-8">
             <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-semibold text-gray-900">Reviews & Ratings</h1>
+                {canCreateReview && <AddReviewModal products={products} />}
             </div>
 
             {/* Stats Dashboard */}
@@ -125,7 +134,7 @@ function DashboardStat({
 }: {
     title: string,
     value: string | number,
-    icon: any,
+    icon: ComponentType<SVGProps<SVGSVGElement>>,
     color: string,
     highlight?: boolean
 }) {
