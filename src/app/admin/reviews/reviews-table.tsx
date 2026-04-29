@@ -10,15 +10,19 @@ import clsx from "clsx"
 import { formatIST } from "@/lib/util/date"
 import { AdminTableWrapper } from "@modules/admin/components/admin-table-wrapper"
 
+type ReviewMedia = ReviewWithMedia["review_media"][number]
+type ReviewTab = "all" | "pending" | "approved" | "rejected" | "voice"
+
+const REVIEW_TABS: ReviewTab[] = ["all", "pending", "approved", "rejected", "voice"]
 
 export default function ReviewsTable({ reviews }: { reviews: ReviewWithMedia[] }) {
-    const [activeTab, setActiveTab] = useState<"all" | "pending" | "approved" | "rejected" | "voice">("all")
+    const [activeTab, setActiveTab] = useState<ReviewTab>("all")
     const [selectedReview, setSelectedReview] = useState<ReviewWithMedia | null>(null)
     const [isProcessing, setIsProcessing] = useState(false)
 
     const filteredReviews = reviews.filter((r) => {
         if (activeTab === "all") return true
-        if (activeTab === "voice") return r.review_media?.some((m: any) => m.file_type === 'audio')
+        if (activeTab === "voice") return r.review_media?.some((m) => m.file_type === 'audio')
         return r.approval_status === activeTab
     })
 
@@ -51,17 +55,17 @@ export default function ReviewsTable({ reviews }: { reviews: ReviewWithMedia[] }
         <div className="bg-white rounded-lg shadow border border-gray-200">
             {/* Tabs */}
             <div className="border-b border-gray-200 px-6 flex gap-6">
-                {["all", "pending", "approved", "rejected", "voice"].map((tab) => {
+                {REVIEW_TABS.map((tab) => {
                     const count = tab === 'all'
                         ? reviews.length
                         : tab === 'voice'
-                            ? reviews.filter(r => r.review_media?.some((m: any) => m.file_type === 'audio')).length
+                            ? reviews.filter(r => r.review_media?.some((m) => m.file_type === 'audio')).length
                             : reviews.filter(r => r.approval_status === tab).length
 
                     return (
                         <button
                             key={tab}
-                            onClick={() => setActiveTab(tab as any)}
+                            onClick={() => setActiveTab(tab)}
                             className={clsx(
                                 "py-4 text-sm font-medium border-b-2 transition-colors capitalize flex items-center gap-2",
                                 activeTab === tab
@@ -107,19 +111,19 @@ export default function ReviewsTable({ reviews }: { reviews: ReviewWithMedia[] }
                                             <span className="text-gray-500 text-xs line-clamp-1">{review.title}</span>
                                             {review.review_media?.length > 0 && (
                                                 <div className="flex gap-2 mt-1.5">
-                                                    {review.review_media.some((m: any) => m.file_type === 'image') && (
+                                                    {review.review_media.some((m) => m.file_type === 'image') && (
                                                         <span className="inline-flex items-center gap-1 text-xs text-gray-400">
                                                             <ImageIcon className="h-3 w-3" />
-                                                            {review.review_media.filter((m: any) => m.file_type === 'image').length}
+                                                            {review.review_media.filter((m) => m.file_type === 'image').length}
                                                         </span>
                                                     )}
-                                                    {review.review_media.some((m: any) => m.file_type === 'video') && (
+                                                    {review.review_media.some((m) => m.file_type === 'video') && (
                                                         <span className="inline-flex items-center gap-1 text-xs text-gray-400">
                                                             <Video className="h-3 w-3" />
-                                                            {review.review_media.filter((m: any) => m.file_type === 'video').length}
+                                                            {review.review_media.filter((m) => m.file_type === 'video').length}
                                                         </span>
                                                     )}
-                                                    {review.review_media.some((m: any) => m.file_type === 'audio') && (
+                                                    {review.review_media.some((m) => m.file_type === 'audio') && (
                                                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-[10px] font-bold uppercase tracking-wider border border-indigo-100 shadow-sm">
                                                             <Mic className="h-3 w-3" />
                                                             Voice
@@ -265,7 +269,7 @@ export default function ReviewsTable({ reviews }: { reviews: ReviewWithMedia[] }
                                         Attachments ({selectedReview.review_media.length})
                                     </h5>
                                     <div className="grid grid-cols-2 gap-4">
-                                        {selectedReview.review_media.map((media: any) => {
+                                        {selectedReview.review_media.map((media: ReviewMedia) => {
                                             const publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL ? `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${media.file_path}` : "";
                                             return (
                                                 <div key={media.id} className="relative rounded-lg overflow-hidden border border-gray-200 bg-black/5">
@@ -288,7 +292,7 @@ export default function ReviewsTable({ reviews }: { reviews: ReviewWithMedia[] }
                                                                 Your browser does not support the audio element.
                                                             </audio>
                                                             <p className="text-xs text-gray-500 text-center">
-                                                                Listen to the customer's voice review
+                                                                Listen to the customer&apos;s voice review
                                                             </p>
                                                         </div>
                                                     )}
