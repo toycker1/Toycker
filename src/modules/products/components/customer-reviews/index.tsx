@@ -4,14 +4,22 @@ import { useState, useMemo, Fragment, useEffect } from "react"
 import { Button } from "@modules/common/components/button"
 import Modal from "@modules/common/components/modal"
 import { Dialog, Transition } from "@headlessui/react"
-import { Star, Image as ImageIcon, Video, Mic, Trash2, Play, Pause, Square, ShieldCheck, User, X } from "lucide-react"
-import { getPresignedUploadUrl } from "@/lib/actions/storage"
+import { Star, Mic, Play, ShieldCheck, User, X } from "lucide-react"
 import { submitReview, type ReviewData, type ReviewWithMedia } from "@/lib/actions/reviews"
 import Image from "next/image"
 import LocalizedClientLink from "@modules/common/components/localized-client-link"
 import { cn } from "@lib/util/cn"
-import { useVoiceRecorder } from "@/hooks/useVoiceRecorder"
 import SideDrawer from "@modules/common/components/side-drawer"
+import { useReviewForm } from "@/modules/reviews/hooks/use-review-form"
+import {
+  ReviewAnonymousToggle,
+  ReviewMediaUploader,
+  ReviewRatingPicker,
+  ReviewTextarea,
+  ReviewTextInput,
+  ReviewVoiceRecorderPanel,
+} from "@/modules/reviews/components/review-form-fields"
+import { uploadReviewMedia } from "@/modules/reviews/utils/upload-review-media"
 
 type CustomerApiResponse = {
   id?: string
@@ -33,20 +41,10 @@ const CustomerReviews = ({
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [errorModalOpen, setErrorModalOpen] = useState(false)
   const [errorMessage, setErrorMessage] = useState("")
-  const [rating, setRating] = useState(0)
-  const [formState, setFormState] = useState({
-    review: "",
-    title: "",
-    displayName: "",
-    anonymous: false,
-  })
-  const [files, setFiles] = useState<File[]>([])
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle")
   const [customerLookupState, setCustomerLookupState] =
     useState<CustomerLookupState>("loading")
-
-  // Voice recording hook
-  const voiceRecorder = useVoiceRecorder()
+  const reviewForm = useReviewForm()
 
   useEffect(() => {
     let shouldIgnoreResponse = false
@@ -90,49 +88,11 @@ const CustomerReviews = ({
     }
   }, [])
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setFiles((prev) => [...prev, ...Array.from(e.target.files!)])
-    }
-  }
-
-  const removeFile = (index: number) => {
-    setFiles((prev) => prev.filter((_, i) => i !== index))
-  }
-
-  // Simple retry helper
-  const uploadWithRetry = async (url: string, file: File, maxRetries: number = 3): Promise<Response> => {
-    let lastError: Error | null = null
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const response = await fetch(url, {
-          method: "PUT",
-          body: file,
-          headers: { "Content-Type": file.type },
-        })
-        if (response.ok) return response
-        // Non-ok response (but not network error), treat as error to potentially retry if transient
-        // (Though usually 4xx/5xx from R2 might be persistent, but 5xx warrants retry)
-        if (response.status >= 500 || response.status === 429) {
-          throw new Error(`Upload failed with status ${response.status} (attempt ${attempt})`)
-        }
-        return response // Return 4xx so main logic handles it as perm failure
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error))
-        console.warn(`Upload attempt ${attempt} failed:`, lastError)
-        if (attempt < maxRetries) {
-          // Wait: 1s, 2s, 3s
-          await new Promise(resolve => setTimeout(resolve, attempt * 1000))
-        }
-      }
-    }
-    throw lastError ?? new Error("Upload failed after retries")
-  }
-
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (rating === 0) {
-      setErrorMessage("Please select a star rating")
+    const validationError = reviewForm.validate()
+    if (validationError) {
+      setErrorMessage(validationError)
       setErrorModalOpen(true)
       return
     }
@@ -140,57 +100,20 @@ const CustomerReviews = ({
     setStatus("submitting")
 
     try {
-      const uploadedMedia: ReviewData["media"] = []
-
-      // 1. Upload files (including voice recording) to R2
-      const allFiles = [...files]
-
-      // Add voice recording if exists
-      if (voiceRecorder.audioBlob) {
-        const voiceFile = new File(
-          [voiceRecorder.audioBlob],
-          `voice-review-${Date.now()}.${voiceRecorder.audioBlob.type.includes('mp4') ? 'mp4' : 'webm'}`,
-          { type: voiceRecorder.audioBlob.type }
-        )
-        allFiles.push(voiceFile)
-      }
-
-      for (const file of allFiles) {
-        const fileType = file.type.startsWith("image/")
-          ? "image"
-          : file.type.startsWith("video/")
-            ? "video"
-            : "audio"
-
-        const { url, key, error } = await getPresignedUploadUrl({
-          fileType: file.type,
-        })
-
-        if (error || !url || !key) {
-          throw new Error(error || "Failed to initialize upload. Please try again.")
-        }
-
-        // Upload to R2 with retry
-        const uploadRes = await uploadWithRetry(url, file)
-
-        if (!uploadRes.ok) {
-          throw new Error(`Failed to upload file. Server returned ${uploadRes.status}`)
-        }
-
-        uploadedMedia.push({
-          file_path: key,
-          file_type: fileType as "image" | "video" | "audio",
-        })
-      }
+      const uploadedMedia: ReviewData["media"] = await uploadReviewMedia({
+        files: reviewForm.files,
+        audioBlob: reviewForm.voiceRecorder.audioBlob,
+        voiceFilePrefix: "voice-review",
+      })
 
       // 2. Submit Review Data
       const result = await submitReview({
         product_id: productId,
-        rating,
-        title: formState.title,
-        content: formState.review,
-        display_name: formState.displayName,
-        is_anonymous: formState.anonymous,
+        rating: reviewForm.values.rating,
+        title: reviewForm.values.title,
+        content: reviewForm.values.content,
+        display_name: reviewForm.values.displayName,
+        is_anonymous: reviewForm.values.isAnonymous,
         media: uploadedMedia,
       })
 
@@ -202,10 +125,7 @@ const CustomerReviews = ({
       setTimeout(() => {
         setIsModalOpen(false)
         setStatus("idle")
-        setFormState({ review: "", title: "", displayName: "", anonymous: false })
-        setRating(0)
-        setFiles([])
-        voiceRecorder.resetRecording()
+        reviewForm.reset()
       }, 2000)
     } catch (error) {
       // Provide user-friendly error if possible
@@ -347,194 +267,57 @@ const CustomerReviews = ({
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-8">
-            <div className="space-y-4">
-              <span className="text-sm font-bold text-gray-900 uppercase tracking-widest pl-1">Overall Rating</span>
-              <div className="flex items-center gap-3 bg-gray-50/50 p-4 rounded-2xl border border-gray-100 w-fit">
-                {Array.from({ length: 5 }).map((_, index) => (
-                  <button
-                    key={index}
-                    type="button"
-                    onClick={() => setRating(index + 1)}
-                    className="transition-all hover:scale-125 active:scale-95"
-                  >
-                    <Star
-                      className={cn(
-                        "h-8 w-8 transition-colors",
-                        index < rating ? "fill-indigo-500 text-indigo-500" : "text-gray-300"
-                      )}
-                    />
-                  </button>
-                ))}
-                <span className="ml-2 text-lg font-black text-indigo-600">{rating > 0 ? rating.toFixed(1) : ""}</span>
-              </div>
-            </div>
-
-            <InputControl
-              label="Review Title"
-              value={formState.title}
-              placeholder="Summarize your experience"
-              onChange={(value) => setFormState((prev) => ({ ...prev, title: value }))}
-              required
+            <ReviewRatingPicker
+              value={reviewForm.values.rating}
+              onChange={(rating) => reviewForm.updateField("rating", rating)}
+              variant="customer"
             />
 
-            <div className="space-y-3">
-              <label className="text-sm font-bold text-gray-900 uppercase tracking-widest pl-1">Detailed Review</label>
-              <textarea
-                required
-                value={formState.review}
-                placeholder="What did you think about the product?"
-                onChange={(event) =>
-                  setFormState((prev) => ({ ...prev, review: event.target.value }))
-                }
-                className="min-h-[160px] w-full rounded-2xl border border-gray-200 bg-white px-5 py-4 text-gray-900 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 placeholder:text-gray-400"
-              />
-            </div>
+            <ReviewTextInput
+              label="Review Title"
+              value={reviewForm.values.title}
+              placeholder="Summarize your experience"
+              onChange={(value) => reviewForm.updateField("title", value)}
+              required
+              variant="customer"
+            />
 
-            {/* Media Upload Section */}
-            <div className="space-y-4">
-              <span className="text-sm font-bold text-gray-900 uppercase tracking-widest pl-1">Photos & Videos</span>
-              <div className="flex flex-wrap gap-4">
-                {files.map((file, idx) => (
-                  <div key={idx} className="relative h-24 w-24 overflow-hidden rounded-2xl border-2 border-white shadow-md ring-1 ring-gray-100">
-                    {file.type.startsWith("image") ? (
-                      <Image
-                        src={URL.createObjectURL(file)}
-                        alt="preview"
-                        fill
-                        className="object-cover"
-                        sizes="96px"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-gray-50">
-                        {file.type.startsWith("video") ? <Video className="h-8 w-8 text-gray-400" /> : <Mic className="h-8 w-8 text-gray-400" />}
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => removeFile(idx)}
-                      className="absolute right-1.5 top-1.5 rounded-full bg-white/90 p-1.5 text-red-500 shadow-sm transition-all hover:bg-white hover:text-red-600 active:scale-95"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
-                <label className="flex h-24 w-24 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 transition-all hover:border-indigo-50 hover:bg-indigo-50 hover:shadow-lg active:scale-95 group">
-                  <ImageIcon className="h-8 w-8 text-gray-300 group-hover:text-indigo-400 transition-colors" />
-                  <span className="mt-2 text-[11px] font-bold text-gray-400 group-hover:text-indigo-500 uppercase">Add Media</span>
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*,video/*,audio/*"
-                    className="hidden"
-                    onChange={handleFileChange}
-                  />
-                </label>
-              </div>
-            </div>
+            <ReviewTextarea
+              label="Detailed Review"
+              value={reviewForm.values.content}
+              placeholder="What did you think about the product?"
+              onChange={(value) => reviewForm.updateField("content", value)}
+              variant="customer"
+            />
 
-            {/* Voice Recording Section */}
-            <div className="space-y-4 pt-2">
-              <span className="text-sm font-bold text-gray-900 uppercase tracking-widest pl-1">Voice Review (Optional)</span>
+            <ReviewMediaUploader
+              files={reviewForm.files}
+              inputResetKey={reviewForm.mediaInputResetKey}
+              onFileChange={reviewForm.handleFileChange}
+              onRemoveFile={reviewForm.removeFile}
+              variant="customer"
+            />
 
-              {voiceRecorder.status === 'error' && (
-                <div className="rounded-xl bg-red-50 border border-red-100 p-4 text-sm text-red-700 font-medium">
-                  {voiceRecorder.errorMessage}
-                </div>
-              )}
+            <ReviewVoiceRecorderPanel
+              voiceRecorder={reviewForm.voiceRecorder}
+              variant="customer"
+            />
 
-              {(voiceRecorder.status === 'idle' || voiceRecorder.status === 'error') && !voiceRecorder.audioBlob && (
-                <button
-                  type="button"
-                  onClick={voiceRecorder.startRecording}
-                  className="flex items-center gap-3 rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 px-6 py-4 text-gray-500 transition-all hover:border-indigo-500 hover:bg-indigo-50 hover:text-indigo-600 active:scale-95 w-full sm:w-auto"
-                >
-                  <Mic className="h-5 w-5" />
-                  <span className="text-sm font-bold uppercase tracking-wider">Start Recording</span>
-                </button>
-              )}
-
-              {(voiceRecorder.status === 'recording' || voiceRecorder.status === 'paused') && (
-                <div className="rounded-[2rem] border-2 border-red-100 bg-red-50 px-6 py-6 space-y-4 shadow-sm animate-in fade-in zoom-in duration-300">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      {voiceRecorder.status === 'recording' && (
-                        <div className="h-3 w-3 rounded-full bg-red-500 animate-ping" />
-                      )}
-                      <span className="text-sm font-bold text-red-900 uppercase tracking-widest">
-                        {voiceRecorder.status === 'recording' ? 'Recording Live' : 'Paused'}
-                      </span>
-                    </div>
-                    <span className="text-lg font-mono font-bold text-red-600">
-                      {Math.floor(voiceRecorder.duration / 60).toString().padStart(2, '0')}:
-                      {(voiceRecorder.duration % 60).toString().padStart(2, '0')}
-                    </span>
-                  </div>
-
-                  <div className="flex gap-3">
-                    <button
-                      type="button"
-                      onClick={voiceRecorder.status === 'recording' ? voiceRecorder.pauseRecording : voiceRecorder.resumeRecording}
-                      className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-white border border-red-100 px-4 py-3 text-sm font-bold text-red-600 transition hover:bg-red-100 active:scale-95 shadow-sm"
-                    >
-                      {voiceRecorder.status === 'recording' ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                      {voiceRecorder.status === 'recording' ? 'Pause' : 'Resume'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={voiceRecorder.stopRecording}
-                      className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-700 active:scale-95 shadow-lg shadow-red-200"
-                    >
-                      <Square className="h-4 w-4" />
-                      Stop
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {voiceRecorder.status === 'stopped' && voiceRecorder.audioUrl && (
-                <div className="rounded-[2rem] border-2 border-indigo-100 bg-indigo-50/50 p-6 space-y-4 shadow-sm">
-                  <div className="flex items-center gap-4">
-                    <div className="h-12 w-12 rounded-full bg-indigo-500 flex items-center justify-center shadow-lg shadow-indigo-200">
-                      <Mic className="h-6 w-6 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-bold text-gray-900 uppercase">Voice Review Locked</p>
-                      <p className="text-xs text-indigo-400 font-bold">
-                        {Math.floor(voiceRecorder.duration / 60)}:
-                        {(voiceRecorder.duration % 60).toString().padStart(2, '0')} READY
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={voiceRecorder.resetRecording}
-                      className="rounded-full p-2.5 text-red-400 transition hover:bg-white hover:text-red-600 active:scale-95 shadow-sm"
-                    >
-                      <Trash2 className="h-5 w-5" />
-                    </button>
-                  </div>
-                  <audio controls src={voiceRecorder.audioUrl} className="w-full h-10 brightness-110 drop-shadow-sm" />
-                </div>
-              )}
-            </div>
-
-            <InputControl
+            <ReviewTextInput
               label="Display Name"
-              value={formState.displayName}
-              onChange={(value) => setFormState((prev) => ({ ...prev, displayName: value }))}
+              value={reviewForm.values.displayName}
+              onChange={(value) => reviewForm.updateField("displayName", value)}
               placeholder="How you'll appear publically"
-              required={!formState.anonymous}
+              required={!reviewForm.values.isAnonymous}
+              variant="customer"
             />
 
             <div className="pt-2">
-              <label className="flex items-center gap-4 text-sm font-bold text-gray-600 cursor-pointer group px-4 py-3 rounded-2xl border border-transparent transition-all hover:bg-gray-50 hover:border-gray-200">
-                <input
-                  type="checkbox"
-                  checked={formState.anonymous}
-                  onChange={() => setFormState((prev) => ({ ...prev, anonymous: !prev.anonymous }))}
-                  className="h-6 w-6 rounded-lg border-2 border-gray-300 text-indigo-600 transition-all focus:ring-4 focus:ring-indigo-100 checked:bg-indigo-600"
-                />
-                <span className="uppercase tracking-widest group-hover:text-indigo-600 transition-colors">Post Anonymously</span>
-              </label>
+              <ReviewAnonymousToggle
+                checked={reviewForm.values.isAnonymous}
+                onChange={(checked) => reviewForm.updateField("isAnonymous", checked)}
+                variant="customer"
+              />
             </div>
 
             <div className="flex items-center gap-3 pt-6 border-t border-gray-100">
@@ -749,38 +532,6 @@ const CustomerReviews = ({
           </div>
         </Dialog>
       </Transition>
-    </div>
-  )
-}
-
-const InputControl = ({
-  label,
-  value,
-  onChange,
-  type = "text",
-  required,
-  placeholder
-}: {
-  label: string
-  value: string
-  onChange: (_value: string) => void
-  type?: string
-  required?: boolean
-  placeholder?: string
-}) => {
-  return (
-    <div className="space-y-3">
-      <label className="text-sm font-semibold text-gray-700">
-        {label} {required && <span className="text-red-500">*</span>}
-      </label>
-      <input
-        type={type}
-        required={required}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        className="w-full rounded-xl border border-ui-border-base bg-white px-4 py-3 text-ui-fg-base outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-      />
     </div>
   )
 }
