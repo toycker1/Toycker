@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
@@ -512,6 +512,16 @@ describe("admin order Trivara booking", () => {
     delete process.env.TRIVARA_BOOKING_ENABLED
   })
 
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    delete process.env.TRIVARA_BOOKING_ENABLED
+    delete process.env.TRIVARA_API_BASE_URL
+    delete process.env.TRIVARA_API_KEY
+    delete process.env.TRIVARA_CRN_NO
+    delete process.env.TRIVARA_PICKUP_LOCATION_CODE
+    delete process.env.TRIVARA_SERVICE_PARTNER
+  })
+
   it("records a skipped Trivara booking when accepting an order while booking is disabled", async () => {
     const ensureAdminClient = buildEnsureAdminClient()
     const updateOrderEq = vi.fn().mockResolvedValue({ error: null })
@@ -624,6 +634,166 @@ describe("admin order Trivara booking", () => {
       expect.objectContaining({
         order_id: "order-1",
         title: "Trivara Booking Skipped",
+      })
+    )
+  })
+
+  it("preserves Trivara error payload when booking returns a failed HTTP response", async () => {
+    process.env.TRIVARA_BOOKING_ENABLED = "true"
+    process.env.TRIVARA_API_BASE_URL = "https://app.trivaralogistics.in"
+    process.env.TRIVARA_API_KEY = "secret-key"
+    process.env.TRIVARA_CRN_NO = "654822"
+    process.env.TRIVARA_PICKUP_LOCATION_CODE = "654822_DEFAULT_WAREHOUSE"
+    process.env.TRIVARA_SERVICE_PARTNER = "DEL"
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        return new Response(JSON.stringify({ message: "Invalid pincode" }), {
+          status: 400,
+        })
+      })
+    )
+
+    const ensureAdminClient = buildEnsureAdminClient()
+    const updateOrderEq = vi.fn().mockResolvedValue({ error: null })
+    const updateOrder = vi.fn().mockReturnValue({ eq: updateOrderEq })
+    const orderClient = {
+      from: vi.fn((table: string) => {
+        if (table !== "orders") {
+          throw new Error(`Unexpected table: ${table}`)
+        }
+
+        return {
+          update: updateOrder,
+        }
+      }),
+    }
+    const actorMaybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        first_name: "Admin",
+        last_name: "User",
+        email: "admin@example.com",
+        contact_email: null,
+        phone: null,
+      },
+      error: null,
+    })
+    const actorClient = {
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: {
+            user: {
+              id: "admin-user",
+              email: "admin@example.com",
+              phone: null,
+            },
+          },
+        }),
+      },
+      from: vi.fn((table: string) => {
+        if (table !== "profiles") {
+          throw new Error(`Unexpected table: ${table}`)
+        }
+
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({ maybeSingle: actorMaybeSingle }),
+          }),
+        }
+      }),
+    }
+
+    const insertTimeline = vi.fn().mockResolvedValue({ error: null })
+    const existingBookingMaybeSingle = vi.fn().mockResolvedValue({
+      data: null,
+      error: null,
+    })
+    const orderMaybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        id: "order-1",
+        display_id: 7,
+        total_amount: 1671,
+        total: 1671,
+        currency_code: "inr",
+        payment_method: "easebuzz",
+        metadata: null,
+        shipping_address: {
+          first_name: "Test",
+          last_name: "Customer",
+          address_1: "1 Test Street",
+          address_2: "",
+          company: null,
+          city: "Surat",
+          province: "Gujarat",
+          postal_code: "395006",
+          phone: "9898989898",
+        },
+        items: [{ title: "Toy Car" }],
+      },
+      error: null,
+    })
+    const upsertBooking = vi.fn().mockResolvedValue({ error: null })
+    const adminClient = {
+      from: vi.fn((table: string) => {
+        if (table === "order_timeline") {
+          return {
+            insert: insertTimeline,
+          }
+        }
+
+        if (table === "trivara_order_bookings") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi
+                .fn()
+                .mockReturnValue({ maybeSingle: existingBookingMaybeSingle }),
+            }),
+            upsert: upsertBooking,
+          }
+        }
+
+        if (table === "orders") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({ maybeSingle: orderMaybeSingle }),
+            }),
+          }
+        }
+
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    }
+
+    vi.mocked(createClient)
+      .mockResolvedValueOnce(
+        ensureAdminClient as unknown as Awaited<ReturnType<typeof createClient>>
+      )
+      .mockResolvedValueOnce(
+        orderClient as unknown as Awaited<ReturnType<typeof createClient>>
+      )
+      .mockResolvedValueOnce(
+        actorClient as unknown as Awaited<ReturnType<typeof createClient>>
+      )
+    vi.mocked(createAdminClient).mockResolvedValue(
+      adminClient as unknown as Awaited<ReturnType<typeof createAdminClient>>
+    )
+
+    await acceptOrder("order-1")
+
+    expect(upsertBooking).toHaveBeenCalledWith(
+      expect.objectContaining({
+        order_id: "order-1",
+        status: "failed",
+        response_payload: { message: "Invalid pincode" },
+        error_message: "Trivara request failed with status 400",
+      }),
+      { onConflict: "order_id" }
+    )
+    expect(insertTimeline).toHaveBeenCalledWith(
+      expect.objectContaining({
+        order_id: "order-1",
+        title: "Trivara Booking Failed",
       })
     )
   })

@@ -120,6 +120,66 @@ function getRequiredEnv(key: string): string {
   return value
 }
 
+function getValidBaseUrl(value: string, envKey: string): string {
+  const trimmed = value.trim()
+
+  if (!trimmed) {
+    throw new Error(`Missing required environment variable: ${envKey}`)
+  }
+
+  try {
+    const url = new URL(trimmed)
+
+    if (url.protocol !== "https:" && url.protocol !== "http:") {
+      throw new Error("Invalid protocol")
+    }
+
+    return url.toString().replace(/\/$/, "")
+  } catch {
+    throw new Error(
+      `${envKey} must be a full URL starting with https:// or http://`
+    )
+  }
+}
+
+function getOptionalValidBaseUrl(
+  envKey: string,
+  defaultValue: string
+): string {
+  return getValidBaseUrl(getTrimmedEnv(envKey) || defaultValue, envKey)
+}
+
+function getErrorCauseDetail(error: unknown): string {
+  if (!error || typeof error !== "object" || !("cause" in error)) {
+    return ""
+  }
+
+  const cause = (error as { cause?: unknown }).cause
+  if (!cause || typeof cause !== "object") {
+    return ""
+  }
+
+  const values = cause as {
+    code?: unknown
+    hostname?: unknown
+    syscall?: unknown
+  }
+  const parts = [values.code, values.hostname, values.syscall].filter(
+    (value): value is string => typeof value === "string" && value.length > 0
+  )
+
+  return parts.length > 0 ? ` (${parts.join(" ")})` : ""
+}
+
+function formatTrivaraNetworkError(url: URL, error: unknown): Error {
+  const message = error instanceof Error ? error.message : "Unknown error"
+  return new Error(
+    `Trivara request failed before receiving a response${getErrorCauseDetail(
+      error
+    )}: ${message}. URL: ${url.origin}`
+  )
+}
+
 function readService(value: string): TrivaraService {
   const normalized = value.trim().toUpperCase()
 
@@ -146,11 +206,14 @@ function readShipmentType(value: string): TrivaraShipmentType {
 
 export function getTrivaraConfig(): TrivaraConfig {
   const bookingEnabled = getTrimmedEnv("TRIVARA_BOOKING_ENABLED") === "true"
+  const servicePartner = getTrimmedEnv("TRIVARA_SERVICE_PARTNER")
 
-  return {
+  const config = {
     bookingEnabled,
-    apiBaseUrl:
-      getTrimmedEnv("TRIVARA_API_BASE_URL") || DEFAULT_TRIVARA_API_BASE_URL,
+    apiBaseUrl: getOptionalValidBaseUrl(
+      "TRIVARA_API_BASE_URL",
+      DEFAULT_TRIVARA_API_BASE_URL
+    ),
     apiKey: bookingEnabled
       ? getRequiredEnv("TRIVARA_API_KEY")
       : getTrimmedEnv("TRIVARA_API_KEY"),
@@ -162,11 +225,17 @@ export function getTrivaraConfig(): TrivaraConfig {
       : getTrimmedEnv("TRIVARA_PICKUP_LOCATION_CODE"),
     service: readService(getTrimmedEnv("TRIVARA_SERVICE")),
     shipmentType: readShipmentType(getTrimmedEnv("TRIVARA_SHIPMENT_TYPE")),
-    servicePartner: getTrimmedEnv("TRIVARA_SERVICE_PARTNER"),
+    servicePartner,
     defaultWeightGrams:
       getTrimmedEnv("TRIVARA_DEFAULT_WEIGHT_GRAMS") ||
       DEFAULT_TRIVARA_WEIGHT_GRAMS,
   }
+
+  if (bookingEnabled && !servicePartner) {
+    throw new Error("Missing required environment variable: TRIVARA_SERVICE_PARTNER")
+  }
+
+  return config
 }
 
 export function getTrivaraApiKey(): string {
@@ -186,12 +255,15 @@ export function getTrivaraCrnNo(): string {
 }
 
 export function getTrivaraApiBaseUrl(): string {
-  return getTrimmedEnv("TRIVARA_API_BASE_URL") || DEFAULT_TRIVARA_API_BASE_URL
+  return getOptionalValidBaseUrl(
+    "TRIVARA_API_BASE_URL",
+    DEFAULT_TRIVARA_API_BASE_URL
+  )
 }
 
 export function getTrivaraPrintSlipApiBaseUrl(): string {
-  return (
-    getTrimmedEnv("TRIVARA_PRINT_SLIP_API_BASE_URL") ||
+  return getOptionalValidBaseUrl(
+    "TRIVARA_PRINT_SLIP_API_BASE_URL",
     DEFAULT_TRIVARA_PRINT_SLIP_API_BASE_URL
   )
 }
@@ -386,14 +458,21 @@ export async function sendTrivaraOrderBooking(
   fetcher: FetchLike = fetch
 ): Promise<TrivaraOrderBookingResponse> {
   const url = new URL(ORDER_BOOKING_PATH, config.apiBaseUrl)
-  const response = await fetcher(url, {
-    method: "POST",
-    headers: {
-      Apikey: config.apiKey,
-    },
-    body: payloadToFormData(payload),
-    cache: "no-store",
-  })
+  let response: Response
+
+  try {
+    response = await fetcher(url, {
+      method: "POST",
+      headers: {
+        Apikey: config.apiKey,
+      },
+      body: payloadToFormData(payload),
+      cache: "no-store",
+    })
+  } catch (error) {
+    throw formatTrivaraNetworkError(url, error)
+  }
+
   const responsePayload = await parseTrivaraResponse(response)
 
   return {
@@ -415,14 +494,21 @@ async function sendTrivaraFormRequest(
   fetcher: FetchLike = fetch
 ): Promise<TrivaraApiResponse> {
   const url = new URL(path, config.apiBaseUrl)
-  const response = await fetcher(url, {
-    method: "POST",
-    headers: {
-      [config.apiKeyHeader]: config.apiKey,
-    },
-    body: payloadToFormData(payload),
-    cache: "no-store",
-  })
+  let response: Response
+
+  try {
+    response = await fetcher(url, {
+      method: "POST",
+      headers: {
+        [config.apiKeyHeader]: config.apiKey,
+      },
+      body: payloadToFormData(payload),
+      cache: "no-store",
+    })
+  } catch (error) {
+    throw formatTrivaraNetworkError(url, error)
+  }
+
   const responsePayload = await parseTrivaraResponse(response)
 
   return {

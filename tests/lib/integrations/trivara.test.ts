@@ -1,7 +1,9 @@
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
   buildTrivaraOrderBookingPayload,
+  getTrivaraApiBaseUrl,
+  getTrivaraConfig,
   sendTrivaraCancelOrder,
   sendTrivaraOrderTracking,
   sendTrivaraPickupLocations,
@@ -93,6 +95,16 @@ const buildOrder = (overrides: Partial<Order> = {}): Order => ({
 })
 
 describe("Trivara order booking integration", () => {
+  const originalEnv = process.env
+
+  beforeEach(() => {
+    process.env = { ...originalEnv }
+  })
+
+  afterEach(() => {
+    process.env = originalEnv
+  })
+
   it("builds COD payload from Toycker order data", () => {
     const payload = buildTrivaraOrderBookingPayload(buildOrder(), config)
 
@@ -178,6 +190,86 @@ describe("Trivara order booking integration", () => {
       status: 200,
       referenceNumber: "857252P0000044",
     })
+  })
+
+  it("rejects invalid Trivara base URLs before sending requests", () => {
+    process.env.TRIVARA_API_BASE_URL = "OY6R-not-a-url"
+
+    expect(() => getTrivaraApiBaseUrl()).toThrow(
+      "TRIVARA_API_BASE_URL must be a full URL starting with https:// or http://"
+    )
+  })
+
+  it("requires a service partner when live booking is enabled", () => {
+    process.env.TRIVARA_BOOKING_ENABLED = "true"
+    process.env.TRIVARA_API_BASE_URL = "https://app.trivaralogistics.in"
+    process.env.TRIVARA_API_KEY = "secret-key"
+    process.env.TRIVARA_CRN_NO = "857252"
+    process.env.TRIVARA_PICKUP_LOCATION_CODE = "857252_2"
+    process.env.TRIVARA_SERVICE_PARTNER = ""
+
+    expect(() => getTrivaraConfig()).toThrow(
+      "Missing required environment variable: TRIVARA_SERVICE_PARTNER"
+    )
+  })
+
+  it("keeps a successful HTTP response incomplete when no reference number exists", async () => {
+    const fetcher = vi.fn(async () => {
+      return new Response(JSON.stringify({ success: true }), { status: 200 })
+    })
+
+    const payload = buildTrivaraOrderBookingPayload(
+      buildOrder(),
+      {
+        ...config,
+        servicePartner: "DEL",
+      }
+    )
+    const result = await sendTrivaraOrderBooking(
+      payload,
+      {
+        apiBaseUrl: "https://app.trivaralogistics.in",
+        apiKey: "secret-key",
+      },
+      fetcher
+    )
+
+    expect(result.ok).toBe(true)
+    expect(result.referenceNumber).toBeNull()
+    expect(result.responsePayload).toEqual({ success: true })
+  })
+
+  it("includes low-level network cause details when fetch fails", async () => {
+    const fetchError = Object.assign(new Error("fetch failed"), {
+      cause: {
+        code: "ENOTFOUND",
+        hostname: "app.trivaralogistics.in",
+        syscall: "getaddrinfo",
+      },
+    })
+    const fetcher = vi.fn(async () => {
+      throw fetchError
+    })
+    const payload = buildTrivaraOrderBookingPayload(
+      buildOrder(),
+      {
+        ...config,
+        servicePartner: "DEL",
+      }
+    )
+
+    await expect(
+      sendTrivaraOrderBooking(
+        payload,
+        {
+          apiBaseUrl: "https://app.trivaralogistics.in",
+          apiKey: "secret-key",
+        },
+        fetcher
+      )
+    ).rejects.toThrow(
+      "Trivara request failed before receiving a response (ENOTFOUND app.trivaralogistics.in getaddrinfo)"
+    )
   })
 })
 

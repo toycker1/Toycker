@@ -2900,7 +2900,59 @@ async function requestTrivaraBookingForAcceptedOrder(orderId: string) {
     const response = await sendTrivaraOrderBooking(payload, config)
 
     if (!response.ok) {
-      throw new Error(`Trivara request failed with status ${response.status}`)
+      const errorMessage = `Trivara request failed with status ${response.status}`
+
+      await upsertTrivaraBookingRecord(orderId, {
+        status: "failed",
+        request_payload: requestPayload,
+        response_payload: response.responsePayload,
+        error_message: errorMessage,
+        trivara_reference_number: null,
+        booked_at: null,
+      })
+
+      await logOrderEvent(
+        orderId,
+        "note_added",
+        "Trivara Booking Failed",
+        `Order was accepted, but Trivara booking failed: ${errorMessage}`,
+        "system",
+        {
+          provider: "trivara",
+          error: errorMessage,
+          response_status: response.status,
+        }
+      )
+
+      return
+    }
+
+    if (!response.referenceNumber) {
+      const errorMessage =
+        "Trivara booking response did not include a reference number."
+
+      await upsertTrivaraBookingRecord(orderId, {
+        status: "failed",
+        request_payload: requestPayload,
+        response_payload: response.responsePayload,
+        error_message: errorMessage,
+        trivara_reference_number: null,
+        booked_at: null,
+      })
+
+      await logOrderEvent(
+        orderId,
+        "note_added",
+        "Trivara Booking Failed",
+        `Order was accepted, but ${errorMessage}`,
+        "system",
+        {
+          provider: "trivara",
+          error: errorMessage,
+        }
+      )
+
+      return
     }
 
     await upsertTrivaraBookingRecord(orderId, {
