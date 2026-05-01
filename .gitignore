@@ -67,3 +67,5 @@ dump.rdb
 
 # Supabase local dev artifacts
 supabase/.temp/
+supabase/backups/
+supabase/prod/backups/
