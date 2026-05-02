@@ -3,6 +3,7 @@
 import { z } from "zod"
 import { revalidateTag } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { PaymentCollection } from "@/lib/supabase/types"
 import { resolveCustomerPhone } from "@/lib/util/customer-contact-phone"
 import { getCheckoutPhoneValue } from "@/lib/util/customer-phone"
@@ -166,7 +167,8 @@ export async function completeCheckout(
 
     // Step 3: Call Supabase RPC function for atomic order creation
     // The RPC will now find the initialized payment session data in the cart record
-    const { data: result, error } = await supabase.rpc(
+    const orderSupabase = await createAdminClient()
+    const { data: result, error } = await orderSupabase.rpc(
       "create_order_with_payment",
       {
         p_cart_id: checkoutData.cartId,
@@ -259,7 +261,7 @@ export async function completeCheckout(
     }
 
     // Fetch the created order to get any updated payment data (like Stripe client_secret)
-    const { data: orderData } = await supabase
+    const { data: orderData } = await orderSupabase
       .from("orders")
       .select("*, payment_collection")
       .eq("id", result.order_id)
