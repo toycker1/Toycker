@@ -1,18 +1,28 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import {
   CheckoutData,
   completeCheckout,
 } from "@/lib/actions/complete-checkout"
+import { cancelPendingPaymentOrders } from "@/lib/actions/cancel-pending-payment"
 import * as cartData from "@lib/data/cart"
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
 }))
 
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: vi.fn(),
+}))
+
 vi.mock("next/cache", () => ({
   revalidateTag: vi.fn(),
+}))
+
+vi.mock("@/lib/actions/cancel-pending-payment", () => ({
+  cancelPendingPaymentOrders: vi.fn(),
 }))
 
 vi.mock("@lib/data/cart", () => ({
@@ -65,7 +75,7 @@ function buildSupabaseMock({
   user?: MockUser | null
   profileRow?: { first_name: string | null; last_name: string | null; phone: string | null } | null
 }) {
-  const mockRpc = vi
+  const mockAdminRpc = vi
     .fn()
     .mockResolvedValue({ data: { order_id: "new-order-id" }, error: null })
   const mockGetUser = vi.fn().mockResolvedValue({ data: { user } })
@@ -103,10 +113,6 @@ function buildSupabaseMock({
   const mockProfileUpdate = vi.fn().mockReturnValue({ eq: mockProfileUpdateEq })
 
   const mockFrom = vi.fn((table: string) => {
-    if (table === "orders") {
-      return { select: mockOrderSelect }
-    }
-
     if (table === "profiles") {
       return {
         select: mockProfileSelect,
@@ -117,14 +123,26 @@ function buildSupabaseMock({
     throw new Error(`Unexpected table: ${table}`)
   })
 
+  const mockAdminFrom = vi.fn((table: string) => {
+    if (table === "orders") {
+      return { select: mockOrderSelect }
+    }
+
+    throw new Error(`Unexpected admin table: ${table}`)
+  })
+
   vi.mocked(createClient).mockResolvedValue({
-    rpc: mockRpc,
     from: mockFrom,
     auth: { getUser: mockGetUser },
   } as unknown as Awaited<ReturnType<typeof createClient>>)
 
+  vi.mocked(createAdminClient).mockResolvedValue({
+    rpc: mockAdminRpc,
+    from: mockAdminFrom,
+  } as unknown as Awaited<ReturnType<typeof createAdminClient>>)
+
   return {
-    mockRpc,
+    mockAdminRpc,
     mockProfileUpdate,
     mockProfileUpdateEq,
   }
@@ -133,10 +151,11 @@ function buildSupabaseMock({
 describe("completeCheckout Integration", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(cancelPendingPaymentOrders).mockResolvedValue(undefined)
   })
 
   it("should successfully complete checkout", async () => {
-    const { mockRpc } = buildSupabaseMock({})
+    const { mockAdminRpc } = buildSupabaseMock({})
 
     vi.mocked(cartData.initiatePaymentSession).mockResolvedValue(undefined)
     vi.mocked(cartData.retrieveCart).mockResolvedValue({ id: "test-cart-id" } as never)
@@ -153,7 +172,7 @@ describe("completeCheckout Integration", () => {
         customerAddress: mockCheckoutData.billingAddress,
       })
     )
-    expect(mockRpc).toHaveBeenCalledWith(
+    expect(mockAdminRpc).toHaveBeenCalledWith(
       "create_order_with_payment",
       expect.anything()
     )
@@ -197,7 +216,7 @@ describe("completeCheckout Integration", () => {
   })
 
   it("should override authenticated billing phone with the immutable account phone", async () => {
-    const { mockRpc } = buildSupabaseMock({
+    const { mockAdminRpc } = buildSupabaseMock({
       user: {
         id: "user-1",
         phone: "919876543210",
@@ -233,7 +252,7 @@ describe("completeCheckout Integration", () => {
         }),
       })
     )
-    expect(mockRpc).toHaveBeenCalledWith(
+    expect(mockAdminRpc).toHaveBeenCalledWith(
       "create_order_with_payment",
       expect.objectContaining({
         p_billing_address: expect.objectContaining({
@@ -251,16 +270,19 @@ describe("completeCheckout Integration", () => {
   })
 
   it("should handle order creation failure", async () => {
-    const mockRpc = vi
+    const mockAdminRpc = vi
       .fn()
       .mockResolvedValue({ data: null, error: { message: "DB Error" } })
     const mockGetUser = vi.fn().mockResolvedValue({ data: { user: null } })
 
     vi.mocked(createClient).mockResolvedValue({
-      rpc: mockRpc,
       auth: { getUser: mockGetUser },
       from: vi.fn(),
     } as unknown as Awaited<ReturnType<typeof createClient>>)
+    vi.mocked(createAdminClient).mockResolvedValue({
+      rpc: mockAdminRpc,
+      from: vi.fn(),
+    } as unknown as Awaited<ReturnType<typeof createAdminClient>>)
 
     const result = await completeCheckout(mockCheckoutData)
 
