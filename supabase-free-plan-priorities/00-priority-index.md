@@ -17,7 +17,7 @@ Do the `code-only` work first because it can reduce usage without changing Supab
 | Order | Priority | Classification | Status | Why It Comes Here |
 | --- | --- | --- | --- | --- |
 | 1 | Lightweight product listing queries | code-only | Completed and manually verified on 04 May 2026 | Biggest likely egress reduction because listing pages previously fetched detail-level product data. |
-| 2 | Database-level pagination | code-only | Pending | Prevents large product responses during normal browsing. |
+| 2 | Database-level pagination | code-only | Completed and manually verified on 04 May 2026 | Prevents large product responses during normal browsing. |
 | 3 | Layout state payload reduction | code-only | Pending | Avoids full cart/customer reads on every public page load. |
 | 4 | Cart summary vs full cart | code-only | Pending | Keeps global UI lightweight while preserving full cart behavior where needed. |
 | 5 | Public storefront caching | code-only | Pending | Reduces repeated Supabase reads for public data. |
@@ -41,7 +41,8 @@ Local code inspection supports the same conclusion:
 
 - Product listing functions previously used a large `PRODUCT_SELECT` in `src/lib/data/products.ts`.
 - Priority 1 is now implemented: listing functions use a lightweight card select, while detail and quick-view flows can still request full product detail data.
-- Price filtering can fetch all matching products before filtering in application code.
+- Priority 2 is now implemented: public product listing requests normalize page and limit values, cap listing limits, and apply bounded Supabase ranges.
+- Price filtering is now bounded in the code-only pass, but the complete exact variant-price filtering fix still belongs to Priority 3.
 - Layout state calls `/api/storefront/layout-state` with `cache: "no-store"`.
 - Cart retrieval fetches full cart items with `product:products(*)` and `variant:product_variants(*)`.
 - Realtime exists mainly in admin/order components and is currently not the primary issue.

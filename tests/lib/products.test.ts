@@ -121,4 +121,61 @@ describe("storefront product data", () => {
 
     expect(query.eq).toHaveBeenCalledWith("status", ACTIVE_PRODUCT_STATUS)
   })
+
+  it("uses database range for the requested product listing page", async () => {
+    const query = createPaginatedProductsQuery()
+
+    vi.mocked(createClient).mockResolvedValue(buildSupabaseClient(query))
+
+    await listPaginatedProducts({
+      page: 2,
+      limit: 12,
+      sortBy: "featured",
+    })
+
+    expect(query.range).toHaveBeenCalledWith(12, 23)
+  })
+
+  it("falls back to safe pagination values for invalid product listing input", async () => {
+    const query = createPaginatedProductsQuery()
+
+    vi.mocked(createClient).mockResolvedValue(buildSupabaseClient(query))
+
+    await listPaginatedProducts({
+      page: 0,
+      limit: Number.NaN,
+      sortBy: "featured",
+    })
+
+    expect(query.range).toHaveBeenCalledWith(0, 11)
+  })
+
+  it("caps oversized public product listing limits", async () => {
+    const query = createPaginatedProductsQuery()
+
+    vi.mocked(createClient).mockResolvedValue(buildSupabaseClient(query))
+
+    await listPaginatedProducts({
+      page: 1,
+      limit: 500,
+      sortBy: "featured",
+    })
+
+    expect(query.range).toHaveBeenCalledWith(0, 23)
+  })
+
+  it("keeps price-filtered product listings bounded", async () => {
+    const query = createPaginatedProductsQuery()
+
+    vi.mocked(createClient).mockResolvedValue(buildSupabaseClient(query))
+
+    await listPaginatedProducts({
+      page: 1,
+      limit: 12,
+      sortBy: "featured",
+      priceFilter: { min: 100, max: 500 },
+    })
+
+    expect(query.range).toHaveBeenCalledWith(0, 47)
+  })
 })

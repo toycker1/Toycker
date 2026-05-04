@@ -8,6 +8,10 @@ import {
 } from "@modules/store/components/refinement-list/types"
 import { STORE_PRODUCT_PAGE_SIZE } from "@modules/store/constants"
 import { sanitizePriceRange } from "@modules/store/utils/price-range"
+import {
+  normalizeProductLimit,
+  normalizeProductPage,
+} from "@modules/store/utils/pagination"
 import { resolveAgeFilterValue } from "@modules/store/utils/age-filter"
 import { resolveCategoryIdentifier } from "@modules/store/utils/category"
 import { resolveCollectionIdentifier } from "@modules/store/utils/collection"
@@ -47,9 +51,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "Country code is required" }, { status: 400 })
     }
 
-    const page = typeof body.page === "number" && body.page > 0 ? Math.floor(body.page) : 1
-    const limit =
-      typeof body.limit === "number" && body.limit > 0 ? Math.floor(body.limit) : STORE_PRODUCT_PAGE_SIZE
+    const page = normalizeProductPage(body.page)
+    const limit = normalizeProductLimit(body.limit ?? STORE_PRODUCT_PAGE_SIZE)
     const sortBy: SortOptions = body.sortBy || "featured"
 
     const queryParams: Record<string, string | string[] | undefined> = {}
@@ -100,7 +103,7 @@ export async function POST(request: Request) {
     }
 
     if (body.productsIds && body.productsIds.length > 0) {
-      queryParams["id"] = body.productsIds
+      queryParams["id"] = body.productsIds.slice(0, limit)
     }
 
     const requestedPrice = sanitizePriceRange(body.filters?.price)

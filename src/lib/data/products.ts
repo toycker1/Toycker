@@ -7,6 +7,9 @@ import { SortOptions } from "@modules/store/components/refinement-list/types"
 
 import { normalizeProductImage } from "@lib/util/images"
 import { ACTIVE_PRODUCT_STATUS } from "@lib/util/product-visibility"
+import { getProductRange } from "@modules/store/utils/pagination"
+
+const PRICE_FILTER_SCAN_MULTIPLIER = 4
 
 const PRODUCT_CARD_SELECT = `
   id,
@@ -199,7 +202,7 @@ export const listPaginatedProducts = cache(async function listPaginatedProducts(
   includeDetails?: boolean
 }) {
   const supabase = await createClient()
-  const offset = (page - 1) * limit
+  const range = getProductRange(page, limit)
   const productSelect = includeDetails ? PRODUCT_DETAIL_SELECT : PRODUCT_CARD_SELECT
 
   // Determine if we need joins for category or collection filtering
@@ -276,16 +279,18 @@ export const listPaginatedProducts = cache(async function listPaginatedProducts(
   const sort = sortConfigs[sortBy] || sortConfigs.featured
   query = query.order(sort.col, { ascending: sort.asc })
 
-  // Apply pagination only if NOT doing client-side filtering
-  // If we have a price filter, we must fetch everything to find matches and then paginate manually
   const needsClientSideFiltering = priceFilter?.min !== undefined || priceFilter?.max !== undefined
+  const queryRange = needsClientSideFiltering
+    ? {
+        from: range.from,
+        to: range.from + range.limit * PRICE_FILTER_SCAN_MULTIPLIER - 1,
+      }
+    : range
 
-  const { data, count, error } = needsClientSideFiltering
-    ? await query // Fetch everything if we need to filter client-side
-    : await query.range(offset, offset + limit - 1)
+  const { data, count, error } = await query.range(queryRange.from, queryRange.to)
 
   if (error) {
-    return { response: { products: [], count: 0 }, pagination: { page, limit } }
+    return { response: { products: [], count: 0 }, pagination: { page: range.page, limit: range.limit } }
   }
 
   let products = (data || []).map((p) => normalizeProductImage(p as unknown as Product))
@@ -320,18 +325,16 @@ export const listPaginatedProducts = cache(async function listPaginatedProducts(
       return true
     })
 
-    // Update total count after filtering
     const totalFilteredCount = products.length
 
-    // Manual offset/limit for paginated response
-    const paginatedProducts = products.slice(offset, offset + limit)
+    const paginatedProducts = products.slice(0, range.limit)
 
     return {
       response: {
         products: paginatedProducts,
         count: totalFilteredCount,
       },
-      pagination: { page, limit },
+      pagination: { page: range.page, limit: range.limit },
     }
   }
 
@@ -340,6 +343,6 @@ export const listPaginatedProducts = cache(async function listPaginatedProducts(
       products,
       count: count || 0,
     },
-    pagination: { page, limit },
+    pagination: { page: range.page, limit: range.limit },
   }
 })
