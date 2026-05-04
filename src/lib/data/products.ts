@@ -8,16 +8,89 @@ import { SortOptions } from "@modules/store/components/refinement-list/types"
 import { normalizeProductImage } from "@lib/util/images"
 import { ACTIVE_PRODUCT_STATUS } from "@lib/util/product-visibility"
 
-const PRODUCT_SELECT = `
-  *, 
-  variants:product_variants(*), 
-  options:product_options(*, values:product_option_values(*)),
+const PRODUCT_CARD_SELECT = `
+  id,
+  handle,
+  name,
+  short_description,
+  price,
+  currency_code,
+  image_url,
+  thumbnail,
+  stock_count,
+  metadata,
+  category_id,
+  collection_id,
+  created_at,
+  updated_at,
+  status,
+  variants:product_variants(
+    id,
+    title,
+    price,
+    compare_at_price,
+    inventory_quantity,
+    manage_inventory,
+    allow_backorder,
+    product_id,
+    image_url,
+    options
+  )
+`
+
+const PRODUCT_DETAIL_SELECT = `
+  id,
+  handle,
+  name,
+  description,
+  short_description,
+  price,
+  currency_code,
+  image_url,
+  video_url,
+  thumbnail,
+  images,
+  stock_count,
+  metadata,
+  seo_title,
+  seo_description,
+  seo_metadata,
+  category_id,
+  collection_id,
+  created_at,
+  updated_at,
+  subtitle,
+  status,
+  variants:product_variants(
+    id,
+    title,
+    sku,
+    barcode,
+    price,
+    compare_at_price,
+    inventory_quantity,
+    manage_inventory,
+    allow_backorder,
+    product_id,
+    options,
+    image_url
+  ),
+  options:product_options(
+    id,
+    title,
+    values:product_option_values(
+      id,
+      value,
+      option_id,
+      metadata
+    )
+  ),
   related_combinations:product_combinations!product_id(
-    *,
+    id,
+    product_id,
+    related_product_id,
     related_product:products!related_product_id(
-      *,
-      variants:product_variants(*), 
-      options:product_options(*, values:product_option_values(*))
+      ${PRODUCT_CARD_SELECT}
     )
   )
 `
@@ -33,7 +106,7 @@ export const listProducts = cache(async function listProducts(options: {
 } = {}): Promise<{ response: { products: Product[]; count: number } }> {
   const supabase = await createClient()
 
-  let selectString = PRODUCT_SELECT
+  let selectString = PRODUCT_CARD_SELECT
   const joins: string[] = []
 
   if (options.queryParams?.collection_id?.length) {
@@ -44,7 +117,7 @@ export const listProducts = cache(async function listProducts(options: {
   }
 
   if (joins.length > 0) {
-    selectString = `${PRODUCT_SELECT}, ${joins.join(', ')}`
+    selectString = `${PRODUCT_CARD_SELECT}, ${joins.join(', ')}`
   }
 
   let query = supabase
@@ -84,25 +157,25 @@ export const retrieveProduct = cache(async function retrieveProduct(id: string):
   const supabase = await createClient()
   const { data, error } = await supabase
     .from("products")
-    .select(PRODUCT_SELECT)
+    .select(PRODUCT_DETAIL_SELECT)
     .eq("id", id)
     .maybeSingle()
 
   if (error || !data) return null
-  return normalizeProductImage(data as Product)
+  return normalizeProductImage(data as unknown as Product)
 })
 
 export const getProductByHandle = cache(async function getProductByHandle(handle: string): Promise<Product | null> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from("products")
-    .select(PRODUCT_SELECT)
+    .select(PRODUCT_DETAIL_SELECT)
     .eq("status", ACTIVE_PRODUCT_STATUS)
     .eq("handle", handle)
     .maybeSingle()
 
   if (error || !data) return null
-  return normalizeProductImage(data as Product)
+  return normalizeProductImage(data as unknown as Product)
 })
 
 export const listPaginatedProducts = cache(async function listPaginatedProducts({
@@ -113,6 +186,7 @@ export const listPaginatedProducts = cache(async function listPaginatedProducts(
   priceFilter,
   availability,
   ageFilter: _ageFilter,
+  includeDetails = false,
 }: {
   page?: number
   limit?: number
@@ -122,9 +196,11 @@ export const listPaginatedProducts = cache(async function listPaginatedProducts(
   availability?: string
   priceFilter?: { min?: number; max?: number }
   ageFilter?: string
+  includeDetails?: boolean
 }) {
   const supabase = await createClient()
   const offset = (page - 1) * limit
+  const productSelect = includeDetails ? PRODUCT_DETAIL_SELECT : PRODUCT_CARD_SELECT
 
   // Determine if we need joins for category or collection filtering
   const categoryIds = queryParams?.category_id
@@ -136,19 +212,24 @@ export const listPaginatedProducts = cache(async function listPaginatedProducts(
 
   const needsCategoryJoin = categoryIds.length > 0
   const needsCollectionJoin = collectionIds.length > 0
-  // Build query with appropriate SELECT based on join requirements
-  // When price filter is applied, we need to join variants to get accurate min price
-  let query = needsCategoryJoin
-    ? supabase.from("products").select(`
-        ${PRODUCT_SELECT},
-        product_categories!inner(category_id)
-      `, { count: "exact" })
-    : needsCollectionJoin
-      ? supabase.from("products").select(`
-        ${PRODUCT_SELECT},
-        product_collections!inner(collection_id)
-      `, { count: "exact" })
-      : supabase.from("products").select(PRODUCT_SELECT, { count: "exact" })
+  // Build query with the same filters as before, but use a lightweight select by default.
+  const joins: string[] = []
+
+  if (needsCategoryJoin) {
+    joins.push("product_categories!inner(category_id)")
+  }
+
+  if (needsCollectionJoin) {
+    joins.push("product_collections!inner(collection_id)")
+  }
+
+  const selectString = joins.length
+    ? `${productSelect}, ${joins.join(", ")}`
+    : productSelect
+
+  let query = supabase
+    .from("products")
+    .select(selectString, { count: "exact" })
 
   query = query.eq("status", ACTIVE_PRODUCT_STATUS)
 
@@ -207,7 +288,7 @@ export const listPaginatedProducts = cache(async function listPaginatedProducts(
     return { response: { products: [], count: 0 }, pagination: { page, limit } }
   }
 
-  let products = (data || []).map((p) => normalizeProductImage(p as Product))
+  let products = (data || []).map((p) => normalizeProductImage(p as unknown as Product))
 
   // Apply price filtering (only when price filter is active)
   if (needsClientSideFiltering) {

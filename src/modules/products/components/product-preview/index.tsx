@@ -84,7 +84,9 @@ export default function ProductPreview({
   )
 
   const descriptionPreview =
-    isListView && product.description ? product.description : undefined
+    isListView && (product.short_description || product.description)
+      ? product.short_description || product.description || undefined
+      : undefined
   // Determine if product requires option selection
   const hasVariants =
     (product.variants?.length ?? 0) > 0 || (product.options?.length ?? 0) > 0

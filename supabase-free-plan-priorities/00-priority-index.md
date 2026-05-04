@@ -14,19 +14,19 @@ The main target is to reduce Supabase egress and avoid Free Plan quota restricti
 
 Do the `code-only` work first because it can reduce usage without changing Supabase configuration or database schema.
 
-| Order | Priority | Classification | Why It Comes Here |
-| --- | --- | --- | --- |
-| 1 | Lightweight product listing queries | code-only | Biggest likely egress reduction because listing pages currently fetch detail-level product data. |
-| 2 | Database-level pagination | code-only | Prevents large product responses during normal browsing. |
-| 3 | Layout state payload reduction | code-only | Avoids full cart/customer reads on every public page load. |
-| 4 | Cart summary vs full cart | code-only | Keeps global UI lightweight while preserving full cart behavior where needed. |
-| 5 | Public storefront caching | code-only | Reduces repeated Supabase reads for public data. |
-| 6 | Search request and payload optimization | code-only | Reduces search request count and response size. |
-| 7 | Auth request reduction | code-only | Reduces repeated Auth/session traffic. |
-| 8 | Price filtering in database | both | Best fix needs SQL/view/RPC support plus app changes. |
-| 9 | Realtime scope and table config | both | Requires code subscription limits and Supabase table configuration review. |
-| 10 | Media and storage egress control | both | Only important if media is served from Supabase Storage. |
-| 11 | Monitoring and usage review | Supabase-only | Ongoing dashboard and log review, no code change required. |
+| Order | Priority | Classification | Status | Why It Comes Here |
+| --- | --- | --- | --- | --- |
+| 1 | Lightweight product listing queries | code-only | Completed and manually verified on 04 May 2026 | Biggest likely egress reduction because listing pages previously fetched detail-level product data. |
+| 2 | Database-level pagination | code-only | Pending | Prevents large product responses during normal browsing. |
+| 3 | Layout state payload reduction | code-only | Pending | Avoids full cart/customer reads on every public page load. |
+| 4 | Cart summary vs full cart | code-only | Pending | Keeps global UI lightweight while preserving full cart behavior where needed. |
+| 5 | Public storefront caching | code-only | Pending | Reduces repeated Supabase reads for public data. |
+| 6 | Search request and payload optimization | code-only | Pending | Reduces search request count and response size. |
+| 7 | Auth request reduction | code-only | Pending | Reduces repeated Auth/session traffic. |
+| 8 | Price filtering in database | both | Pending | Best fix needs SQL/view/RPC support plus app changes. |
+| 9 | Realtime scope and table config | both | Pending | Requires code subscription limits and Supabase table configuration review. |
+| 10 | Media and storage egress control | both | Pending | Only important if media is served from Supabase Storage. |
+| 11 | Monitoring and usage review | Supabase-only | Pending | Ongoing dashboard and log review, no code change required. |
 
 ## Current Evidence From Toycker
 
@@ -39,7 +39,8 @@ The current screenshots show high database activity relative to Storage and Real
 
 Local code inspection supports the same conclusion:
 
-- Product listing functions use a large `PRODUCT_SELECT` in `src/lib/data/products.ts`.
+- Product listing functions previously used a large `PRODUCT_SELECT` in `src/lib/data/products.ts`.
+- Priority 1 is now implemented: listing functions use a lightweight card select, while detail and quick-view flows can still request full product detail data.
 - Price filtering can fetch all matching products before filtering in application code.
 - Layout state calls `/api/storefront/layout-state` with `cache: "no-store"`.
 - Cart retrieval fetches full cart items with `product:products(*)` and `variant:product_variants(*)`.

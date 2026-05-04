@@ -29,6 +29,7 @@ type RequestBody = {
   collectionId?: string | string[]
   productsIds?: string[]
   searchQuery?: string
+  includeDetails?: boolean
   filters?: {
     availability?: AvailabilityFilter
     price?: PriceRangeFilter
@@ -114,6 +115,7 @@ export async function POST(request: Request) {
       availability: body.filters?.availability,
       priceFilter: requestedPrice,
       ageFilter: normalizedAgeFilter,
+      includeDetails: body.includeDetails === true,
     })
 
     return NextResponse.json({ products: response.products, count: response.count })
