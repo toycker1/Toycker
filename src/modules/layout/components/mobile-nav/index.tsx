@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import LocalizedClientLink from "@modules/common/components/localized-client-link"
 import { Home, User, LayoutGrid, Star, ShoppingBag } from "lucide-react"
 import { useCartStore } from "@modules/cart/context/cart-store-context"
+import { useLayoutData } from "@modules/layout/context/layout-data-context"
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 
@@ -15,6 +16,7 @@ function clx(...inputs: ClassValue[]) {
 const MobileNav = () => {
     const pathname = usePathname()
     const { cart } = useCartStore()
+    const { cart: layoutCart } = useLayoutData()
 
     useEffect(() => {
         document.body.classList.add("has-mobile-nav")
@@ -23,8 +25,10 @@ const MobileNav = () => {
         }
     }, [])
 
-    // Calculate total quantity of items in cart
-    const cartCount = cart?.items?.reduce((acc, item) => acc + item.quantity, 0) || 0
+    const cartCount =
+        cart?.items?.reduce((acc, item) => acc + item.quantity, 0) ??
+        layoutCart?.item_count ??
+        0
 
     const navItems = [
         {

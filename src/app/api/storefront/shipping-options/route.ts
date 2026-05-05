@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 
-import { listCartOptions, retrieveCart } from "@lib/data/cart"
+import { listCartOptions } from "@lib/data/cart"
+import { retrieveLayoutCartSummary } from "@lib/data/layout-state"
 import { ShippingOption } from "@/lib/supabase/types"
 
 const SHIPPING_OPTIONS_TTL = 1000 * 15 // 15 seconds cache window per cart snapshot
@@ -53,7 +54,7 @@ export const dynamic = "force-dynamic"
 
 export async function GET() {
   try {
-    const cart = await retrieveCart()
+    const cart = await retrieveLayoutCartSummary()
 
     if (!cart) {
       return NextResponse.json({ shippingOptions: [], regionId: null })
@@ -61,7 +62,7 @@ export async function GET() {
 
     pruneCacheForCart(cart.id)
 
-    const cacheKey = buildCacheKey(cart.id, cart.region_id, cart.updated_at ?? undefined)
+    const cacheKey = buildCacheKey(cart.id, cart.region_id, cart.updated_at)
     const cachedEntry = shippingOptionsCache.get(cacheKey)
 
     if (cachedEntry && cachedEntry.expiresAt > Date.now()) {
@@ -70,7 +71,7 @@ export async function GET() {
 
     const { shipping_options } = await listCartOptions()
 
-    setCache(cacheKey, shipping_options as ShippingOption[])
+    setCache(cacheKey, shipping_options)
 
     return NextResponse.json({ shippingOptions: shipping_options, regionId: cart.region_id })
   } catch (error) {

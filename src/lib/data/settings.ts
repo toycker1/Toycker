@@ -9,7 +9,7 @@ const getGlobalSettingsInternal = async (): Promise<GlobalSettings> => {
 
     const { data, error } = await supabase
         .from("global_settings")
-        .select("*")
+        .select("id, gift_wrap_fee, is_gift_wrap_enabled, updated_at")
         .eq("id", "default")
         .single()
 

@@ -1,6 +1,6 @@
 "use server"
 
-import { revalidatePath } from "next/cache"
+import { revalidatePath, revalidateTag } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { BannerSchema, type BannerFormData, type HomeBanner } from "@/lib/types/home-banners"
 import { deleteFile, extractKeyFromUrl } from "./storage"
@@ -71,6 +71,7 @@ export async function createHomeBanner(formData: BannerFormData) {
     }
 
     // Revalidate home page cache
+    revalidateTag("banners", "max")
     revalidatePath("/")
     revalidatePath("/admin/home-settings")
 
@@ -116,6 +117,7 @@ export async function updateHomeBanner(id: string, formData: Partial<BannerFormD
         return { error: error.message }
     }
 
+    revalidateTag("banners", "max")
     revalidatePath("/")
     revalidatePath("/admin/home-settings")
 
@@ -154,6 +156,7 @@ export async function deleteHomeBanner(id: string) {
         }
     }
 
+    revalidateTag("banners", "max")
     revalidatePath("/")
     revalidatePath("/admin/home-settings")
 
@@ -176,6 +179,7 @@ export async function reorderHomeBanners(bannerIds: string[]) {
         return { error: error.message }
     }
 
+    revalidateTag("banners", "max")
     revalidatePath("/")
     revalidatePath("/admin/home-settings")
 

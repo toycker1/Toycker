@@ -1,1 +1,2 @@
 export const STORE_PRODUCT_PAGE_SIZE = 12
+export const STORE_PRODUCT_MAX_PAGE_SIZE = 24

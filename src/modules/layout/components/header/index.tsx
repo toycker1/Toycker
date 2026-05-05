@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { Bars3Icon, HeartIcon, ShoppingBagIcon, MagnifyingGlassIcon, UserIcon, EnvelopeIcon, PhoneIcon } from "@heroicons/react/24/outline"
+import type { Cart } from "@/lib/supabase/types"
 
 import LocalizedClientLink from "@modules/common/components/localized-client-link"
 import AnnouncementBar from "@modules/layout/components/announcement-bar"
@@ -14,6 +15,7 @@ import MobileMenu from "@modules/layout/components/mobile-menu"
 import SearchDrawer from "@modules/layout/components/search-drawer"
 import CartSidebar from "@modules/layout/components/cart-sidebar"
 import { useCartSidebar } from "@modules/layout/context/cart-sidebar-context"
+import { useLayoutData } from "@modules/layout/context/layout-data-context"
 import { useCartStore } from "@modules/cart/context/cart-store-context"
 import { useWishlistCount } from "@modules/products/hooks/use-wishlist-count"
 import {
@@ -60,7 +62,7 @@ const ContactInfo = ({
 
 type HeaderProps = {
   regions?: Record<string, unknown>
-  cart?: any
+  cart?: Cart | null
   navLinks?: NavLink[]
   ageCategories?: AgeCategory[]
   shopMenuSections?: ShopMenuSection[]
@@ -84,6 +86,7 @@ const Header = ({
     cart: sharedCart,
     setCart,
   } = useCartSidebar()
+  const { cart: layoutCart } = useLayoutData()
   const pathname = usePathname()
   const wishlistCount = useWishlistCount()
   const { cart: storeCart } = useCartStore()
@@ -104,7 +107,9 @@ const Header = ({
   // Use cart from store for instant reactivity
   const activeCart = storeCart ?? sharedCart ?? cart
   const cartItemCount =
-    activeCart?.items?.reduce((total: number, item: { quantity: number }) => total + item.quantity, 0) || 0
+    activeCart?.items?.reduce((total: number, item: { quantity: number }) => total + item.quantity, 0) ??
+    layoutCart?.item_count ??
+    0
   const resolvedNavLinks = navLinks && navLinks.length ? navLinks : defaultNavLinks
   const resolvedAgeCategories = ageCategories && ageCategories.length ? ageCategories : defaultAgeCategories
   const fallbackSections = defaultShopMenuSections.map((section) =>

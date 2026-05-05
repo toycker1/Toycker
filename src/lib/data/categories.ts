@@ -7,6 +7,18 @@ import { Category } from "@/lib/supabase/types"
 // Cache TTL: 10 minutes in seconds
 const CATEGORIES_CACHE_TTL = 86400
 
+type CategoryRow = Omit<Category, "parent_category"> & {
+  parent_category?: Category | Category[] | null
+}
+
+const firstRelation = <T,>(value: T | T[] | null | undefined): T | null => {
+  if (Array.isArray(value)) {
+    return value[0] ?? null
+  }
+
+  return value ?? null
+}
+
 // Internal function for listCategories
 const listCategoriesInternal = async (page: number = 1, limit: number = 20) => {
   const supabase = await createClient()
@@ -40,7 +52,24 @@ const getCategoryByHandleInternal = async (categoryHandle: string[]): Promise<Ca
   // Fetch the current category and its parent information
   const { data, error } = await supabase
     .from("categories")
-    .select("*, parent_category(*)")
+    .select(`
+      id,
+      name,
+      handle,
+      description,
+      parent_category_id,
+      created_at,
+      image_url,
+      parent_category(
+        id,
+        name,
+        handle,
+        description,
+        parent_category_id,
+        created_at,
+        image_url
+      )
+    `)
     .eq("handle", handle)
     .maybeSingle()
 
@@ -51,7 +80,12 @@ const getCategoryByHandleInternal = async (categoryHandle: string[]): Promise<Ca
     return null
   }
 
-  return data as Category
+  const category = data as unknown as CategoryRow
+
+  return {
+    ...category,
+    parent_category: firstRelation(category.parent_category) ?? undefined,
+  }
 }
 
 export const getCategoryByHandle = unstable_cache(

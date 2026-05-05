@@ -1,6 +1,6 @@
 "use server"
 
-import { revalidatePath } from "next/cache"
+import { revalidatePath, revalidateTag } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { ExclusiveCollectionSchema, type ExclusiveCollectionFormData, type HomeExclusiveCollection } from "@/lib/types/home-exclusive-collections"
 import { deleteFile, extractKeyFromUrl } from "./storage"
@@ -97,6 +97,7 @@ export async function createExclusiveCollection(formData: ExclusiveCollectionFor
     }
 
     // Revalidate home page cache
+    revalidateTag("exclusive-collections", "max")
     revalidatePath("/")
     revalidatePath("/admin/home-settings")
 
@@ -158,6 +159,7 @@ export async function updateExclusiveCollection(
         return { error: error.message }
     }
 
+    revalidateTag("exclusive-collections", "max")
     revalidatePath("/")
     revalidatePath("/admin/home-settings")
 
@@ -203,6 +205,7 @@ export async function deleteExclusiveCollection(id: string) {
         }
     }
 
+    revalidateTag("exclusive-collections", "max")
     revalidatePath("/")
     revalidatePath("/admin/home-settings")
 
@@ -225,6 +228,7 @@ export async function reorderExclusiveCollections(collectionIds: string[]) {
         return { error: error.message }
     }
 
+    revalidateTag("exclusive-collections", "max")
     revalidatePath("/")
     revalidatePath("/admin/home-settings")
 

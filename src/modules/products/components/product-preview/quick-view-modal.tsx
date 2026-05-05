@@ -48,6 +48,7 @@ const ProductQuickViewModal = ({
             countryCode: DEFAULT_COUNTRY_CODE,
             limit: 1,
             productsIds: [product.id],
+            includeDetails: true,
           }),
           signal: controller.signal,
         })
