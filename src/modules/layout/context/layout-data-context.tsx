@@ -1,5 +1,12 @@
 "use client"
 
+import type { ShippingOption } from "@/lib/supabase/types"
+import type {
+  LayoutCartSummary,
+  LayoutCustomer,
+  LayoutState,
+  ShippingOptionsState,
+} from "@/lib/types/layout-state"
 import {
   ReactNode,
   createContext,
@@ -12,11 +19,11 @@ import {
 } from "react"
 
 type LayoutDataContextValue = {
-  cart: any
-  setCart: (_cart: any) => void
-  customer: any
-  setCustomer: (_customer: any) => void
-  shippingOptions: any[]
+  cart: LayoutCartSummary | null
+  setCart: (_cart: LayoutCartSummary | null) => void
+  customer: LayoutCustomer | null
+  setCustomer: (_customer: LayoutCustomer | null) => void
+  shippingOptions: ShippingOption[]
   loading: boolean
   refresh: () => Promise<void>
   loadShippingOptions: () => Promise<void>
@@ -37,10 +44,7 @@ const fetchLayoutState = async (signal?: AbortSignal) => {
       return { cart: null, customer: null }
     }
 
-    return (await response.json()) as {
-      cart: any
-      customer: any
-    }
+    return (await response.json()) as LayoutState
   } catch (error) {
     if ((error as Error)?.name === "AbortError") {
       throw error // Re-throw abort errors to be handled by caller
@@ -62,10 +66,7 @@ const fetchShippingOptions = async (signal?: AbortSignal) => {
       throw new Error("Failed to load shipping options")
     }
 
-    return (await response.json()) as {
-      shippingOptions: any[]
-      regionId: string | null
-    }
+    return (await response.json()) as ShippingOptionsState
   } catch (error) {
     if ((error as Error)?.name === "AbortError") {
       return {
@@ -78,9 +79,9 @@ const fetchShippingOptions = async (signal?: AbortSignal) => {
 }
 
 export const LayoutDataProvider = ({ children }: { children: ReactNode }) => {
-  const [cart, setCart] = useState<any>(null)
-  const [customer, setCustomer] = useState<any>(null)
-  const [shippingOptions, setShippingOptions] = useState<any[]>([])
+  const [cart, setCart] = useState<LayoutCartSummary | null>(null)
+  const [customer, setCustomer] = useState<LayoutCustomer | null>(null)
+  const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([])
   const [shippingOptionsRegion, setShippingOptionsRegion] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const abortController = useRef<AbortController | null>(null)

@@ -18,7 +18,7 @@ Do the `code-only` work first because it can reduce usage without changing Supab
 | --- | --- | --- | --- | --- |
 | 1 | Lightweight product listing queries | code-only | Completed and manually verified on 04 May 2026 | Biggest likely egress reduction because listing pages previously fetched detail-level product data. |
 | 2 | Database-level pagination | code-only | Completed and manually verified on 04 May 2026 | Prevents large product responses during normal browsing. |
-| 3 | Layout state payload reduction | code-only | Pending | Avoids full cart/customer reads on every public page load. |
+| 3 | Layout state payload reduction | code-only | Completed and manually verified on 05 May 2026 | Avoids full cart/customer reads on every public page load. |
 | 4 | Cart summary vs full cart | code-only | Pending | Keeps global UI lightweight while preserving full cart behavior where needed. |
 | 5 | Public storefront caching | code-only | Pending | Reduces repeated Supabase reads for public data. |
 | 6 | Search request and payload optimization | code-only | Pending | Reduces search request count and response size. |
@@ -43,8 +43,9 @@ Local code inspection supports the same conclusion:
 - Priority 1 is now implemented: listing functions use a lightweight card select, while detail and quick-view flows can still request full product detail data.
 - Priority 2 is now implemented: public product listing requests normalize page and limit values, cap listing limits, and apply bounded Supabase ranges.
 - Price filtering is now bounded in the code-only pass, but the complete exact variant-price filtering fix still belongs to Priority 3.
-- Layout state calls `/api/storefront/layout-state` with `cache: "no-store"`.
-- Cart retrieval fetches full cart items with `product:products(*)` and `variant:product_variants(*)`.
+- Priority 4 is now implemented: `/api/storefront/layout-state` returns lightweight customer and cart summary fields only.
+- Full cart retrieval still exists for cart, checkout, cart sidebar detail loading, and cart actions.
+- The manually verified layout-state response includes only `customer.id`, `customer.first_name`, `customer.is_club_member`, and cart summary fields such as `id`, `user_id`, `region_id`, `currency_code`, `updated_at`, and `item_count`.
 - Realtime exists mainly in admin/order components and is currently not the primary issue.
 
 ## Classification Summary
