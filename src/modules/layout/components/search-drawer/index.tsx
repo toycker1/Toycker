@@ -19,6 +19,7 @@ import { useSearchResults } from "@modules/layout/hooks/useSearchResults"
 import { useVoiceSearch } from "@modules/layout/hooks/useVoiceSearch"
 import LocalizedClientLink from "@modules/common/components/localized-client-link"
 import { DEFAULT_COUNTRY_CODE } from "@lib/constants/region"
+import { MIN_SEARCH_QUERY_LENGTH } from "@/lib/constants/search"
 import type { SearchProductSummary, SearchCategorySummary, SearchCollectionSummary } from "@lib/data/search"
 import { fixUrl } from "@lib/util/images"
 import { useImageSearchStore } from "@/lib/store/image-search-store"
@@ -89,7 +90,7 @@ const SearchDrawer = ({ isOpen, onClose }: SearchDrawerProps) => {
     onClose()
   }
 
-  const canViewAll = Boolean(query.trim())
+  const canViewAll = query.trim().length >= MIN_SEARCH_QUERY_LENGTH
 
   useBodyScrollLock({ isLocked: isOpen })
 
@@ -108,11 +109,13 @@ const SearchDrawer = ({ isOpen, onClose }: SearchDrawerProps) => {
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault()
 
-    if (!query.trim()) {
+    const normalizedQuery = query.trim()
+
+    if (normalizedQuery.length < MIN_SEARCH_QUERY_LENGTH) {
       return
     }
 
-    router.push(buildLocalizedPath(`/store?q=${encodeURIComponent(query.trim())}`))
+    router.push(buildLocalizedPath(`/store?q=${encodeURIComponent(normalizedQuery)}`))
     handleClose()
   }
 

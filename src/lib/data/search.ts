@@ -1,6 +1,14 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import {
+    MIN_SEARCH_QUERY_LENGTH,
+    SEARCH_DEFAULT_PRODUCT_LIMIT,
+    SEARCH_DEFAULT_TAXONOMY_LIMIT,
+    SEARCH_MAX_PRODUCT_LIMIT,
+    SEARCH_MAX_QUERY_LENGTH,
+    SEARCH_MAX_TAXONOMY_LIMIT,
+} from "@/lib/constants/search"
 
 export type SearchProductSummary = {
     id: string
@@ -46,21 +54,56 @@ type SearchProductRow = {
     handle: string
     image_url: string | null
     thumbnail: string | null
-    price: number
+    price: number | string | null
     currency_code: string | null
+}
+
+const clampLimit = (value: number | undefined, fallback: number, max: number) => {
+    if (value === undefined || !Number.isFinite(value) || value < 1) {
+        return fallback
+    }
+
+    return Math.min(Math.floor(value), max)
+}
+
+const normalizeSearchQuery = (value: string) =>
+    value.trim().slice(0, SEARCH_MAX_QUERY_LENGTH)
+
+const normalizePrice = (value: SearchProductRow["price"]) => {
+    if (typeof value === "number") {
+        return value
+    }
+
+    if (typeof value === "string") {
+        const parsed = Number(value)
+        return Number.isFinite(parsed) ? parsed : 0
+    }
+
+    return 0
 }
 
 export const searchEntities = async ({
     query,
     countryCode: _countryCode,
-    productLimit = 6,
-    taxonomyLimit = 5,
+    productLimit,
+    taxonomyLimit,
 }: SearchEntitiesArgs): Promise<SearchResultsPayload> => {
-    const normalizedQuery = query.trim()
+    const normalizedQuery = normalizeSearchQuery(query)
 
-    if (!normalizedQuery) {
+    if (normalizedQuery.length < MIN_SEARCH_QUERY_LENGTH) {
         return { products: [], categories: [], collections: [], suggestions: [] }
     }
+
+    const resolvedProductLimit = clampLimit(
+        productLimit,
+        SEARCH_DEFAULT_PRODUCT_LIMIT,
+        SEARCH_MAX_PRODUCT_LIMIT
+    )
+    const resolvedTaxonomyLimit = clampLimit(
+        taxonomyLimit,
+        SEARCH_DEFAULT_TAXONOMY_LIMIT,
+        SEARCH_MAX_TAXONOMY_LIMIT
+    )
 
     const supabase = await createClient()
 
@@ -69,7 +112,7 @@ export const searchEntities = async ({
         // Search Products using Advanced Multimodal RPC (FTS part only for now)
         supabase.rpc("search_products_multimodal", {
             search_query: normalizedQuery,
-            match_count: productLimit,
+            match_count: resolvedProductLimit,
             match_threshold: 0.1,
         }),
 
@@ -78,14 +121,14 @@ export const searchEntities = async ({
             .from("categories")
             .select("id, name, handle")
             .ilike("name", `%${normalizedQuery}%`)
-            .limit(taxonomyLimit),
+            .limit(resolvedTaxonomyLimit),
 
         // Search Collections
         supabase
             .from("collections")
             .select("id, title, handle")
             .ilike("title", `%${normalizedQuery}%`)
-            .limit(taxonomyLimit),
+            .limit(resolvedTaxonomyLimit),
     ])
 
     // 2. Process results (Normalization)
@@ -95,7 +138,7 @@ export const searchEntities = async ({
         handle: p.handle,
         thumbnail: p.image_url || p.thumbnail,
         price: {
-            amount: p.price,
+            amount: normalizePrice(p.price),
             currencyCode: p.currency_code || "INR",
             formatted: `₹${p.price}`,
         },

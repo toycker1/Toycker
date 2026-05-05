@@ -15,6 +15,10 @@ import {
 import { resolveAgeFilterValue } from "@modules/store/utils/age-filter"
 import { resolveCategoryIdentifier } from "@modules/store/utils/category"
 import { resolveCollectionIdentifier } from "@modules/store/utils/collection"
+import {
+  MIN_SEARCH_QUERY_LENGTH,
+  SEARCH_MAX_QUERY_LENGTH,
+} from "@/lib/constants/search"
 
 const normalizeStringArray = (value?: string | string[] | null): string[] => {
   if (!value) {
@@ -22,6 +26,14 @@ const normalizeStringArray = (value?: string | string[] | null): string[] => {
   }
 
   return (Array.isArray(value) ? value : [value]).map((entry) => entry ?? "").filter(Boolean)
+}
+
+const normalizeSearchQuery = (value?: string) => {
+  const normalized = value?.trim().slice(0, SEARCH_MAX_QUERY_LENGTH)
+
+  return normalized && normalized.length >= MIN_SEARCH_QUERY_LENGTH
+    ? normalized
+    : undefined
 }
 
 type RequestBody = {
@@ -98,8 +110,10 @@ export async function POST(request: Request) {
       }
     }
 
-    if (body.searchQuery) {
-      queryParams["q"] = body.searchQuery
+    const searchQuery = normalizeSearchQuery(body.searchQuery)
+
+    if (searchQuery) {
+      queryParams["q"] = searchQuery
     }
 
     if (body.productsIds && body.productsIds.length > 0) {

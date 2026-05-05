@@ -8,8 +8,21 @@ import { SortOptions } from "@modules/store/components/refinement-list/types"
 import { normalizeProductImage } from "@lib/util/images"
 import { ACTIVE_PRODUCT_STATUS } from "@lib/util/product-visibility"
 import { getProductRange } from "@modules/store/utils/pagination"
+import {
+  MIN_SEARCH_QUERY_LENGTH,
+  SEARCH_MAX_QUERY_LENGTH,
+} from "@/lib/constants/search"
 
 const PRICE_FILTER_SCAN_MULTIPLIER = 4
+
+const normalizeProductSearchQuery = (value: string | string[] | undefined) => {
+  const rawValue = Array.isArray(value) ? value[0] : value
+  const normalized = rawValue?.trim().slice(0, SEARCH_MAX_QUERY_LENGTH)
+
+  return normalized && normalized.length >= MIN_SEARCH_QUERY_LENGTH
+    ? normalized
+    : undefined
+}
 
 const PRODUCT_CARD_SELECT = `
   id,
@@ -250,8 +263,10 @@ export const listPaginatedProducts = cache(async function listPaginatedProducts(
     query = query.in("id", ids)
   }
 
-  if (queryParams?.q) {
-    query = query.ilike("name", `%${queryParams.q}%`)
+  const searchQuery = normalizeProductSearchQuery(queryParams?.q)
+
+  if (searchQuery) {
+    query = query.ilike("name", `%${searchQuery}%`)
   }
 
   // NOTE: Price filtering is done CLIENT-SIDE after fetching

@@ -11,6 +11,18 @@ import ProductGridSection from "@modules/store/components/product-grid-section"
 import { STORE_PRODUCT_PAGE_SIZE } from "@modules/store/constants"
 import { resolveAgeFilterValue } from "@modules/store/utils/age-filter"
 import { resolveCategoryIdentifier } from "@modules/store/utils/category"
+import {
+  MIN_SEARCH_QUERY_LENGTH,
+  SEARCH_MAX_QUERY_LENGTH,
+} from "@/lib/constants/search"
+
+const normalizeStoreSearchQuery = (value?: string) => {
+  const normalized = value?.trim().slice(0, SEARCH_MAX_QUERY_LENGTH)
+
+  return normalized && normalized.length >= MIN_SEARCH_QUERY_LENGTH
+    ? normalized
+    : undefined
+}
 
 type PaginatedProductsParams = {
   limit: number
@@ -69,8 +81,10 @@ export default async function PaginatedProducts({
     queryParams["id"] = productsIds
   }
 
-  if (searchQuery) {
-    queryParams["q"] = searchQuery
+  const resolvedSearchQuery = normalizeStoreSearchQuery(searchQuery)
+
+  if (resolvedSearchQuery) {
+    queryParams["q"] = resolvedSearchQuery
   }
 
   const region = await getRegion()

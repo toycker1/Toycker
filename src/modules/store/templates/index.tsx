@@ -14,6 +14,18 @@ import FilterDrawer from "@modules/store/components/filter-drawer"
 import Breadcrumbs from "@modules/common/components/breadcrumbs"
 import { resolveAgeFilterValue } from "@modules/store/utils/age-filter"
 import { resolveCollectionIdentifier } from "@modules/store/utils/collection"
+import {
+  MIN_SEARCH_QUERY_LENGTH,
+  SEARCH_MAX_QUERY_LENGTH,
+} from "@/lib/constants/search"
+
+const normalizeStoreSearchQuery = (value?: string) => {
+  const normalized = value?.trim().slice(0, SEARCH_MAX_QUERY_LENGTH)
+
+  return normalized && normalized.length >= MIN_SEARCH_QUERY_LENGTH
+    ? normalized
+    : undefined
+}
 
 const StoreTemplate = async ({
   sortBy,
@@ -41,6 +53,7 @@ const StoreTemplate = async ({
   const pageNumber = page ? parseInt(page) : 1
   const sort = sortBy || "featured"
   const resolvedViewMode = viewMode || "grid-4"
+  const resolvedSearchQuery = normalizeStoreSearchQuery(searchQuery)
 
   const normalizedAgeFilter = resolveAgeFilterValue(ageFilter)
 
@@ -65,8 +78,8 @@ const StoreTemplate = async ({
     productQueryParams["collection_id"] = [effectiveCollectionId]
   }
 
-  if (searchQuery) {
-    productQueryParams["q"] = searchQuery
+  if (resolvedSearchQuery) {
+    productQueryParams["q"] = resolvedSearchQuery
   }
 
   const effectiveProductQueryParams: Record<string, string | string[] | undefined> | undefined =
@@ -114,7 +127,7 @@ const StoreTemplate = async ({
       initialFilters={{
         sortBy: sort,
         page: pageNumber,
-        searchQuery,
+        searchQuery: resolvedSearchQuery,
         availability,
         priceRange,
         age: ageFilter,
@@ -126,7 +139,7 @@ const StoreTemplate = async ({
       pageSize={STORE_PRODUCT_PAGE_SIZE}
     >
       <FilterDrawer
-        searchQuery={searchQuery}
+        searchQuery={resolvedSearchQuery}
         selectedFilters={{
           availability,
           priceMin: priceRange?.min,
