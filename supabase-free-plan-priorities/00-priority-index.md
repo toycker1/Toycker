@@ -19,7 +19,7 @@ Do the `code-only` work first because it can reduce usage without changing Supab
 | 1 | Lightweight product listing queries | code-only | Completed and manually verified on 04 May 2026 | Biggest likely egress reduction because listing pages previously fetched detail-level product data. |
 | 2 | Database-level pagination | code-only | Completed and manually verified on 04 May 2026 | Prevents large product responses during normal browsing. |
 | 3 | Layout state payload reduction | code-only | Completed and manually verified on 05 May 2026 | Avoids full cart/customer reads on every public page load. |
-| 4 | Cart summary vs full cart | code-only | Pending | Keeps global UI lightweight while preserving full cart behavior where needed. |
+| 4 | Cart summary vs full cart | code-only | Completed and manually verified on 05 May 2026 | Keeps global UI lightweight while preserving full cart behavior where needed. |
 | 5 | Public storefront caching | code-only | Pending | Reduces repeated Supabase reads for public data. |
 | 6 | Search request and payload optimization | code-only | Pending | Reduces search request count and response size. |
 | 7 | Auth request reduction | code-only | Pending | Reduces repeated Auth/session traffic. |
@@ -44,8 +44,10 @@ Local code inspection supports the same conclusion:
 - Priority 2 is now implemented: public product listing requests normalize page and limit values, cap listing limits, and apply bounded Supabase ranges.
 - Price filtering is now bounded in the code-only pass, but the complete exact variant-price filtering fix still belongs to Priority 3.
 - Priority 4 is now implemented: `/api/storefront/layout-state` returns lightweight customer and cart summary fields only.
+- Priority 5 is now implemented: count-only UI uses lightweight cart summary fallback, while full cart retrieval remains limited to cart drawer, cart page, checkout, and cart actions.
 - Full cart retrieval still exists for cart, checkout, cart sidebar detail loading, and cart actions.
 - The manually verified layout-state response includes only `customer.id`, `customer.first_name`, `customer.is_club_member`, and cart summary fields such as `id`, `user_id`, `region_id`, `currency_code`, `updated_at`, and `item_count`.
+- The manually verified shipping-options response still returns active shipping options after switching the endpoint to lightweight cart summary lookup.
 - Realtime exists mainly in admin/order components and is currently not the primary issue.
 
 ## Classification Summary

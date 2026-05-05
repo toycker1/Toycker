@@ -1,5 +1,15 @@
 # Priority 5: Cart Summary Vs Full Cart
 
+## Status
+
+Completed.
+
+- Completed on: 05 May 2026
+- Manual testing status: passed
+- Implementation type: `code-only`
+- Supabase migration required: `no`
+- Supabase dashboard/config change required: `no`
+
 ## Classification
 
 `code-only`
@@ -13,6 +23,14 @@ Do this with or shortly after layout state payload reduction.
 Full cart retrieval is expensive because it includes cart items, product rows, variants, promotions, shipping options, settings, and pricing calculations. The global layout usually does not need all of that.
 
 ## Current Toycker Evidence
+
+Implementation update:
+
+- Count-only UI now uses the lightweight layout cart summary as a fallback when full cart details are not loaded yet.
+- The desktop/header cart badge and mobile cart badge can show `item_count` without forcing a full cart payload.
+- `/api/storefront/shipping-options` now reads the lightweight cart summary instead of calling full `retrieveCart()`.
+- Full cart retrieval remains in place for cart drawer details, cart page, checkout page, cart mutations, payment, promotions, rewards, and order creation.
+- Manual testing confirmed the layout-state response stays lightweight and checkout shipping options still return correctly.
 
 In `src/lib/data/cart.ts`, `retrieveCartRaw` fetches:
 
@@ -68,10 +86,86 @@ Then calculate `item_count` in application code.
 
 ## Acceptance Checks
 
-- Header/cart badge uses summary data only.
-- Cart drawer either loads full cart on open or receives full data after explicit refresh.
-- Cart page and checkout page still use full cart.
-- Add/remove/update cart operations still revalidate or refresh the correct data.
+- Header/cart badge uses summary data only. Passed on 05 May 2026.
+- Mobile cart badge uses summary data as fallback. Passed on 05 May 2026.
+- Cart drawer either loads full cart on open or receives full data after explicit refresh. Passed on 05 May 2026.
+- Cart page and checkout page still use full cart. Passed on 05 May 2026.
+- Add/remove/update cart operations still revalidate or refresh the correct data. Passed on 05 May 2026.
+- Shipping options endpoint still returns active shipping options. Passed on 05 May 2026.
+
+## Implementation Summary
+
+Files changed:
+
+- `src/modules/layout/components/mobile-nav/index.tsx`
+- `src/modules/layout/components/cart-badge/index.tsx`
+- `src/app/api/storefront/shipping-options/route.ts`
+
+The implementation keeps two separate read paths:
+
+```ts
+LayoutCartSummary
+```
+
+for global count-only UI, and:
+
+```ts
+Cart
+```
+
+for full cart, checkout, pricing, payment, and order behavior.
+
+Manual browser testing showed `/api/storefront/layout-state` returns either:
+
+```json
+{
+  "customer": {
+    "id": "...",
+    "first_name": "Rudra",
+    "is_club_member": true
+  },
+  "cart": null
+}
+```
+
+or the lightweight cart summary:
+
+```json
+{
+  "customer": {
+    "id": "...",
+    "first_name": "Rudra",
+    "is_club_member": true
+  },
+  "cart": {
+    "id": "...",
+    "user_id": "...",
+    "region_id": null,
+    "currency_code": "inr",
+    "updated_at": "...",
+    "item_count": 1
+  }
+}
+```
+
+The response does not include full cart `items`, products, variants, promotions, shipping methods, addresses, metadata, or payment collection data.
+
+Manual console testing also confirmed:
+
+```js
+fetch("/api/storefront/shipping-options")
+  .then((res) => res.json())
+  .then(console.log)
+```
+
+returns active shipping options, including `Standard Shipping`.
+
+## Quality Check Status
+
+- Focused tests: passed with `pnpm.cmd test tests\lib\data\layout-state.test.ts`
+- Build: passed with `pnpm.cmd build`
+- TypeScript: blocked by existing unrelated `tests/lib/actions/complete-checkout.test.ts` error
+- Lint: blocked by existing `next lint` script issue
 
 ## References
 
