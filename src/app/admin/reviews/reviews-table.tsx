@@ -277,7 +277,7 @@ export default function ReviewsTable({ reviews }: { reviews: ReviewWithMedia[] }
                                                         <img src={publicUrl} alt="review media" className="w-full h-auto object-contain max-h-60" />
                                                     )}
                                                     {media.file_type === 'video' && (
-                                                        <video controls className="w-full h-auto max-h-60">
+                                                        <video controls preload="none" className="w-full h-auto max-h-60">
                                                             <source src={publicUrl} />
                                                         </video>
                                                     )}

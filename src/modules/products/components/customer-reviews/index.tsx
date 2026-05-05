@@ -518,6 +518,7 @@ const CustomerReviews = ({
                     src={activeVideo?.url}
                     controls
                     autoPlay
+                    preload="metadata"
                     className="max-h-[85vh] w-auto max-w-full rounded-2xl"
                   />
                   <button

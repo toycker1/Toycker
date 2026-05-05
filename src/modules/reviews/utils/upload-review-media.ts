@@ -3,6 +3,7 @@
 import { getPresignedUploadUrl } from "@/lib/actions/storage"
 import type { ReviewData } from "@/lib/actions/reviews"
 import type { ReviewFileType } from "../types"
+import { validateUploadFile } from "@/lib/constants/upload-file-types"
 
 export function getReviewFileType(file: File): ReviewFileType {
   if (file.type.startsWith("image/")) {
@@ -27,6 +28,7 @@ export function createVoiceReviewFile(audioBlob: Blob, prefix: string) {
 export async function uploadWithRetry(
   url: string,
   file: File,
+  cacheControl?: string,
   maxRetries = 3
 ): Promise<Response> {
   let lastError: Error | null = null
@@ -36,7 +38,10 @@ export async function uploadWithRetry(
       const response = await fetch(url, {
         method: "PUT",
         body: file,
-        headers: { "Content-Type": file.type },
+        headers: {
+          "Content-Type": file.type,
+          ...(cacheControl ? { "Cache-Control": cacheControl } : {}),
+        },
       })
 
       if (response.ok || (response.status < 500 && response.status !== 429)) {
@@ -74,15 +79,22 @@ export async function uploadReviewMedia({
   const uploadedMedia: ReviewData["media"] = []
 
   for (const file of uploadFiles) {
-    const { url, key, error } = await getPresignedUploadUrl({
+    const validation = validateUploadFile({ folder: "reviews", file })
+    if (validation.error) {
+      throw new Error(validation.error)
+    }
+
+    const { url, key, cacheControl, error } = await getPresignedUploadUrl({
       fileType: file.type,
+      folder: "reviews",
+      fileSizeBytes: file.size,
     })
 
     if (error || !url || !key) {
       throw new Error(error || "Failed to initialize upload.")
     }
 
-    const uploadResponse = await uploadWithRetry(url, file)
+    const uploadResponse = await uploadWithRetry(url, file, cacheControl)
 
     if (!uploadResponse.ok) {
       throw new Error(

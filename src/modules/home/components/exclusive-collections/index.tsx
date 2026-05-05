@@ -144,7 +144,7 @@ const ExclusiveCard = ({
           {hasVideo ? (
             <video
               src={item.video_url}
-              preload="auto"
+              preload="metadata"
               onLoadedData={() => setIsLoaded(true)}
               onCanPlay={() => setIsLoaded(true)}
             />
@@ -174,7 +174,7 @@ const ExclusiveCard = ({
             loop
             muted
             playsInline
-            preload="auto"
+            preload="metadata"
             poster={poster}
           >
             Your browser does not support the video tag.

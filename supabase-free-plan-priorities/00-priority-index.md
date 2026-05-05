@@ -25,7 +25,7 @@ Do the `code-only` work first because it can reduce usage without changing Supab
 | 7 | Auth request reduction | code-only | Completed and manually verified on 05 May 2026 | Reduces repeated Auth/session traffic. |
 | 8 | Price filtering in database | both | Completed and manually verified on 05 May 2026 | Moves variant-aware price filtering, sorting, and pagination into Supabase. |
 | 9 | Realtime scope and table config | both | Implemented and Supabase-verified on 05 May 2026; manual workflow verification pending | Realtime is now limited to intentional admin/order tables and narrower subscription events. |
-| 10 | Media and storage egress control | both | Pending | Only important if media is served from Supabase Storage. |
+| 10 | Media and storage egress control | code-only | Implemented on 05 May 2026; manual workflow verification pending | Media is served from Cloudflare R2/CDN, so the fix keeps uploads bounded and cacheable without Supabase Storage changes. |
 | 11 | Monitoring and usage review | Supabase-only | Pending | Ongoing dashboard and log review, no code change required. |
 
 ## Current Evidence From Toycker
@@ -49,6 +49,7 @@ Local code inspection supports the same conclusion:
 - Priority 7 is now implemented: text search waits for 2+ characters, uses a 300 ms debounce, aborts stale client requests, clamps server-side search limits, and keeps store listing search from applying broad 1-character queries.
 - Priority 9 is now implemented: anonymous public pages skip unnecessary Supabase Auth checks when no auth cookie exists, layout state uses verified claims for lightweight customer/cart summary lookups, wishlist uses existing layout customer state instead of its own browser auth request, and public product listing pages no longer fetch full customer data only to compute an unused login flag.
 - Priority 8 is now implemented: admin order realtime listens only for `INSERT` and `UPDATE`, order tracking stays scoped to `UPDATE` events for the current order id, admin notifications listen only for `INSERT`, and migration `20260505170000_limit_realtime_publication_tables.sql` removes unused `public.wishlist_items` realtime publication scope.
+- Priority 10 is now implemented: the linked development project has no Supabase Storage buckets, product media URLs use `cdn.toycker.in`, review media is stored with provider `r2`, R2 uploads now use explicit file type/size limits, new R2 uploads include long-lived immutable cache metadata, exclusive video uploads are capped at 20MB, and public/admin media previews use lighter preload or lazy-loading behavior where appropriate.
 - Full cart retrieval still exists for cart, checkout, cart sidebar detail loading, and cart actions.
 - The manually verified layout-state response includes only `customer.id`, `customer.first_name`, `customer.is_club_member`, and cart summary fields such as `id`, `user_id`, `region_id`, `currency_code`, `updated_at`, and `item_count`.
 - The manually verified shipping-options response still returns active shipping options after switching the endpoint to lightweight cart summary lookup.
@@ -75,7 +76,12 @@ Local code inspection supports the same conclusion:
 
 - `03-price-filtering-in-database.md`
 - `08-realtime-scope-and-table-config.md`
+
+### Code-Only After Verification
+
 - `10-media-and-storage-egress-control.md`
+
+Priority 10 was originally classified as `both`, but current Toycker evidence shows media is served from Cloudflare R2/CDN rather than Supabase Storage. No Supabase migration or bucket configuration change was required for this implementation.
 
 ### Supabase-Only
 

@@ -291,6 +291,7 @@ export default function NewProductForm({ collections, categories }: NewProductFo
                   src={embedUrl}
                   title="YouTube video player"
                   frameBorder="0"
+                  loading="lazy"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
                 />

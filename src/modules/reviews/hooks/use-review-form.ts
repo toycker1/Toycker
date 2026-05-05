@@ -4,6 +4,7 @@ import type { ChangeEvent } from "react"
 import { useState } from "react"
 import { useVoiceRecorder } from "@/hooks/useVoiceRecorder"
 import type { ReviewFormValues } from "../types"
+import { validateUploadFile } from "@/lib/constants/upload-file-types"
 
 const initialValues: ReviewFormValues = {
   rating: 0,
@@ -62,9 +63,18 @@ export function useReviewForm(defaultValues: Partial<ReviewFormValues> = {}) {
       return
     }
 
+    const validFiles = selectedFiles.filter((file) => {
+      const validation = validateUploadFile({ folder: "reviews", file })
+      return !validation.error
+    })
+
+    if (validFiles.length < selectedFiles.length) {
+      alert("Some review media files were skipped because they are too large or not supported.")
+    }
+
     setFiles((currentFiles) => [
       ...currentFiles,
-      ...selectedFiles,
+      ...validFiles,
     ])
   }
 

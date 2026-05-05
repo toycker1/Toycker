@@ -5,7 +5,10 @@ import { PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3"
 import { r2Client } from "../r2"
 import { v4 as uuidv4 } from "uuid"
 import {
+    MEDIA_UPLOAD_CACHE_CONTROL,
     UPLOAD_ALLOWED_FILE_TYPES,
+    UPLOAD_MAX_FILE_SIZE_MB,
+    getUploadMaxFileSizeBytes,
     isAllowedUploadFileType,
     type UploadFolder,
 } from "@/lib/constants/upload-file-types"
@@ -13,17 +16,24 @@ import {
 export async function getPresignedUploadUrl({
     fileType,
     folder = "reviews",
-    maxSizeMB: _maxSizeMB = 10,
+    fileSizeBytes,
 }: {
     fileType: string
     folder?: UploadFolder
-    maxSizeMB?: number
+    fileSizeBytes?: number
 }) {
     try {
         const allowedTypes = UPLOAD_ALLOWED_FILE_TYPES[folder]
 
         if (!isAllowedUploadFileType(folder, fileType)) {
             return { error: `Invalid file type for ${folder}. Allowed: ${allowedTypes.join(", ")}` }
+        }
+
+        if (
+            typeof fileSizeBytes === "number" &&
+            fileSizeBytes > getUploadMaxFileSizeBytes(folder)
+        ) {
+            return { error: `File must be ${UPLOAD_MAX_FILE_SIZE_MB[folder]}MB or smaller.` }
         }
 
         const fileId = uuidv4()
@@ -36,11 +46,12 @@ export async function getPresignedUploadUrl({
             Bucket: process.env.CLOUDFLARE_R2_BUCKET!,
             Key: key,
             ContentType: fileType,
+            CacheControl: MEDIA_UPLOAD_CACHE_CONTROL,
         })
 
         const signedUrl = await getSignedUrl(r2Client, command, { expiresIn: 3600 })
 
-        return { url: signedUrl, key }
+        return { url: signedUrl, key, cacheControl: MEDIA_UPLOAD_CACHE_CONTROL }
     } catch (error) {
         console.error("Error generating presigned URL:", error)
         return { error: "Unable to prepare file upload. Please try again." }

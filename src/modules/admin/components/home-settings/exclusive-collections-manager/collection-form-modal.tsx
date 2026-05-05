@@ -161,7 +161,7 @@ export default function CollectionFormModal({ isOpen, onClose, onSuccess, collec
                                     value={formData.video_url || ""}
                                     onChange={(url) => setFormData({ ...formData, video_url: url })}
                                     acceptedFormats={["video/mp4", "video/webm"]}
-                                    maxSizeMB={50}
+                                    maxSizeMB={20}
                                 />
                             </div>
                         </div>

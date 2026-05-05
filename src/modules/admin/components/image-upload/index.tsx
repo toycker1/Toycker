@@ -38,9 +38,10 @@ export default function ImageUpload({ name, initialUrl, label = "Image URL" }: I
 
     try {
       // Get presigned URL for upload
-      const { url, key, error } = await getPresignedUploadUrl({
+      const { url, key, cacheControl, error } = await getPresignedUploadUrl({
         fileType: file.type,
         folder: "products",
+        fileSizeBytes: file.size,
       })
 
       if (error || !url || !key) {
@@ -74,6 +75,9 @@ export default function ImageUpload({ name, initialUrl, label = "Image URL" }: I
 
       xhr.open("PUT", url)
       xhr.setRequestHeader("Content-Type", file.type)
+      if (cacheControl) {
+        xhr.setRequestHeader("Cache-Control", cacheControl)
+      }
       xhr.send(file)
     } catch (error) {
       console.error("Upload error:", error)
