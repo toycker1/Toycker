@@ -1,5 +1,15 @@
 # Priority 6: Public Storefront Caching
 
+## Status
+
+Completed.
+
+- Completed on: 05 May 2026
+- Manual testing status: passed
+- Implementation type: `code-only`
+- Supabase migration required: `no`
+- Supabase dashboard/config change required: `no`
+
 ## Classification
 
 `code-only`
@@ -24,6 +34,15 @@ Good candidates for caching:
 - shipping settings that are not cart-specific
 
 ## Current Toycker Evidence
+
+Implementation update:
+
+- Public cached reads now use explicit field selections for home banners, exclusive collections, category detail, and global settings.
+- Storefront home reviews now use `unstable_cache` with `revalidate: 3600` and tag `home-reviews`.
+- Storefront home reviews select only needed review media fields instead of `review_media (*)`.
+- Admin home banner, exclusive collection, and home review mutations now revalidate matching cache tags.
+- Full cart, customer, account, checkout, wishlist, and other user-specific data paths were not cached.
+- Manual testing confirmed the homepage renders correctly after the caching changes and no new public-cache-related console errors were present.
 
 Some caching already exists:
 
@@ -65,10 +84,54 @@ Recommended TTL defaults:
 
 ## Acceptance Checks
 
-- Public homepage data is cached.
-- Category/collection list data is cached.
-- Admin updates revalidate or eventually refresh expected content.
-- No user-specific data is stored in public cache.
+- Public homepage data is cached. Passed on 05 May 2026.
+- Category/collection list data is cached. Passed on 05 May 2026.
+- Admin updates revalidate or eventually refresh expected content. Implemented with cache tags on 05 May 2026.
+- No user-specific data is stored in public cache. Passed on 05 May 2026.
+
+## Implementation Summary
+
+Files changed:
+
+- `src/lib/data/home-banners.ts`
+- `src/lib/data/exclusive-collections.ts`
+- `src/lib/data/categories.ts`
+- `src/lib/data/settings.ts`
+- `src/lib/actions/home-reviews.ts`
+- `src/lib/actions/home-banners.ts`
+- `src/lib/actions/home-exclusive-collections.ts`
+
+Public reads now avoid broad payloads such as:
+
+```ts
+select("*")
+```
+
+where the storefront only needs a small field set.
+
+Storefront home reviews are now cached with:
+
+```ts
+unstable_cache(..., ["home-reviews", "storefront"], {
+  revalidate: 3600,
+  tags: ["home-reviews"],
+})
+```
+
+Admin changes revalidate relevant public cache tags:
+
+- `banners`
+- `exclusive-collections`
+- `home-reviews`
+
+Manual browser testing showed the homepage hero/banner area and public storefront sections still render correctly after these changes.
+
+## Quality Check Status
+
+- Build: passed with `pnpm.cmd build`
+- TypeScript: blocked only by existing unrelated `tests/lib/actions/complete-checkout.test.ts` error
+- Lint: blocked by existing `next lint` script issue
+- New `any` usage: none added in touched files
 
 ## References
 

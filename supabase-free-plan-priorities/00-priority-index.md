@@ -20,7 +20,7 @@ Do the `code-only` work first because it can reduce usage without changing Supab
 | 2 | Database-level pagination | code-only | Completed and manually verified on 04 May 2026 | Prevents large product responses during normal browsing. |
 | 3 | Layout state payload reduction | code-only | Completed and manually verified on 05 May 2026 | Avoids full cart/customer reads on every public page load. |
 | 4 | Cart summary vs full cart | code-only | Completed and manually verified on 05 May 2026 | Keeps global UI lightweight while preserving full cart behavior where needed. |
-| 5 | Public storefront caching | code-only | Pending | Reduces repeated Supabase reads for public data. |
+| 5 | Public storefront caching | code-only | Completed and manually verified on 05 May 2026 | Reduces repeated Supabase reads for public data. |
 | 6 | Search request and payload optimization | code-only | Pending | Reduces search request count and response size. |
 | 7 | Auth request reduction | code-only | Pending | Reduces repeated Auth/session traffic. |
 | 8 | Price filtering in database | both | Pending | Best fix needs SQL/view/RPC support plus app changes. |
@@ -45,9 +45,11 @@ Local code inspection supports the same conclusion:
 - Price filtering is now bounded in the code-only pass, but the complete exact variant-price filtering fix still belongs to Priority 3.
 - Priority 4 is now implemented: `/api/storefront/layout-state` returns lightweight customer and cart summary fields only.
 - Priority 5 is now implemented: count-only UI uses lightweight cart summary fallback, while full cart retrieval remains limited to cart drawer, cart page, checkout, and cart actions.
+- Priority 6 is now implemented: public homepage/category/settings reads use lighter cached selects, storefront home reviews are cached, and admin public-content actions revalidate matching cache tags.
 - Full cart retrieval still exists for cart, checkout, cart sidebar detail loading, and cart actions.
 - The manually verified layout-state response includes only `customer.id`, `customer.first_name`, `customer.is_club_member`, and cart summary fields such as `id`, `user_id`, `region_id`, `currency_code`, `updated_at`, and `item_count`.
 - The manually verified shipping-options response still returns active shipping options after switching the endpoint to lightweight cart summary lookup.
+- Manual storefront testing confirmed the homepage renders after public caching changes and no new public-cache-related console errors were present.
 - Realtime exists mainly in admin/order components and is currently not the primary issue.
 
 ## Classification Summary

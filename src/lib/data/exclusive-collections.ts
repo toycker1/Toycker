@@ -14,6 +14,18 @@ export type ExclusiveCollectionEntry = {
   product: Product | null
 }
 
+type ExclusiveCollectionRow = Omit<ExclusiveCollectionEntry, "product"> & {
+  product: Product | Product[] | null
+}
+
+const firstRelation = <T,>(value: T | T[] | null | undefined): T | null => {
+  if (Array.isArray(value)) {
+    return value[0] ?? null
+  }
+
+  return value ?? null
+}
+
 export const listExclusiveCollections = unstable_cache(
   async ({
     regionId: _regionId,
@@ -25,7 +37,12 @@ export const listExclusiveCollections = unstable_cache(
     const { data, error } = await supabase
       .from("home_exclusive_collections")
       .select(`
-        *,
+        id,
+        product_id,
+        video_url,
+        poster_url,
+        video_duration,
+        sort_order,
         product:products (
           id,
           name,
@@ -33,9 +50,7 @@ export const listExclusiveCollections = unstable_cache(
           image_url,
           images,
           price,
-          description,
           collection_id,
-          metadata,
           created_at,
           updated_at
         )
@@ -52,7 +67,10 @@ export const listExclusiveCollections = unstable_cache(
       return []
     }
 
-    return data as ExclusiveCollectionEntry[]
+    return (data as unknown as ExclusiveCollectionRow[]).map((entry) => ({
+      ...entry,
+      product: firstRelation(entry.product),
+    }))
   },
   ["exclusive-collections"],
   { revalidate: 3600, tags: ["exclusive-collections"] }

@@ -21,7 +21,7 @@ export const listHomeBanners = unstable_cache(
 
     const { data, error } = await supabase
       .from("home_banners")
-      .select("*")
+      .select("id, title, image_url, alt_text, link_url, sort_order, is_active, starts_at, ends_at")
       .eq("is_active", true)
       .order("sort_order", { ascending: true })
 
