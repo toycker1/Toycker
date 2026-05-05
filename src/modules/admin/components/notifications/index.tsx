@@ -1,17 +1,18 @@
 "use client"
 
-import React, { useEffect, useState, useCallback, Fragment } from "react"
+import React, { useEffect, useState, useCallback, Fragment, useMemo } from "react"
 import { BellIcon, PackageIcon, UserPlusIcon, StarIcon, BellOffIcon } from "lucide-react"
 import { Popover, PopoverButton, PopoverPanel, Transition, Tab, TabGroup, TabList, TabPanel, TabPanels } from "@headlessui/react"
 import { cn } from "@lib/util/cn"
 import { createClient } from "@/lib/supabase/client"
-import { AdminNotification, RealtimePayload } from "@/lib/supabase/types/notifications"
+import { AdminNotification } from "@/lib/supabase/types/notifications"
 import { getAdminNotifications, markNotificationAsRead, clearAllNotifications } from "@/lib/data/admin"
 import LocalizedClientLink from "@modules/common/components/localized-client-link"
 
 export function AdminNotificationDropdown() {
     const [notifications, setNotifications] = useState<AdminNotification[]>([])
     const [isRefreshing, setIsRefreshing] = useState(false)
+    const supabase = useMemo(() => createClient(), [])
 
     const unreadNotifications = notifications.filter(n => !n.is_read)
     const last24hNotifications = notifications.filter(n => {
@@ -35,18 +36,18 @@ export function AdminNotificationDropdown() {
     useEffect(() => {
         fetchNotifications()
 
-        const supabase = createClient()
         const channel = supabase
             .channel("admin_notifications_realtime")
             .on(
-                "postgres_changes" as any,
+                "postgres_changes",
                 {
                     event: "INSERT",
                     schema: "public",
                     table: "admin_notifications",
                 },
-                (payload: RealtimePayload<AdminNotification>) => {
-                    setNotifications(prev => [payload.new, ...prev].slice(0, 50)) // Increase slice to 50 for better context
+                (payload) => {
+                    const notification = payload.new as AdminNotification
+                    setNotifications(prev => [notification, ...prev].slice(0, 50))
                 }
             )
             .subscribe()
@@ -54,7 +55,7 @@ export function AdminNotificationDropdown() {
         return () => {
             supabase.removeChannel(channel)
         }
-    }, [fetchNotifications])
+    }, [fetchNotifications, supabase])
 
     const handleMarkAsRead = async (id: string) => {
         try {
