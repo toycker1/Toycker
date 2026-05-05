@@ -24,8 +24,8 @@ Do the `code-only` work first because it can reduce usage without changing Supab
 | 6 | Search request and payload optimization | code-only | Completed and manually verified on 05 May 2026 | Reduces search request count and response size. |
 | 7 | Auth request reduction | code-only | Completed and manually verified on 05 May 2026 | Reduces repeated Auth/session traffic. |
 | 8 | Price filtering in database | both | Completed and manually verified on 05 May 2026 | Moves variant-aware price filtering, sorting, and pagination into Supabase. |
-| 9 | Realtime scope and table config | both | Implemented and Supabase-verified on 05 May 2026; manual workflow verification pending | Realtime is now limited to intentional admin/order tables and narrower subscription events. |
-| 10 | Media and storage egress control | code-only | Implemented on 05 May 2026; manual workflow verification pending | Media is served from Cloudflare R2/CDN, so the fix keeps uploads bounded and cacheable without Supabase Storage changes. |
+| 9 | Realtime scope and table config | both | Completed and manually verified on 05 May 2026 | Realtime is now limited to intentional admin/order tables and narrower subscription events. |
+| 10 | Media and storage egress control | code-only | Completed and manually verified on 05 May 2026 | Media is served from Cloudflare R2/CDN, so the fix keeps uploads bounded and cacheable without Supabase Storage changes. |
 | 11 | Monitoring and usage review | Supabase-only | Pending | Ongoing dashboard and log review, no code change required. |
 
 ## Current Evidence From Toycker

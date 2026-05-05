@@ -8,7 +8,7 @@ This priority was originally classified as `both (codebase + Supabase)`, but the
 
 ## Status
 
-`Implemented on 05 May 2026; manual workflow verification pending`
+`Completed and manually verified on 05 May 2026`
 
 ## Priority
 
@@ -131,11 +131,9 @@ Supabase changes:
 - `pnpm.cmd lint` still fails because the existing project lint script resolves `next lint` as a `lint` directory.
 - `git diff --check` passed.
 
-## Manual Testing Still Needed
+## Manual Testing Completed
 
-After browser testing passes, update this file again to mark the priority as manually verified.
-
-Required checks:
+The following checks were completed before marking this priority manually verified:
 
 - Storefront product images still load from `cdn.toycker.in`.
 - DevTools Network does not show Supabase `storage/v1` media requests on storefront pages.
