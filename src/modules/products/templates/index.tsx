@@ -162,6 +162,7 @@ const ProductTemplate = async ({
                       height="100%"
                       src={embedUrl}
                       title="Product Video"
+                      loading="lazy"
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                       allowFullScreen
                       className="border-0"

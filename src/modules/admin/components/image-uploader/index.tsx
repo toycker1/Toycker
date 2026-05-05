@@ -6,6 +6,10 @@ import { CloudArrowUpIcon, XMarkIcon } from "@heroicons/react/24/outline"
 import { getPresignedUploadUrl } from "@/lib/actions/storage"
 import { getFileUrl } from "@/lib/r2"
 import { useToast } from "@modules/common/context/toast-context"
+import {
+    UPLOAD_MAX_FILE_SIZE_MB,
+    validateUploadFile,
+} from "@/lib/constants/upload-file-types"
 
 type Props = {
     folder: "banners" | "exclusive-videos" | "categories" | "collections"
@@ -26,17 +30,12 @@ export default function ImageUploader({
     const [isUploading, setIsUploading] = useState(false)
     const [uploadProgress, setUploadProgress] = useState(0)
     const [isDragging, setIsDragging] = useState(false)
+    const effectiveMaxSizeMB = Math.min(maxSizeMB, UPLOAD_MAX_FILE_SIZE_MB[folder])
 
     const handleUpload = useCallback(async (file: File) => {
-        // Validate file size
-        if (file.size > maxSizeMB * 1024 * 1024) {
-            showToast(`File must be smaller than ${maxSizeMB}MB`, "error")
-            return
-        }
-
-        // Validate file type
-        if (!acceptedFormats.includes(file.type)) {
-            showToast(`Invalid file type. Allowed: ${acceptedFormats.join(", ")}`, "error")
+        const validation = validateUploadFile({ folder, file })
+        if (validation.error) {
+            showToast(validation.error, "error")
             return
         }
 
@@ -45,10 +44,10 @@ export default function ImageUploader({
 
         try {
             // Step 1: Get presigned URL
-            const { url, key, error } = await getPresignedUploadUrl({
+            const { url, key, cacheControl, error } = await getPresignedUploadUrl({
                 fileType: file.type,
                 folder,
-                maxSizeMB,
+                fileSizeBytes: file.size,
             })
 
             if (error || !url || !key) {
@@ -83,6 +82,9 @@ export default function ImageUploader({
 
                 xhr.open("PUT", url)
                 xhr.setRequestHeader("Content-Type", file.type)
+                if (cacheControl) {
+                    xhr.setRequestHeader("Cache-Control", cacheControl)
+                }
                 xhr.send(file)
             })
         } catch (error) {
@@ -95,7 +97,7 @@ export default function ImageUploader({
             setIsUploading(false)
             setUploadProgress(0)
         }
-    }, [acceptedFormats, folder, maxSizeMB, onChange, showToast])
+    }, [folder, onChange, showToast])
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
@@ -201,7 +203,7 @@ export default function ImageUploader({
                                         : "Drag & drop a file here, or click to select"}
                                 </p>
                                 <p className="mt-1 text-xs text-gray-500">
-                                    Max {maxSizeMB}MB • {acceptedFormats.map((f) => f.split("/")[1]).join(", ")}
+                                    Max {effectiveMaxSizeMB}MB • {acceptedFormats.map((f) => f.split("/")[1]).join(", ")}
                                 </p>
                             </>
                         )}

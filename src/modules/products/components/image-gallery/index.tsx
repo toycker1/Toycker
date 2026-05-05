@@ -40,8 +40,9 @@ const ImageGallery = ({ images, variant = "default" }: ImageGalleryProps) => {
   }, [images, mainSwiper])
 
   useEffect(() => {
-    const handleVariantImageChange = (e: any) => {
-      const url = e.detail?.url
+    const handleVariantImageChange = (event: Event) => {
+      const variantImageEvent = event as CustomEvent<{ url?: string }>
+      const url = variantImageEvent.detail?.url
       if (!url || !mainSwiper || !images) return
 
       const index = images.findIndex((img) => img.url === url)

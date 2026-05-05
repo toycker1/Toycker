@@ -121,9 +121,10 @@ export default function MediaGallery({ initialImages = [], onOrderChange }: Medi
             const uploadedUrls: string[] = []
 
             for (const file of validFiles) {
-                const { url, key, error } = await getPresignedUploadUrl({
+                const { url, key, cacheControl, error } = await getPresignedUploadUrl({
                     fileType: file.type,
                     folder: "products",
+                    fileSizeBytes: file.size,
                 })
 
                 if (error || !url || !key) throw new Error(error || "Failed to get upload URL")
@@ -149,6 +150,9 @@ export default function MediaGallery({ initialImages = [], onOrderChange }: Medi
                     xhr.addEventListener("error", () => reject(new Error("Network error")))
                     xhr.open("PUT", url)
                     xhr.setRequestHeader("Content-Type", file.type)
+                    if (cacheControl) {
+                        xhr.setRequestHeader("Cache-Control", cacheControl)
+                    }
                     xhr.send(file)
                 })
 

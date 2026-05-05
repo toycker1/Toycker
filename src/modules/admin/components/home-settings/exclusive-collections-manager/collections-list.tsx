@@ -99,6 +99,7 @@ function SortableCollectionItem({ collection, onEdit, onDelete, onToggle, deleti
                     muted
                     loop
                     playsInline
+                    preload="metadata"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-gray-900/80 via-transparent to-gray-900/30" />
 
