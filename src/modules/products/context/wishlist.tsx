@@ -11,7 +11,7 @@ import {
   useState,
 } from "react"
 import { useRouter } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
+import { useLayoutData } from "@modules/layout/context/layout-data-context"
 
 import {
   addToWishlist,
@@ -57,18 +57,27 @@ export const WishlistProvider = ({
   const [items, setItems] = useState<string[]>([])
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isInitialized, setIsInitialized] = useState(false)
-  const isInitializing = useRef(false)
+  const initializedFor = useRef<string | null>(null)
   const router = useRouter()
+  const { customer, loading: layoutDataLoading } = useLayoutData()
 
-  // Fetch auth status and wishlist on mount (client-side)
+  // Layout state already resolves auth once, so wishlist does not need its own auth request.
   useEffect(() => {
-    if (isInitializing.current) return
-    isInitializing.current = true
+    if (layoutDataLoading) {
+      return
+    }
+
+    const customerKey = customer?.id ?? "guest"
+
+    if (initializedFor.current === customerKey) {
+      return
+    }
+
+    initializedFor.current = customerKey
 
     const initializeWishlist = async () => {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      const authenticated = !!user
+      const authenticated = Boolean(customer)
+      setIsInitialized(false)
       setIsAuthenticated(authenticated)
 
       if (authenticated) {
@@ -81,7 +90,7 @@ export const WishlistProvider = ({
     }
 
     initializeWishlist()
-  }, [])
+  }, [customer, layoutDataLoading])
 
   // Handle guest items merging when user logs in
   useEffect(() => {

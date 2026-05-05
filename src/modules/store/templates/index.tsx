@@ -1,5 +1,4 @@
 import { listPaginatedProducts } from "@lib/data/products"
-import { retrieveCustomer } from "@lib/data/customer"
 import {
   AvailabilityFilter,
   PriceRangeFilter,
@@ -117,10 +116,6 @@ const StoreTemplate = async ({
     },
   ]
 
-  const accountPath = "/account"
-  const customer = await retrieveCustomer()
-  const isCustomerLoggedIn = !!customer
-
   return (
     <StorefrontFiltersProvider
       countryCode={countryCode}
@@ -173,8 +168,6 @@ const StoreTemplate = async ({
             sortBy={sort}
             pageSize={STORE_PRODUCT_PAGE_SIZE}
             totalCountHint={initialCount}
-            isCustomerLoggedIn={isCustomerLoggedIn}
-            loginPath={accountPath}
             clubDiscountPercentage={clubDiscountPercentage}
           />
         </div>

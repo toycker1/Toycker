@@ -1,6 +1,5 @@
 import { listPaginatedProducts } from "@lib/data/products"
 import { getRegion } from "@lib/data/regions"
-import { retrieveCustomer } from "@lib/data/customer"
 import {
   AvailabilityFilter,
   PriceRangeFilter,
@@ -112,10 +111,6 @@ export default async function PaginatedProducts({
   const resolvedViewMode = viewMode || "grid-4"
   const resolvedSort = sortBy || "featured"
 
-  const accountPath = "/account"
-  const customer = await retrieveCustomer()
-  const isCustomerLoggedIn = !!customer
-
   return (
     <ProductGridSection
       title={title}
@@ -126,8 +121,6 @@ export default async function PaginatedProducts({
       sortBy={resolvedSort}
       pageSize={STORE_PRODUCT_PAGE_SIZE}
       totalCountHint={totalCountHint}
-      isCustomerLoggedIn={isCustomerLoggedIn}
-      loginPath={accountPath}
     />
   )
 }

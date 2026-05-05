@@ -22,7 +22,7 @@ Do the `code-only` work first because it can reduce usage without changing Supab
 | 4 | Cart summary vs full cart | code-only | Completed and manually verified on 05 May 2026 | Keeps global UI lightweight while preserving full cart behavior where needed. |
 | 5 | Public storefront caching | code-only | Completed and manually verified on 05 May 2026 | Reduces repeated Supabase reads for public data. |
 | 6 | Search request and payload optimization | code-only | Completed and manually verified on 05 May 2026 | Reduces search request count and response size. |
-| 7 | Auth request reduction | code-only | Pending | Reduces repeated Auth/session traffic. |
+| 7 | Auth request reduction | code-only | Completed and manually verified on 05 May 2026 | Reduces repeated Auth/session traffic. |
 | 8 | Price filtering in database | both | Pending | Best fix needs SQL/view/RPC support plus app changes. |
 | 9 | Realtime scope and table config | both | Pending | Requires code subscription limits and Supabase table configuration review. |
 | 10 | Media and storage egress control | both | Pending | Only important if media is served from Supabase Storage. |
@@ -47,11 +47,13 @@ Local code inspection supports the same conclusion:
 - Priority 5 is now implemented: count-only UI uses lightweight cart summary fallback, while full cart retrieval remains limited to cart drawer, cart page, checkout, and cart actions.
 - Priority 6 is now implemented: public homepage/category/settings reads use lighter cached selects, storefront home reviews are cached, and admin public-content actions revalidate matching cache tags.
 - Priority 7 is now implemented: text search waits for 2+ characters, uses a 300 ms debounce, aborts stale client requests, clamps server-side search limits, and keeps store listing search from applying broad 1-character queries.
+- Priority 9 is now implemented: anonymous public pages skip unnecessary Supabase Auth checks when no auth cookie exists, layout state uses verified claims for lightweight customer/cart summary lookups, wishlist uses existing layout customer state instead of its own browser auth request, and public product listing pages no longer fetch full customer data only to compute an unused login flag.
 - Full cart retrieval still exists for cart, checkout, cart sidebar detail loading, and cart actions.
 - The manually verified layout-state response includes only `customer.id`, `customer.first_name`, `customer.is_club_member`, and cart summary fields such as `id`, `user_id`, `region_id`, `currency_code`, `updated_at`, and `item_count`.
 - The manually verified shipping-options response still returns active shipping options after switching the endpoint to lightweight cart summary lookup.
 - Manual storefront testing confirmed the homepage renders after public caching changes and no new public-cache-related console errors were present.
 - Manual search testing confirmed 1-character text search returns an empty lightweight response, normal searches return capped summary results only, store search still works, and visual search remains unaffected.
+- Manual auth testing confirmed anonymous store browsing works without unnecessary `auth/v1/user` requests, guest cart and wishlist redirect behavior still work, logged-in layout state/customer/wishlist behavior still works, cart and checkout still work, logged-out checkout still redirects to login, account pages still gate correctly, and admin access still works.
 - Realtime exists mainly in admin/order components and is currently not the primary issue.
 
 ## Classification Summary
