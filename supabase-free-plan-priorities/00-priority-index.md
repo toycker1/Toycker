@@ -23,7 +23,7 @@ Do the `code-only` work first because it can reduce usage without changing Supab
 | 5 | Public storefront caching | code-only | Completed and manually verified on 05 May 2026 | Reduces repeated Supabase reads for public data. |
 | 6 | Search request and payload optimization | code-only | Completed and manually verified on 05 May 2026 | Reduces search request count and response size. |
 | 7 | Auth request reduction | code-only | Completed and manually verified on 05 May 2026 | Reduces repeated Auth/session traffic. |
-| 8 | Price filtering in database | both | Pending | Best fix needs SQL/view/RPC support plus app changes. |
+| 8 | Price filtering in database | both | Completed and manually verified on 05 May 2026 | Moves variant-aware price filtering, sorting, and pagination into Supabase. |
 | 9 | Realtime scope and table config | both | Pending | Requires code subscription limits and Supabase table configuration review. |
 | 10 | Media and storage egress control | both | Pending | Only important if media is served from Supabase Storage. |
 | 11 | Monitoring and usage review | Supabase-only | Pending | Ongoing dashboard and log review, no code change required. |
@@ -42,7 +42,7 @@ Local code inspection supports the same conclusion:
 - Product listing functions previously used a large `PRODUCT_SELECT` in `src/lib/data/products.ts`.
 - Priority 1 is now implemented: listing functions use a lightweight card select, while detail and quick-view flows can still request full product detail data.
 - Priority 2 is now implemented: public product listing requests normalize page and limit values, cap listing limits, and apply bounded Supabase ranges.
-- Price filtering is now bounded in the code-only pass, but the complete exact variant-price filtering fix still belongs to Priority 3.
+- Priority 3 is now implemented: price-filtered storefront listings use the `list_storefront_products_by_price` Supabase RPC from migration `20260505133000_storefront_price_filtered_products.sql`, with variant-aware display price filtering, SQL pagination, SQL sorting, and a supporting `product_variants(product_id, price)` index.
 - Priority 4 is now implemented: `/api/storefront/layout-state` returns lightweight customer and cart summary fields only.
 - Priority 5 is now implemented: count-only UI uses lightweight cart summary fallback, while full cart retrieval remains limited to cart drawer, cart page, checkout, and cart actions.
 - Priority 6 is now implemented: public homepage/category/settings reads use lighter cached selects, storefront home reviews are cached, and admin public-content actions revalidate matching cache tags.
@@ -54,6 +54,7 @@ Local code inspection supports the same conclusion:
 - Manual storefront testing confirmed the homepage renders after public caching changes and no new public-cache-related console errors were present.
 - Manual search testing confirmed 1-character text search returns an empty lightweight response, normal searches return capped summary results only, store search still works, and visual search remains unaffected.
 - Manual auth testing confirmed anonymous store browsing works without unnecessary `auth/v1/user` requests, guest cart and wishlist redirect behavior still work, logged-in layout state/customer/wishlist behavior still works, cart and checkout still work, logged-out checkout still redirects to login, account pages still gate correctly, and admin access still works.
+- Manual price-filter testing confirmed min/max price filters, pagination, sorting, search combination, availability combination, product detail navigation, and existing storefront/admin workflows still work after applying the Priority 3 migration to Toycker Development.
 - Realtime exists mainly in admin/order components and is currently not the primary issue.
 
 ## Classification Summary
