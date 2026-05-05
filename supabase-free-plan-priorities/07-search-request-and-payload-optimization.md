@@ -4,6 +4,10 @@
 
 `code-only`
 
+## Status
+
+Completed and manually verified on 05 May 2026.
+
 ## Priority
 
 Do this after product listing/query cleanup, because search should reuse lightweight product summary shapes.
@@ -39,6 +43,20 @@ supabase.rpc("search_products_multimodal", {
 ```
 
 Category and collection results are limited with `.limit(taxonomyLimit)`.
+
+## Implementation Completed
+
+Code-only changes were completed. No Supabase migration was required because the existing `search_products_multimodal` RPC already returns lightweight product summary fields.
+
+Implemented behavior:
+
+- Shared search constants now define the 2-character minimum, 300 ms debounce, default limits, max limits, and max query length.
+- Header text search no longer calls `/api/storefront/search` for 0-1 character input.
+- Header text search now uses 300 ms debounce and aborts stale in-flight requests when a newer query starts.
+- `/api/storefront/search` now trims and caps the query, returns an empty lightweight payload for short queries, and clamps `productLimit` and `taxonomyLimit`.
+- `searchEntities` also enforces the same minimum query length and server-side limit caps before querying Supabase.
+- Store product listing search ignores 1-character `q` values so `/store?q=a` does not run a broad database search.
+- Visual/image search was left unchanged.
 
 ## Recommended Fix
 
@@ -76,11 +94,33 @@ server max taxonomy limit: 10
 
 ## Acceptance Checks
 
-- Typing one character does not call the search API.
-- Normal search still returns products/categories/collections.
-- Search response is limited and lightweight.
-- Server rejects or clamps excessive `productLimit`/`taxonomyLimit`.
-- Visual/image search still works.
+- Passed: typing one character does not call the search API from the search drawer.
+- Passed: direct one-character API search returns an empty lightweight payload.
+- Passed: normal search still returns products/categories/collections.
+- Passed: search response is limited and lightweight.
+- Passed: excessive `productLimit`/`taxonomyLimit` values are clamped server-side.
+- Passed: visual/image search still works.
+
+Manual verification evidence:
+
+- `/api/storefront/search?q=a&countryCode=in` returned:
+
+```json
+{
+  "products": [],
+  "categories": [],
+  "collections": [],
+  "suggestions": []
+}
+```
+
+- `/api/storefront/search?q=car&countryCode=in&productLimit=999&taxonomyLimit=999` returned capped summary results with only product summary fields such as `id`, `title`, `handle`, `thumbnail`, and `price`, plus lightweight category and collection summaries.
+
+## Quality Checks
+
+- `pnpm.cmd build`: passed.
+- `pnpm.cmd lint`: blocked by existing project lint command issue, `next lint` reports `Invalid project directory provided, no such directory: E:\Next.js_Projects\Toycker\lint`.
+- `pnpm.cmd exec tsc --noEmit`: blocked by existing unrelated test type issue in `tests/lib/actions/complete-checkout.test.ts`.
 
 ## References
 

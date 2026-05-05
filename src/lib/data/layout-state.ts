@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getAuthUser } from "@lib/data/auth"
+import { getAuthUserId } from "@lib/data/auth"
 import { getCartId } from "@lib/data/cookies"
 import type {
   LayoutCartSummary,
@@ -28,9 +28,9 @@ type LayoutCartRow = {
 }
 
 export async function retrieveLayoutCustomer(): Promise<LayoutCustomer | null> {
-  const user = await getAuthUser()
+  const userId = await getAuthUserId()
 
-  if (!user) {
+  if (!userId) {
     return null
   }
 
@@ -38,16 +38,13 @@ export async function retrieveLayoutCustomer(): Promise<LayoutCustomer | null> {
   const { data: profile } = await supabase
     .from("profiles")
     .select("first_name, is_club_member")
-    .eq("id", user.id)
+    .eq("id", userId)
     .maybeSingle<LayoutCustomerProfileRow>()
 
   return {
-    id: user.id,
-    first_name:
-      profile?.first_name ?? user.user_metadata?.first_name ?? null,
-    is_club_member:
-      profile?.is_club_member ??
-      (user.user_metadata?.is_club_member === true),
+    id: userId,
+    first_name: profile?.first_name ?? null,
+    is_club_member: profile?.is_club_member ?? false,
   }
 }
 
@@ -58,7 +55,7 @@ export async function retrieveLayoutCartSummary(): Promise<LayoutCartSummary | n
     return null
   }
 
-  const user = await getAuthUser()
+  const userId = await getAuthUserId()
   const supabase = await createClient()
   const { data: cart } = await supabase
     .from("carts")
@@ -79,7 +76,7 @@ export async function retrieveLayoutCartSummary(): Promise<LayoutCartSummary | n
     return null
   }
 
-  if (cart.user_id && user && cart.user_id !== user.id) {
+  if (cart.user_id && cart.user_id !== userId) {
     return null
   }
 
