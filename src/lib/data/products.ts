@@ -109,6 +109,50 @@ const PRODUCT_DETAIL_SELECT = `
   )
 `
 
+const PRODUCT_QUICK_VIEW_SELECT = `
+  id,
+  handle,
+  name,
+  short_description,
+  price,
+  currency_code,
+  image_url,
+  thumbnail,
+  images,
+  stock_count,
+  metadata,
+  category_id,
+  collection_id,
+  created_at,
+  updated_at,
+  subtitle,
+  status,
+  variants:product_variants(
+    id,
+    title,
+    sku,
+    barcode,
+    price,
+    compare_at_price,
+    inventory_quantity,
+    manage_inventory,
+    allow_backorder,
+    product_id,
+    options,
+    image_url
+  ),
+  options:product_options(
+    id,
+    title,
+    values:product_option_values(
+      id,
+      value,
+      option_id,
+      metadata
+    )
+  )
+`
+
 type PriceFilteredProductVariantRow = {
   id: string
   title: string
@@ -340,7 +384,7 @@ export const listPaginatedProducts = cache(async function listPaginatedProducts(
 }) {
   const supabase = await createClient()
   const range = getProductRange(page, limit)
-  const productSelect = includeDetails ? PRODUCT_DETAIL_SELECT : PRODUCT_CARD_SELECT
+  const productSelect = includeDetails ? PRODUCT_QUICK_VIEW_SELECT : PRODUCT_CARD_SELECT
 
   const categoryIds = queryParams?.category_id
     ? (Array.isArray(queryParams.category_id) ? queryParams.category_id : [queryParams.category_id])

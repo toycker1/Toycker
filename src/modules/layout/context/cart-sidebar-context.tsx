@@ -49,13 +49,12 @@ export const CartSidebarProvider = ({ children }: { children: ReactNode }) => {
     async (lineItemId: string) => {
       try {
         await optimisticRemove(lineItemId)
-        await reloadFromServer()
       } catch (error) {
         console.error("Failed to remove line item", error)
         throw error
       }
     },
-    [optimisticRemove, reloadFromServer],
+    [optimisticRemove],
   )
 
   const value = useMemo(

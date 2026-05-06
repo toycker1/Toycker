@@ -6,9 +6,7 @@
 
 ## Status
 
-Implemented and Supabase-verified on 05 May 2026.
-
-Manual browser workflow verification is still pending. After manual testing passes, update this file again to mark the priority as manually verified.
+Completed and manually verified on 05 May 2026.
 
 ## Priority
 
@@ -130,9 +128,9 @@ Production project:
   - `public.orders`
 - `public.wishlist_items` table still exists.
 
-## Manual Testing Still Needed
+## Manual Testing Completed
 
-Before marking this priority manually verified:
+The following checks were completed before marking this priority manually verified:
 
 - Confirm admin orders list refreshes after a new order or order update.
 - Confirm admin order detail refreshes after same-order status changes.

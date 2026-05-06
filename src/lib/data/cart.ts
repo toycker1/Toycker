@@ -30,6 +30,7 @@ import {
   mapCartItems,
   calculateCartTotals,
   CartShippingMethod,
+  DatabaseCartItem,
 } from "@/lib/util/cart-calculations"
 
 type CartWriteContext = {
@@ -142,11 +143,54 @@ export async function retrieveCartRaw(cartId?: string): Promise<Cart | null> {
       promo_code,
       discount_total,
       items:cart_items(
-        *,
-        product:products(*),
-        variant:product_variants(*)
+        id,
+        cart_id,
+        product_id,
+        variant_id,
+        quantity,
+        metadata,
+        created_at,
+        updated_at,
+        product:products(
+          id,
+          handle,
+          name,
+          price,
+          currency_code,
+          image_url,
+          thumbnail,
+          images,
+          metadata,
+          status
+        ),
+        variant:product_variants(
+          id,
+          title,
+          sku,
+          price,
+          inventory_quantity,
+          manage_inventory,
+          allow_backorder,
+          product_id,
+          options,
+          image_url
+        )
       ),
-      promotion:promotions(*)
+      promotion:promotions(
+        id,
+        code,
+        type,
+        value,
+        min_order_amount,
+        is_active,
+        is_deleted,
+        starts_at,
+        ends_at,
+        max_uses,
+        used_count,
+        created_at,
+        updated_at
+      )
     `
     )
     .eq("id", id)
@@ -191,15 +235,20 @@ export async function retrieveCartRaw(cartId?: string): Promise<Cart | null> {
   const giftWrapFee = globalSettings?.gift_wrap_fee ?? 50
 
   const items = mapCartItems(
-    (cartData.items as any) || [],
+    (cartData.items as unknown as DatabaseCartItem[]) || [],
     clubDiscountPercentage,
     giftWrapFee
   )
 
   // Get payment discount percentage if a method is selected
+  const paymentCollection = cartData.payment_collection as
+    | PaymentCollection
+    | null
+    | undefined
+
   const selectedPaymentProviderId =
-    cartData.payment_collection?.payment_sessions?.find(
-      (s: any) => s.status === "pending"
+    paymentCollection?.payment_sessions?.find(
+      (session) => session.status === "pending"
     )?.provider_id
 
   let paymentDiscountPercentage = 0
@@ -235,7 +284,7 @@ export async function retrieveCartRaw(cartId?: string): Promise<Cart | null> {
 
   const totals = calculateCartTotals({
     items,
-    promotion: cartData.promotion as any as Promotion,
+    promotion: cartData.promotion as unknown as Promotion,
     shippingMethods: cartData.shipping_methods as CartShippingMethod[],
     availableRewards,
     cartMetadata: (cartData.metadata || {}) as Record<string, unknown>,
@@ -256,7 +305,7 @@ export async function retrieveCartRaw(cartId?: string): Promise<Cart | null> {
     ...totals,
     items,
     promotions: cartData.promotion
-      ? [cartData.promotion as any as Promotion]
+      ? [cartData.promotion as unknown as Promotion]
       : [],
     free_shipping_threshold: freeShippingThreshold,
   }
@@ -1007,7 +1056,7 @@ export async function setPaymentProvider(providerId: string) {
   const { error } = await supabase
     .from("carts")
     .update({
-      payment_collection: paymentCollection as any,
+      payment_collection: paymentCollection as Record<string, unknown>,
     })
     .eq("id", cartId)
 
