@@ -82,20 +82,20 @@ Evidence:
 
 ## Remaining Risk Files
 
-| File | Risk Area | Classification | Priority |
-| --- | --- | --- | --- |
-| `13-product-detail-full-payload-risk.md` | Product detail pages still need full product data | `code-only` | Medium |
-| `14-cart-checkout-and-stale-cart-risk.md` | Cart/checkout are intentionally dynamic and old carts can accumulate | `both (codebase + Supabase)` | Medium |
-| `15-visual-search-and-embedding-risk.md` | Visual search can trigger image processing and vector RPC work | `code-only now; both if database tuning is later needed` | Medium |
-| `16-admin-dashboard-export-risk.md` | Admin pages, exports, and backfill jobs can return large data | `code-only` | Low to Medium |
-| `17-media-cdn-cache-regression-risk.md` | Future media changes could bypass Cloudflare and hit Supabase Storage | `code-only for repo; external Cloudflare checks also required` | Medium |
-| `18-bot-prefetch-and-public-traffic-risk.md` | Bots, crawlers, and aggressive prefetch can multiply public reads | `code-only` | Medium |
-| `19-production-monitoring-and-alerting.md` | Egress must be watched weekly before it reaches the Free Plan limit | `Supabase-only` | High |
+| File | Risk Area | Classification | Priority | Status |
+| --- | --- | --- | --- | --- |
+| `13-product-detail-full-payload-risk.md` | Product detail and quick-view payload size | `code-only` | Medium | Completed and manually verified on 06 May 2026 |
+| `14-cart-checkout-and-stale-cart-risk.md` | Cart/checkout are intentionally dynamic and old carts can accumulate | `both (codebase + Supabase)` | Medium | Pending |
+| `15-visual-search-and-embedding-risk.md` | Visual search can trigger image processing and vector RPC work | `code-only now; both if database tuning is later needed` | Medium | Pending |
+| `16-admin-dashboard-export-risk.md` | Admin pages, exports, and backfill jobs can return large data | `code-only` | Low to Medium | Pending |
+| `17-media-cdn-cache-regression-risk.md` | Future media changes could bypass Cloudflare and hit Supabase Storage | `code-only for repo; external Cloudflare checks also required` | Medium | Pending |
+| `18-bot-prefetch-and-public-traffic-risk.md` | Bots, crawlers, and aggressive prefetch can multiply public reads | `code-only` | Medium | Pending |
+| `19-production-monitoring-and-alerting.md` | Egress must be watched weekly before it reaches the Free Plan limit | `Supabase-only` | High | Pending |
 
 ## Recommended Phase Order
 
 1. Keep weekly monitoring active in Supabase.
-2. Watch product detail and cart/checkout endpoint volume.
+2. Watch cart/checkout endpoint volume.
 3. Add small guardrails only if real usage proves a remaining risk is growing.
 4. Avoid extra migrations unless production metrics show a clear need.
 
