@@ -90,10 +90,16 @@ export const CheckoutProvider = ({
   }, [cart, setFromServer])
 
   const checkout = useCheckoutState(initialData)
+  const selectedPaymentMethod = checkout.state.paymentMethod
+  const setCheckoutPaymentMethod = checkout.setPaymentMethod
 
   // Eagerly persist payment method selection to trigger discount calculation
-  const setPaymentMethod = async (method: string) => {
-    checkout.setPaymentMethod(method)
+  const setPaymentMethod = React.useCallback(async (method: string) => {
+    if (method === selectedPaymentMethod) {
+      return
+    }
+
+    setCheckoutPaymentMethod(method)
     setIsPaymentUpdating(true)
     try {
       const { setPaymentProvider } = await import("@lib/data/cart")
@@ -105,7 +111,7 @@ export const CheckoutProvider = ({
     } finally {
       setIsPaymentUpdating(false)
     }
-  }
+  }, [reloadFromServer, selectedPaymentMethod, setCheckoutPaymentMethod])
 
   return (
     <CheckoutContext.Provider

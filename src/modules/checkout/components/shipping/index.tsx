@@ -112,6 +112,10 @@ const Shipping = ({ cart, availableShippingMethods }: ShippingProps) => {
     id: string,
     variant: "shipping" | "pickup"
   ) => {
+    if (id === shippingMethodId) {
+      return
+    }
+
     setError(null)
     setShowPickupOptions(
       variant === "pickup" ? PICKUP_OPTION_ON : PICKUP_OPTION_OFF

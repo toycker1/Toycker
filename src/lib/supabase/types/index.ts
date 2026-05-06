@@ -60,6 +60,36 @@ export interface ProductVariant {
   image_url?: string | null
 }
 
+export type CartProductSummary = Pick<
+  Product,
+  | "id"
+  | "handle"
+  | "name"
+  | "price"
+  | "currency_code"
+  | "image_url"
+  | "thumbnail"
+  | "images"
+  | "metadata"
+  | "status"
+>
+
+export type CartVariantSummary = Pick<
+  ProductVariant,
+  | "id"
+  | "title"
+  | "sku"
+  | "price"
+  | "inventory_quantity"
+  | "manage_inventory"
+  | "allow_backorder"
+  | "product_id"
+  | "options"
+  | "image_url"
+> & {
+  product?: CartProductSummary
+}
+
 export interface VariantFormData {
   id?: string
   title: string
@@ -205,8 +235,8 @@ export interface CartItem {
   quantity: number
   created_at: string
   updated_at: string
-  product?: Product
-  variant?: ProductVariant
+  product?: CartProductSummary
+  variant?: CartVariantSummary
   title: string
   product_title: string
   product_handle?: string
