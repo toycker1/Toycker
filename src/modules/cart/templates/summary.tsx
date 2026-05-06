@@ -137,7 +137,7 @@ const Summary = ({ cart }: SummaryProps) => {
 
         {/* Totals Breakdown */}
         <div className="px-1">
-          <CartTotals totals={cart} cart={cart} />
+          <CartTotals totals={cart} cart={cart} includePaymentDiscount={false} />
         </div>
 
         {/* Action Buttons */}

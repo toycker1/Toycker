@@ -4,7 +4,28 @@
 
 `code-only now; both (codebase + Supabase) if database tuning is later needed`
 
-No Supabase migration is required now.
+Supabase migration used for the completed stock status fix:
+
+- `supabase/migrations/20260506173000_add_stock_count_to_multimodal_search.sql`
+
+## Status
+
+`Completed and manually verified on 06 May 2026`
+
+Completed scope:
+
+- Visual search upload is reduced before upload from the browser.
+- Server-side image processing keeps the embedding input small.
+- Image upload size is capped at `4MB`.
+- Image search result count is capped at `8`.
+- `/api/storefront/search/image` returns lightweight product summaries only.
+- `search_products_multimodal` now returns `stock_count` so visual search cards do not show false `Out of stock` states.
+- The migration was run and verified in both Supabase development project `Toycker Development` and production project `toycker`.
+
+Remaining monitoring scope:
+
+- Watch request volume for `/api/storefront/search/image`.
+- If visual search traffic becomes high, use `18-bot-prefetch-and-public-traffic-risk.md` and `19-production-monitoring-and-alerting.md`.
 
 ## Why This Risk Remains
 

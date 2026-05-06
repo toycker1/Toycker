@@ -86,7 +86,7 @@ Evidence:
 | --- | --- | --- | --- | --- |
 | `13-product-detail-full-payload-risk.md` | Product detail and quick-view payload size | `code-only` | Medium | Completed and manually verified on 06 May 2026 |
 | `14-cart-checkout-and-stale-cart-risk.md` | Cart/checkout are intentionally dynamic and old carts can accumulate | `both (codebase + Supabase)` | Medium | Completed for code-side cart payload reduction and manually verified on 06 May 2026; Supabase cleanup remains monitoring-only |
-| `15-visual-search-and-embedding-risk.md` | Visual search can trigger image processing and vector RPC work | `code-only now; both if database tuning is later needed` | Medium | Pending |
+| `15-visual-search-and-embedding-risk.md` | Visual search can trigger image processing and vector RPC work | `code-only now; both if database tuning is later needed` | Medium | Completed and manually verified on 06 May 2026; request-volume monitoring remains |
 | `16-admin-dashboard-export-risk.md` | Admin pages, exports, and backfill jobs can return large data | `code-only` | Low to Medium | Pending |
 | `17-media-cdn-cache-regression-risk.md` | Future media changes could bypass Cloudflare and hit Supabase Storage | `code-only for repo; external Cloudflare checks also required` | Medium | Pending |
 | `18-bot-prefetch-and-public-traffic-risk.md` | Bots, crawlers, and aggressive prefetch can multiply public reads | `code-only` | Medium | Pending |
