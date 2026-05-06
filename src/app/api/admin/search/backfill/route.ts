@@ -1,28 +1,45 @@
 import { NextResponse } from "next/server"
+import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { generateImageEmbedding } from "@/lib/ml/embeddings"
 
-interface Product {
-    id: string
-    name: string
-    image_url: string | null
-    thumbnail: string | null
+const EMBEDDING_BACKFILL_BATCH_SIZE = 10
+
+export async function GET() {
+    return NextResponse.json(
+        { error: "Method not allowed" },
+        { status: 405 }
+    )
 }
 
-export async function GET(_request: Request) {
-    return POST(_request)
-}
-
-export async function POST(_request: Request) {
+export async function POST() {
     try {
+        const userSupabase = await createClient()
+        const {
+            data: { user },
+        } = await userSupabase.auth.getUser()
+
+        if (!user) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+        }
+
+        const { data: profile } = await userSupabase
+            .from("profiles")
+            .select("role")
+            .eq("id", user.id)
+            .single()
+
+        if (profile?.role !== "admin") {
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+        }
+
         const supabase = await createAdminClient()
 
-        // Get products without embeddings
         const { data: products, error: fetchError } = await supabase
             .from("products")
             .select("id, image_url, thumbnail, name")
             .is("image_embedding", null)
-            .limit(10) // Increased batch size for admin trigger
+            .limit(EMBEDDING_BACKFILL_BATCH_SIZE)
 
         if (fetchError) {
             throw new Error(`Failed to fetch products: ${fetchError.message}`)
@@ -43,17 +60,12 @@ export async function POST(_request: Request) {
                 const targetUrl = product.image_url || product.thumbnail
 
                 if (!targetUrl) {
-                    console.log(`Skipping product ${product.id} - no image source`)
                     results.push({ id: product.id, status: "skipped" })
                     continue
                 }
 
-                console.log(`Processing: ${product.name} (${product.id})`)
-
-                // Generate L2-normalized embedding
                 const embedding = await generateImageEmbedding(targetUrl)
 
-                // Store in database
                 const { error: updateError } = await supabase
                     .from("products")
                     .update({ image_embedding: embedding })
@@ -64,10 +76,9 @@ export async function POST(_request: Request) {
                 }
 
                 results.push({ id: product.id, status: "success" })
-                console.log(`✓ Successfully processed ${product.name}`)
             } catch (err) {
                 const errorMessage = err instanceof Error ? err.message : String(err)
-                console.error(`✗ Failed to process ${product.id}:`, errorMessage)
+                console.error(`Failed to process visual search embedding for ${product.id}:`, errorMessage)
                 results.push({
                     id: product.id,
                     status: "failed",
@@ -84,7 +95,7 @@ export async function POST(_request: Request) {
             success: successCount,
             failed: failedCount,
             details: results,
-            remaining: products.length >= 5,
+            remaining: products.length >= EMBEDDING_BACKFILL_BATCH_SIZE,
         })
     } catch (error) {
         console.error("Backfill error:", error)

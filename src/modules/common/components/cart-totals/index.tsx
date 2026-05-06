@@ -21,12 +21,14 @@ type CartTotalsProps = {
   }
   cart?: Cart
   order?: Order
+  includePaymentDiscount?: boolean
 }
 
 const CartTotals: React.FC<CartTotalsProps> = ({
   totals,
   cart,
   order,
+  includePaymentDiscount = true,
 }) => {
   const {
     currency_code,
@@ -69,9 +71,11 @@ const CartTotals: React.FC<CartTotalsProps> = ({
     payment_discount = typeof metadata?.payment_discount_amount === 'number' ? metadata.payment_discount_amount : 0
     payment_discount_percentage = typeof metadata?.payment_discount_percentage === 'number' ? metadata.payment_discount_percentage : 0
   } else {
-    payment_discount = (totals as any).payment_discount ?? 0
-    payment_discount_percentage = (totals as any).payment_discount_percentage ?? 0
+    payment_discount = totals.payment_discount ?? 0
+    payment_discount_percentage = totals.payment_discount_percentage ?? 0
   }
+  const displayPaymentDiscount = includePaymentDiscount ? payment_discount : 0
+  const displayPaymentDiscountPercentage = includePaymentDiscount ? payment_discount_percentage : 0
 
   const discountSubtotal = promoDiscount + rewards_discount
 
@@ -186,17 +190,17 @@ const CartTotals: React.FC<CartTotalsProps> = ({
           </div>
         )}
 
-        {payment_discount > 0 && (
+        {displayPaymentDiscount > 0 && (
           <div className="flex items-center justify-between py-1">
-            <span className="font-medium text-pink-600 uppercase tracking-widest text-sm">Payment Discount ({payment_discount_percentage}%)</span>
+            <span className="font-medium text-pink-600 uppercase tracking-widest text-sm">Payment Discount ({displayPaymentDiscountPercentage}%)</span>
             <span
               className="font-bold text-pink-600"
               data-testid="cart-payment-discount"
-              data-value={payment_discount}
+              data-value={displayPaymentDiscount}
             >
               -{" "}
               {convertToLocale({
-                amount: payment_discount,
+                amount: displayPaymentDiscount,
                 currency_code: normalizedCurrency,
               })}
             </span>
@@ -242,10 +246,10 @@ const CartTotals: React.FC<CartTotalsProps> = ({
             <span
               className="text-4xl font-black text-slate-900 tracking-tighter leading-none"
               data-testid="cart-total"
-              data-value={Math.max(0, itemSubtotal + displayShippingSubtotal + (tax_total || 0) - (order ? (order.discount_total || 0) : (discountSubtotal + payment_discount)))}
+              data-value={Math.max(0, itemSubtotal + displayShippingSubtotal + (tax_total || 0) - (order ? (order.discount_total || 0) : (discountSubtotal + displayPaymentDiscount)))}
             >
               {convertToLocale({
-                amount: Math.max(0, itemSubtotal + displayShippingSubtotal + (tax_total || 0) - (order ? (order.discount_total || 0) : (discountSubtotal + payment_discount))),
+                amount: Math.max(0, itemSubtotal + displayShippingSubtotal + (tax_total || 0) - (order ? (order.discount_total || 0) : (discountSubtotal + displayPaymentDiscount))),
                 currency_code: normalizedCurrency,
               })}
             </span>

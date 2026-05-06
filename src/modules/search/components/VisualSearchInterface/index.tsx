@@ -9,6 +9,11 @@ import { useRouter } from "next/navigation"
 import ProductPreview from "@modules/products/components/product-preview"
 import { Product } from "@/lib/supabase/types"
 import { ProductCardSkeleton } from "@modules/common/components/skeleton/product-grid-skeleton"
+import { resizeImageCropFromElement } from "@/lib/util/image-processing"
+import {
+    SEARCH_IMAGE_CLIENT_MAX_DIMENSION,
+    SEARCH_IMAGE_UPLOAD_QUALITY,
+} from "@/lib/constants/search"
 
 // Define types for results based on the API response
 interface SearchProduct {
@@ -21,6 +26,7 @@ interface SearchProduct {
         currencyCode: string
         formatted: string
     }
+    stock_count: number
     relevance_score: number
 }
 
@@ -33,7 +39,7 @@ interface SearchResults {
 
 export default function VisualSearchInterface() {
     const router = useRouter()
-    const { previewUrl, file, clear, setImage } = useImageSearchStore()
+    const { previewUrl, file, setImage } = useImageSearchStore()
     const [crop, setCrop] = useState<Crop>()
     const [completedCrop, setCompletedCrop] = useState<PixelCrop | null>(null)
     const [results, setResults] = useState<SearchResults | null>(null)
@@ -43,14 +49,20 @@ export default function VisualSearchInterface() {
     const [isMounted, setIsMounted] = useState(false)
     const imgRef = useRef<HTMLImageElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
+    const abortControllerRef = useRef<AbortController | null>(null)
 
     useEffect(() => {
         setIsMounted(true)
+
+        return () => {
+            abortControllerRef.current?.abort()
+        }
     }, [])
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const selectedFile = e.target.files?.[0]
         if (selectedFile) {
+            abortControllerRef.current?.abort()
             setResults(null)
             setHasInteracted(false)
             setImage(selectedFile)
@@ -98,6 +110,9 @@ export default function VisualSearchInterface() {
         // If we are doing a crop search but no valid crop exists
         if (!forceFullImage && (!targetCrop || targetCrop.width <= 0)) return
 
+        abortControllerRef.current?.abort()
+        const controller = new AbortController()
+        abortControllerRef.current = controller
         setLoading(true)
         setError(null)
         setHasInteracted(true)
@@ -108,24 +123,32 @@ export default function VisualSearchInterface() {
             const scaleY = image.naturalHeight / image.height
 
             const formData = new FormData()
-            formData.append("image", file)
+            const naturalCrop = forceFullImage
+                ? {
+                    x: 0,
+                    y: 0,
+                    width: image.naturalWidth,
+                    height: image.naturalHeight,
+                }
+                : {
+                    x: Math.round((targetCrop?.x || 0) * scaleX),
+                    y: Math.round((targetCrop?.y || 0) * scaleY),
+                    width: Math.round((targetCrop?.width || image.width) * scaleX),
+                    height: Math.round((targetCrop?.height || image.height) * scaleY),
+                }
+            const searchBlob = await resizeImageCropFromElement(
+                image,
+                naturalCrop,
+                SEARCH_IMAGE_CLIENT_MAX_DIMENSION,
+                SEARCH_IMAGE_UPLOAD_QUALITY
+            )
 
-            if (forceFullImage) {
-                // To search full image, we send the natural dimensions
-                formData.append("x", "0")
-                formData.append("y", "0")
-                formData.append("width", image.naturalWidth.toString())
-                formData.append("height", image.naturalHeight.toString())
-            } else if (targetCrop) {
-                formData.append("x", (targetCrop.x * scaleX).toString())
-                formData.append("y", (targetCrop.y * scaleY).toString())
-                formData.append("width", (targetCrop.width * scaleX).toString())
-                formData.append("height", (targetCrop.height * scaleY).toString())
-            }
+            formData.append("image", searchBlob, "visual-search.jpg")
 
             const response = await fetch("/api/storefront/search/image", {
                 method: "POST",
                 body: formData,
+                signal: controller.signal,
             })
 
             if (!response.ok) {
@@ -139,9 +162,16 @@ export default function VisualSearchInterface() {
             const data = await response.json()
             setResults(data)
         } catch (err) {
+            if (err instanceof Error && err.name === "AbortError") {
+                return
+            }
+
             setError(err instanceof Error ? err.message : "Something went wrong")
         } finally {
-            setLoading(false)
+            if (abortControllerRef.current === controller) {
+                abortControllerRef.current = null
+                setLoading(false)
+            }
         }
     }
 
@@ -287,6 +317,7 @@ export default function VisualSearchInterface() {
                                             thumbnail: product.thumbnail,
                                             price: product.price.amount,
                                             currency_code: product.price.currencyCode,
+                                            stock_count: product.stock_count,
                                             status: "active",
                                         } as unknown as Product}
                                     />

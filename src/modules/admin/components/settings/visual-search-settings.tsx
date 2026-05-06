@@ -5,6 +5,13 @@ import AdminCard from "../admin-card"
 import { SparklesIcon, ArrowPathIcon, CheckCircleIcon, ExclamationCircleIcon } from "@heroicons/react/24/outline"
 import { createClient } from "@/lib/supabase/client"
 
+type BackfillResponse = {
+    success?: number
+    remaining?: boolean
+    message?: string
+    error?: string
+}
+
 export default function VisualSearchSettings() {
     const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle")
     const [progress, setProgress] = useState({ total: 0, pending: 0, processed: 0 })
@@ -13,8 +20,8 @@ export default function VisualSearchSettings() {
 
     const fetchStatus = async () => {
         const supabase = createClient()
-        const { count: total } = await supabase.from("products").select("*", { count: "exact", head: true })
-        const { count: pending } = await supabase.from("products").select("*", { count: "exact", head: true }).is("image_embedding", null)
+        const { count: total } = await supabase.from("products").select("id", { count: "exact", head: true })
+        const { count: pending } = await supabase.from("products").select("id", { count: "exact", head: true }).is("image_embedding", null)
 
         setProgress({
             total: total || 0,
@@ -38,12 +45,12 @@ export default function VisualSearchSettings() {
 
             while (hasMore) {
                 const response = await fetch("/api/admin/search/backfill", { method: "POST" })
-                const data = await response.json()
+                const data = (await response.json()) as BackfillResponse
 
-                if (!response.ok) throw new Error(data.message || "Re-indexing failed")
+                if (!response.ok) throw new Error(data.message || data.error || "Re-indexing failed")
 
-                totalProcessed += data.success
-                hasMore = data.remaining
+                totalProcessed += data.success || 0
+                hasMore = Boolean(data.remaining)
 
                 setMessage(`Processed ${totalProcessed} products...`)
                 await fetchStatus() // Update UI counts

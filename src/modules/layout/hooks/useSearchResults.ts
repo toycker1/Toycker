@@ -5,6 +5,8 @@ import { useDebounce } from "@/lib/hooks/use-debounce"
 import type { SearchResultsPayload } from "@lib/data/search"
 import { resizeImage } from "@/lib/util/image-processing"
 import {
+  SEARCH_IMAGE_CLIENT_MAX_DIMENSION,
+  SEARCH_IMAGE_UPLOAD_QUALITY,
   MIN_SEARCH_QUERY_LENGTH,
   SEARCH_DEBOUNCE_MS,
   SEARCH_DEFAULT_PRODUCT_LIMIT,
@@ -150,7 +152,11 @@ export const useSearchResults = ({
     setQuery("") // Clear text query when starting image search
 
     try {
-      const processedBlob = await resizeImage(file, 800) // 800px is a good balance for CLIP
+      const processedBlob = await resizeImage(
+        file,
+        SEARCH_IMAGE_CLIENT_MAX_DIMENSION,
+        SEARCH_IMAGE_UPLOAD_QUALITY
+      )
       const formData = new FormData()
       formData.append("image", processedBlob, "search.jpg")
 
