@@ -346,6 +346,7 @@ const SearchDrawer = ({ isOpen, onClose }: SearchDrawerProps) => {
                               key={product.id}
                               href={`/products/${product.handle}`}
                               className="group relative flex items-center gap-4 rounded-2xl border border-slate-100 bg-white p-3 transition-all duration-300 hover:border-primary/20 hover:bg-slate-50/50"
+                              prefetch={false}
                               onClick={handleClose}
                             >
                               {/* Image Container */}

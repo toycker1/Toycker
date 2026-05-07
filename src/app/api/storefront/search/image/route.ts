@@ -5,6 +5,10 @@ import {
     SEARCH_IMAGE_MAX_UPLOAD_BYTES,
     SEARCH_IMAGE_RESULT_LIMIT,
 } from "@/lib/constants/search"
+import {
+    checkRequestRateLimit,
+    getClientIpFromHeaders,
+} from "@/lib/util/request-rate-limit"
 import sharp from "sharp"
 
 interface SearchProduct {
@@ -20,6 +24,8 @@ interface SearchProduct {
 }
 
 const isDevelopment = process.env.NODE_ENV !== "production"
+const IMAGE_SEARCH_RATE_LIMIT = 8
+const IMAGE_SEARCH_RATE_LIMIT_WINDOW_MS = 60 * 1000
 
 const logImageSearch = (message: string) => {
     if (isDevelopment) {
@@ -97,6 +103,27 @@ async function processImage(inputBuffer: Buffer): Promise<Buffer> {
 
 export async function POST(request: Request) {
     try {
+        const clientIp = getClientIpFromHeaders(request.headers)
+        const rateLimit = checkRequestRateLimit({
+            key: `storefront-image-search:${clientIp}`,
+            limit: IMAGE_SEARCH_RATE_LIMIT,
+            windowMs: IMAGE_SEARCH_RATE_LIMIT_WINDOW_MS,
+        })
+
+        if (!rateLimit.allowed) {
+            return NextResponse.json(
+                { error: "Too many image searches. Please wait a moment and try again." },
+                {
+                    status: 429,
+                    headers: {
+                        "Retry-After": String(rateLimit.retryAfterSeconds),
+                        "X-RateLimit-Limit": String(IMAGE_SEARCH_RATE_LIMIT),
+                        "X-RateLimit-Remaining": "0",
+                    },
+                }
+            )
+        }
+
         const formData = await request.formData()
         const imageFile = formData.get("image") as File | null
 

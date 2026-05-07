@@ -176,6 +176,7 @@ export default function ProductPreview({
         <LocalizedClientLink
           href={`/products/${product.handle}`}
           className={cardClassName}
+          prefetch={false}
         >
           <div className={imageWrapperClassName}>
             <Thumbnail

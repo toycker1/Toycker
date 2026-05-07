@@ -89,7 +89,7 @@ Evidence:
 | `15-visual-search-and-embedding-risk.md` | Visual search can trigger image processing and vector RPC work | `code-only now; both if database tuning is later needed` | Medium | Completed and manually verified on 06 May 2026; request-volume monitoring remains |
 | `16-admin-dashboard-export-risk.md` | Admin pages, exports, and backfill jobs can return large data | `code-only` | Low to Medium | Completed and verified on 07 May 2026 |
 | `17-media-cdn-cache-regression-risk.md` | Future media changes could bypass Cloudflare and hit Supabase Storage | `code-only for repo; external Cloudflare checks also required` | Medium | Completed and manually verified on 07 May 2026; weekly Supabase/Cloudflare monitoring remains |
-| `18-bot-prefetch-and-public-traffic-risk.md` | Bots, crawlers, and aggressive prefetch can multiply public reads | `code-only` | Medium | Pending |
+| `18-bot-prefetch-and-public-traffic-risk.md` | Bots, crawlers, and aggressive prefetch can multiply public reads | `code-only` | Medium | Completed and manually verified on 07 May 2026; continue weekly monitoring |
 | `19-production-monitoring-and-alerting.md` | Egress must be watched weekly before it reaches the Free Plan limit | `Supabase-only` | High | Pending |
 
 ## Recommended Phase Order
