@@ -1,12 +1,11 @@
-import { createCollection, getAdminProducts } from "@/lib/data/admin"
+import { createCollection, getAdminProductOptions } from "@/lib/data/admin"
 import Link from "next/link"
 import AdminPageHeader from "@modules/admin/components/admin-page-header"
 import { ChevronLeftIcon } from "@heroicons/react/24/outline"
 import { CollectionForm } from "@/modules/admin/components/collection-form"
 
 export default async function NewCollection() {
-  // Fetch all products for selection
-  const { products } = await getAdminProducts({ limit: -1 })
+  const products = await getAdminProductOptions()
 
   return (
     <div className="space-y-8">

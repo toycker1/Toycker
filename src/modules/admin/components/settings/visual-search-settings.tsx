@@ -6,10 +6,18 @@ import { SparklesIcon, ArrowPathIcon, CheckCircleIcon, ExclamationCircleIcon } f
 import { createClient } from "@/lib/supabase/client"
 
 type BackfillResponse = {
+    processed?: number
     success?: number
+    failed?: number
     remaining?: boolean
     message?: string
     error?: string
+}
+
+const BACKFILL_BATCH_PAUSE_MS = 500
+
+function wait(ms: number) {
+    return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
 export default function VisualSearchSettings() {
@@ -35,6 +43,14 @@ export default function VisualSearchSettings() {
     }, [])
 
     const handleReindex = async () => {
+        const confirmed = window.confirm(
+            "Generate missing visual-search embeddings now? This will process products in small batches and may take a few minutes."
+        )
+
+        if (!confirmed) {
+            return
+        }
+
         setIsReindexing(true)
         setStatus("loading")
         setMessage("Starting re-indexing...")
@@ -54,6 +70,10 @@ export default function VisualSearchSettings() {
 
                 setMessage(`Processed ${totalProcessed} products...`)
                 await fetchStatus() // Update UI counts
+
+                if (hasMore) {
+                    await wait(BACKFILL_BATCH_PAUSE_MS)
+                }
             }
 
             setStatus("success")

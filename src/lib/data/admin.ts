@@ -69,6 +69,53 @@ type CustomerPhoneRow = {
   phone: string | null
 }
 
+type AdminProductVariantListItem = Pick<
+  ProductVariant,
+  | "id"
+  | "product_id"
+  | "title"
+  | "sku"
+  | "price"
+  | "inventory_quantity"
+  | "manage_inventory"
+  | "allow_backorder"
+  | "image_url"
+>
+
+export type AdminProductListItem = Pick<
+  Product,
+  | "id"
+  | "name"
+  | "handle"
+  | "image_url"
+  | "thumbnail"
+  | "price"
+  | "currency_code"
+  | "stock_count"
+  | "status"
+  | "created_at"
+> & {
+  variants?: AdminProductVariantListItem[]
+}
+
+export type AdminProductOption = Pick<Product, "id" | "name" | "thumbnail">
+
+export type AdminOrderListItem = Pick<
+  Order,
+  | "id"
+  | "display_id"
+  | "created_at"
+  | "customer_email"
+  | "payment_status"
+  | "payment_method"
+  | "payu_txn_id"
+  | "gateway_txn_id"
+  | "fulfillment_status"
+  | "total_amount"
+  | "currency_code"
+  | "status"
+>
+
 type OrderAddressActionState = {
   success: boolean
   error: string | null
@@ -200,6 +247,27 @@ function mapEmailBackedRow<T extends EmailBackedRow>(
   }
 }
 
+function getAdminErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function getMetadataStringValue(
+  metadata: Record<string, unknown> | null,
+  key: string
+): string | null {
+  const value = metadata?.[key]
+
+  if (typeof value === "string") {
+    return value
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value)
+  }
+
+  return null
+}
+
 // --- Auth Check ---
 export async function ensureAdmin() {
   const supabase = await createClient()
@@ -246,7 +314,7 @@ export async function getAdminUser() {
     if (Array.isArray(profile.admin_role)) {
       roleName = profile.admin_role[0]?.name || roleName
     } else {
-      roleName = (profile.admin_role as any).name || roleName
+      roleName = profile.admin_role.name || roleName
     }
   } else if (profile?.role === "admin") {
     roleName = "System Admin"
@@ -752,7 +820,7 @@ interface GetAdminProductsParams {
 }
 
 interface PaginatedProductsResponse {
-  products: Product[]
+  products: AdminProductListItem[]
   count: number
   totalPages: number
   currentPage: number
@@ -801,7 +869,31 @@ export async function getAdminProducts(
   // Fetch paginated data
   let query = supabase
     .from("products")
-    .select("*, variants:product_variants(*)")
+    .select(
+      `
+      id,
+      name,
+      handle,
+      image_url,
+      thumbnail,
+      price,
+      currency_code,
+      stock_count,
+      status,
+      created_at,
+      variants:product_variants(
+        id,
+        product_id,
+        title,
+        sku,
+        price,
+        inventory_quantity,
+        manage_inventory,
+        allow_backorder,
+        image_url
+      )
+    `
+    )
     .order("created_at", { ascending: false })
 
   // Only apply range if not fetching all
@@ -826,17 +918,17 @@ export async function getAdminProducts(
   const { data, error } = await query
   if (error) throw error
 
-  const products = (data || []).map((product) => {
-    const variants = (product as any).variants || []
+  const products = ((data || []) as AdminProductListItem[]).map((product) => {
+    const variants = product.variants || []
     if (variants.length > 0) {
       // If base price is 0, use min variant price
       if (product.price === 0) {
-        product.price = Math.min(...variants.map((v: any) => v.price))
+        product.price = Math.min(...variants.map((v) => v.price))
       }
       // If stock count is 0, use sum of variant stock
       if (product.stock_count === 0) {
         product.stock_count = variants.reduce(
-          (sum: number, v: any) => sum + (v.inventory_quantity || 0),
+          (sum, v) => sum + (v.inventory_quantity || 0),
           0
         )
       }
@@ -845,11 +937,25 @@ export async function getAdminProducts(
   })
 
   return {
-    products: products as Product[],
+    products,
     count: count || 0,
     totalPages,
     currentPage: page,
   }
+}
+
+export async function getAdminProductOptions(): Promise<AdminProductOption[]> {
+  await ensureAdmin()
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("products")
+    .select("id, name, thumbnail")
+    .order("name")
+
+  if (error) throw error
+
+  return (data || []) as AdminProductOption[]
 }
 
 type ProductActionState = {
@@ -1892,14 +1998,14 @@ export async function getProductCollections(productId: string) {
       return []
     }
 
-    return singularData
-      .map((item) => (item as any).collection as unknown as Collection)
-      .filter(Boolean)
+    return (singularData as unknown as Array<{ collection: Collection | null }>)
+      .map((item) => item.collection)
+      .filter((collection): collection is Collection => Boolean(collection))
   }
 
-  return data
-    .map((item) => (item as any).collections as unknown as Collection)
-    .filter(Boolean)
+  return (data as unknown as Array<{ collections: Collection | null }>)
+    .map((item) => item.collections)
+    .filter((collection): collection is Collection => Boolean(collection))
 }
 
 // --- Orders ---
@@ -1911,7 +2017,7 @@ interface GetAdminOrdersParams {
 }
 
 interface PaginatedOrdersResponse {
-  orders: Order[]
+  orders: AdminOrderListItem[]
   count: number
   totalPages: number
   currentPage: number
@@ -1929,27 +2035,22 @@ export async function getAdminOrders(
   const searchNum = search && search.trim() ? parseInt(search, 10) : NaN
 
   if (!isNaN(searchNum)) {
-    // Searching by order ID - fetch all orders and filter client-side
-    const { data: allOrders, error } = await supabase
+    const { data, error } = await supabase
       .from("orders")
-      .select("*")
+      .select(
+        "id, display_id, created_at, customer_email, payment_status, payment_method, payu_txn_id, gateway_txn_id, fulfillment_status, total_amount, currency_code, status"
+      )
+      .eq("display_id", searchNum)
       .order("created_at", { ascending: false })
+      .range((page - 1) * limit, page * limit - 1)
 
     if (error) throw error
 
-    // Filter by display_id
-    const filteredOrders = (allOrders || []).filter(
-      (order) => order.display_id === searchNum
-    )
-
-    // Calculate pagination for filtered results
-    const count = filteredOrders.length
+    const count = data?.length || 0
     const totalPages = Math.ceil(count / limit) || 1
-    const offset = (page - 1) * limit
-    const paginatedOrders = filteredOrders.slice(offset, offset + limit)
 
     return {
-      orders: paginatedOrders as Order[],
+      orders: (data || []) as AdminOrderListItem[],
       count,
       totalPages,
       currentPage: page,
@@ -1978,7 +2079,9 @@ export async function getAdminOrders(
   // Fetch paginated data
   let query = supabase
     .from("orders")
-    .select("*")
+    .select(
+      "id, display_id, created_at, customer_email, payment_status, payment_method, payu_txn_id, gateway_txn_id, fulfillment_status, total_amount, currency_code, status"
+    )
     .order("created_at", { ascending: false })
     .range(from, to)
 
@@ -1991,7 +2094,7 @@ export async function getAdminOrders(
   if (error) throw error
 
   return {
-    orders: (data || []) as Order[],
+    orders: (data || []) as AdminOrderListItem[],
     count: count || 0,
     totalPages,
     currentPage: page,
@@ -2421,10 +2524,11 @@ export async function deleteCustomer(id: string) {
 
     revalidatePath("/admin/customers")
     return { success: true }
-  } catch (err: any) {
-    console.error("ADMIN: deleteCustomer CRITICAL FAILURE:", err)
+  } catch (err) {
+    const message = getAdminErrorMessage(err)
+    console.error("ADMIN: deleteCustomer CRITICAL FAILURE:", message)
     // Return a user-friendly error if the key is missing
-    if (err.message?.includes("SUPABASE_SERVICE_ROLE_KEY")) {
+    if (message.includes("SUPABASE_SERVICE_ROLE_KEY")) {
       return {
         success: false,
         error: "Server Error: SUPABASE_SERVICE_ROLE_KEY is not configured.",
@@ -2432,7 +2536,7 @@ export async function deleteCustomer(id: string) {
     }
     return {
       success: false,
-      error: err.message || "An unexpected error occurred.",
+      error: message || "An unexpected error occurred.",
     }
   }
 }
@@ -3104,11 +3208,11 @@ export async function markOrderAsPaid(orderId: string) {
     throw new Error("Payment can only be marked after the order is delivered.")
   }
 
-  const paymentMethodRaw = (
-    order.payment_method ||
-    (order.metadata as any)?.payment_method ||
-    ""
+  const metadataPaymentMethod = getMetadataStringValue(
+    order.metadata as Record<string, unknown> | null,
+    "payment_method"
   )
+  const paymentMethodRaw = (order.payment_method || metadataPaymentMethod || "")
     .toString()
     .toLowerCase()
   const isCod =
@@ -3141,10 +3245,7 @@ export async function markOrderAsPaid(orderId: string) {
       : "Payment marked as paid by admin.",
     "admin",
     {
-      payment_method:
-        order.payment_method ||
-        (order.metadata as any)?.payment_method ||
-        "unknown",
+      payment_method: order.payment_method || metadataPaymentMethod || "unknown",
     },
     actorDisplay
   )

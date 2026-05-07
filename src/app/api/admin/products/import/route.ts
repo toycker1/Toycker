@@ -7,6 +7,18 @@ import { revalidatePath } from "next/cache"
 // Set max duration to 5 mins only for Vercel/similar (Next.js config)
 export const maxDuration = 300
 
+const MAX_IMPORT_FILE_SIZE_BYTES = 5 * 1024 * 1024
+const MAX_IMPORT_ROWS = 1000
+
+function getErrorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error)
+}
+
+function isCsvFile(file: File): boolean {
+    const lowerName = file.name.toLowerCase()
+    return lowerName.endsWith(".csv") || file.type === "text/csv" || file.type === "application/vnd.ms-excel"
+}
+
 export async function POST(request: NextRequest) {
     try {
         const supabase = await createClient()
@@ -20,13 +32,24 @@ export async function POST(request: NextRequest) {
 
         // 2. Parse File
         const formData = await request.formData()
-        const file = formData.get("file") as File
+        const uploadedFile = formData.get("file")
 
-        if (!file) {
+        if (!(uploadedFile instanceof File)) {
             return NextResponse.json({ error: "No file provided" }, { status: 400 })
         }
 
-        const csvText = await file.text()
+        if (!isCsvFile(uploadedFile)) {
+            return NextResponse.json({ error: "Only CSV files are supported" }, { status: 400 })
+        }
+
+        if (uploadedFile.size > MAX_IMPORT_FILE_SIZE_BYTES) {
+            return NextResponse.json(
+                { error: "CSV file is too large", details: "Maximum allowed file size is 5MB." },
+                { status: 400 }
+            )
+        }
+
+        const csvText = await uploadedFile.text()
         const parseResult = Papa.parse<CsvProductRow>(csvText, {
             header: true,
             skipEmptyLines: true,
@@ -43,6 +66,16 @@ export async function POST(request: NextRequest) {
         const rows = parseResult.data
         if (rows.length === 0) {
             return NextResponse.json({ error: "Empty CSV" }, { status: 400 })
+        }
+
+        if (rows.length > MAX_IMPORT_ROWS) {
+            return NextResponse.json(
+                {
+                    error: "CSV has too many rows",
+                    details: `Maximum allowed rows per import is ${MAX_IMPORT_ROWS}.`,
+                },
+                { status: 400 }
+            )
         }
 
         // 3. Group by Handle
@@ -227,9 +260,10 @@ export async function POST(request: NextRequest) {
                     }
                 }
 
-            } catch (err: any) {
-                console.error(`Error processing handle ${handle}:`, err)
-                stats.errors.push(`Handle ${handle}: ${err.message}`)
+            } catch (err) {
+                const message = getErrorMessage(err)
+                console.error(`Error processing handle ${handle}:`, message)
+                stats.errors.push(`Handle ${handle}: ${message}`)
             }
         }
 
@@ -241,8 +275,9 @@ export async function POST(request: NextRequest) {
             ...stats
         })
 
-    } catch (error: any) {
-        console.error("Global import error:", error)
-        return NextResponse.json({ error: "Server error", details: error.message }, { status: 500 })
+    } catch (error) {
+        const message = getErrorMessage(error)
+        console.error("Global import error:", message)
+        return NextResponse.json({ error: "Server error", details: message }, { status: 500 })
     }
 }

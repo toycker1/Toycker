@@ -1,4 +1,4 @@
-import { getAdminCollection, updateCollection, getAdminProducts, getCollectionProducts } from "@/lib/data/admin"
+import { getAdminCollection, updateCollection, getAdminProductOptions, getCollectionProducts } from "@/lib/data/admin"
 import { notFound } from "next/navigation"
 import Link from "next/link"
 import { ChevronLeftIcon } from "@heroicons/react/24/outline"
@@ -11,8 +11,8 @@ export default async function EditCollection({ params }: { params: Promise<{ id:
 
   if (!collection) notFound()
 
-  // Fetch all products and currently selected ones
-  const { products } = await getAdminProducts({ limit: -1 })
+  // Fetch lightweight product options and currently selected ones
+  const products = await getAdminProductOptions()
   const selectedProductIds = await getCollectionProducts(id)
 
   return (

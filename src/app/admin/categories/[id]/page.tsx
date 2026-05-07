@@ -1,4 +1,4 @@
-import { getAdminCategory, updateCategory, getAdminProducts, getCategoryProducts } from "@/lib/data/admin"
+import { getAdminCategory, updateCategory, getAdminProductOptions, getCategoryProducts } from "@/lib/data/admin"
 import { notFound } from "next/navigation"
 import Link from "next/link"
 import { ChevronLeftIcon } from "@heroicons/react/24/outline"
@@ -11,8 +11,8 @@ export default async function EditCategory({ params }: { params: Promise<{ id: s
 
     if (!category) notFound()
 
-    // Fetch all products and currently selected ones
-    const { products } = await getAdminProducts({ limit: -1 })
+    // Fetch lightweight product options and currently selected ones
+    const products = await getAdminProductOptions()
     const selectedProductIds = await getCategoryProducts(id)
 
     return (
