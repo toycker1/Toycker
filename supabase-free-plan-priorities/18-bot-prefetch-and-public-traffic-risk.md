@@ -6,6 +6,14 @@
 
 No Supabase migration is required now.
 
+## Status
+
+Completed and manually verified on 07 May 2026.
+
+This was implemented as a code-only change. No Supabase migration was created or required.
+
+Priority 18 reduces unnecessary request volume from bots, crawlers, hover prefetch, and repeated visual-search requests. It does not change the shape of Supabase payloads. Heavy JSON payload risks are handled by the completed risk files for product detail, cart/checkout, visual search payloads, admin/export/import, and media CDN behavior.
+
 ## Why This Risk Remains
 
 Even optimized pages can create high egress if they are requested too often.
@@ -73,6 +81,32 @@ Code-only changes only if monitoring shows bot/public endpoint pressure:
 4. Consider disabling prefetch on high-card product grids if it causes too many background requests.
 5. Add basic rate limiting at the app or hosting layer for expensive API routes.
 6. Keep `/api/storefront/search/image` protected by file size and request limits.
+
+## Completed Implementation On 07 May 2026
+
+The implementation was intentionally small and focused:
+
+- Expanded `robots.ts` so crawlers are discouraged from private, API, checkout, account, cart, wishlist, order, auth, and visual-search routes.
+- Updated `sitemap.ts` so the sitemap only promotes useful public SEO pages and no longer includes the account route.
+- Added sitemap revalidation so the sitemap is not regenerated on every request.
+- Disabled Next.js link prefetch on high-volume product, catalog, and search result cards so hover or viewport behavior does not trigger extra product-detail reads.
+- Added a small in-memory rate limit to `/api/storefront/search/image` before image parsing, image processing, embedding generation, and Supabase RPC work.
+- Kept public SEO browsing intact for the homepage, store listing, and product detail pages.
+
+No database tables were created. No existing table columns were changed. No RLS policies were added, removed, or edited.
+
+## Manual Verification On 07 May 2026
+
+The following checks were completed after implementation:
+
+- `/robots.txt` showed the expected crawler restrictions.
+- `/sitemap.xml` excluded private, API, account, cart, checkout, and visual-search routes.
+- Store product cards still opened product detail pages normally.
+- Search drawer results still opened product detail pages normally.
+- Hovering product cards no longer caused product-detail prefetch requests.
+- The `204 events?...` requests seen in DevTools were confirmed as Vercel Analytics or Speed Insights requests, not Supabase requests.
+- Visual search still returned normal results for valid use.
+- Repeated visual-search requests returned `429` after the rate limit, which confirms the protection is active.
 
 ## Implementation Trigger
 

@@ -21,6 +21,7 @@ const CatalogCard = ({ item, viewMode = "grid-4" }: CatalogCardProps) => {
     <LocalizedClientLink
       href={item.href}
       className="group flex h-full flex-col overflow-hidden rounded-[32px]  bg-white/80 shadow-sm ring-1 ring-black/5 transition hover:-translate-y-0.5 hover:shadow-lg"
+      prefetch={false}
     >
       <div className={cn("relative w-full overflow-hidden", aspectClass)}>
         {hasImage ? (
