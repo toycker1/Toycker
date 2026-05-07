@@ -14,30 +14,37 @@ export type TopProduct = {
     total_quantity: number
 }
 
+const TOP_PRODUCTS_ORDER_SAMPLE_LIMIT = 100
+
+type OrderItemSummary = {
+    product_id?: string | null
+    quantity?: number | null
+}
+
+function isOrderItemSummary(value: unknown): value is OrderItemSummary {
+    return typeof value === "object" && value !== null
+}
+
+type TopProductDisplayRow = {
+    id: string
+    name: string
+    thumbnail: string | null
+    image_url: string | null
+    price: number
+    currency_code: string
+}
+
 
 export async function getTopProducts(limit: number = 5): Promise<TopProduct[]> {
     const supabase = await createClient()
-
-    // 1. Fetch order items (joined with orders to filter active valid orders?)
-    // For simplicity: We'll assume valid order_items. 
-    // Ideally filtering by order status is best, but lets grab items.
-    // Note: 'order_items' table usually exists. Let's check schema assumption. 
-    // If 'orders' has a 'items' JSONB column, we traverse that. 
-    // The 'Order' type has 'items?: CartItem[]'. This suggests a potential JSON/Join.
-    // Let's assume standard 'order_items' table exists for a robust SQL-like backend.
-    // Wait, previous file view of types shows `CartItem` linked to `Cart` not explicit `order_items` table in top level types export.
-
-    // Let's assume we fetch `orders` and iterate their items in memory if `order_items` table is not readily available or complex.
-    // The typescript `Order` interface has `items?: CartItem[]`. 
-    // We can fetch all orders -> extract items -> aggregate. 
-    // For "Top Selling", performance might be an issue with MANY orders, but for a prototype store, 
-    // fetching all orders (with minimal fields) is acceptable.
 
     const { data: orders, error } = await supabase
         .from("orders")
         .select("items")
         .neq("status", "cancelled")
-        .neq("status", "failed") // Filter invalid orders
+        .neq("status", "failed")
+        .order("created_at", { ascending: false })
+        .limit(TOP_PRODUCTS_ORDER_SAMPLE_LIMIT)
 
     if (error || !orders) {
         console.error("Error fetching top products:", error)
@@ -45,51 +52,64 @@ export async function getTopProducts(limit: number = 5): Promise<TopProduct[]> {
     }
 
     // Aggregate in memory
-    const productStats = new Map<string, { quantity: number, title: string, thumbnail: string, price: number, currency: string }>()
+    const productStats = new Map<string, number>()
 
     orders.forEach(order => {
-        // items is a JSONB array usually if modeled that way in Supabase for simple stores, 
-        // or a Relation. The Typescript interface says `items?: CartItem[]`. 
-        // If it's a relation, we need to SELECT it. `.select('items(*)')`? 
-        // Actually, looking at `CartItem` type, it has `product_id`.
+        const items = Array.isArray(order.items)
+            ? order.items.filter(isOrderItemSummary)
+            : []
 
-        const items = order.items as any[] || [] // usage of any avoided generally, but casting JSON
-        if (Array.isArray(items)) {
-            items.forEach((item: any) => {
-                if (!item.product_id) return
+        items.forEach((item) => {
+            if (!item.product_id) return
 
-                const existing = productStats.get(item.product_id)
-                const qty = item.quantity || 0
-
-                if (existing) {
-                    existing.quantity += qty
-                } else {
-                    productStats.set(item.product_id, {
-                        quantity: qty,
-                        title: item.product_title || item.title || "Unknown Product",
-                        thumbnail: item.thumbnail || null,
-                        price: item.unit_price || 0,
-                        currency: "inr" // Default or infer from context
-                    })
-                }
-            })
-        }
+            const qty = item.quantity || 0
+            productStats.set(item.product_id, (productStats.get(item.product_id) || 0) + qty)
+        })
     })
 
-    // Sort and limit
-    const sorted = Array.from(productStats.entries())
-        .map(([id, stats]) => ({
-            id,
-            title: stats.title,
-            thumbnail: stats.thumbnail,
-            price: stats.price,
-            currency_code: stats.currency,
-            total_quantity: stats.quantity
-        }))
-        .sort((a, b) => b.total_quantity - a.total_quantity)
+    const sortedStats = Array.from(productStats.entries())
+        .map(([id, quantity]) => ({ id, quantity }))
+        .sort((a, b) => b.quantity - a.quantity)
         .slice(0, limit)
 
-    return sorted
+    const productIds = sortedStats.map((product) => product.id)
+
+    if (productIds.length === 0) {
+        return []
+    }
+
+    const { data: products, error: productsError } = await supabase
+        .from("products")
+        .select("id, name, thumbnail, image_url, price, currency_code")
+        .in("id", productIds)
+
+    if (productsError || !products) {
+        console.error("Error fetching top product details:", productsError)
+        return []
+    }
+
+    const productMap = new Map(
+        ((products || []) as TopProductDisplayRow[]).map((product) => [product.id, product])
+    )
+
+    return sortedStats
+        .map(({ id, quantity }) => {
+            const product = productMap.get(id)
+
+            if (!product) {
+                return null
+            }
+
+            return {
+                id,
+                title: product.name,
+                thumbnail: product.thumbnail || product.image_url,
+                price: product.price,
+                currency_code: product.currency_code,
+                total_quantity: quantity
+            }
+        })
+        .filter((product): product is TopProduct => product !== null)
 }
 
 export type DashboardStats = {
