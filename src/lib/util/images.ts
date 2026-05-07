@@ -1,8 +1,7 @@
 import { Product } from "@/lib/supabase/types/index"
+import { buildPublicMediaUrl, getPublicMediaBaseUrl } from "./media-url"
 
-export const CDN_URL =
-  process.env.NEXT_PUBLIC_R2_PUBLIC_URL ||
-  `https://${process.env.NEXT_PUBLIC_R2_MEDIA_HOSTNAME || "cdn.toycker.in"}`
+export const CDN_URL = getPublicMediaBaseUrl()
 
 export const fixUrl = (url: string | null | undefined) => {
   if (!url) return null
@@ -16,7 +15,7 @@ export const fixUrl = (url: string | null | undefined) => {
     }
   }
 
-  if (trimmed.startsWith("http")) return trimmed
+  if (trimmed.startsWith("http")) return buildPublicMediaUrl(trimmed)
 
   // Remove all leading slashes to prevent relative path bugs (/uploads/... -> cdn.com/uploads/...)
   let cleanPath = trimmed
@@ -26,9 +25,7 @@ export const fixUrl = (url: string | null | undefined) => {
 
   if (!cleanPath) return null
 
-  // Safely join baseUrl and cleanPath without double slashes
-  const baseUrl = CDN_URL.endsWith("/") ? CDN_URL.slice(0, -1) : CDN_URL
-  return `${baseUrl}/${cleanPath}`
+  return buildPublicMediaUrl(cleanPath)
 }
 
 export const normalizeProductImage = (product: Product): Product => {

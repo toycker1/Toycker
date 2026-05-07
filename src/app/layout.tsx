@@ -36,7 +36,6 @@ export default function RootLayout(props: { children: React.ReactNode }) {
       <head>
         <GTMAnalytics />
         <link rel="preconnect" href="https://cdn.toycker.in" crossOrigin="anonymous" />
-        <link rel="preconnect" href="https://toycker-supabase.r2.dev" crossOrigin="anonymous" />
       </head>
       <body suppressHydrationWarning className="font-sans">
         <NextTopLoader color="#059669" showSpinner={false} height={3} />

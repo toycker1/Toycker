@@ -51,7 +51,7 @@ export default function ProductSelector({ value, onChange, disabled = false }: P
     )
 
     return (
-        <div className="relative">
+        <div className="relative z-40">
             <button
                 type="button"
                 onClick={() => !disabled && setIsOpen(!isOpen)}
@@ -69,12 +69,12 @@ export default function ProductSelector({ value, onChange, disabled = false }: P
                 <>
                     {/* Backdrop */}
                     <div
-                        className="fixed inset-0 z-10"
+                        className="fixed inset-0 z-30"
                         onClick={() => setIsOpen(false)}
                     />
 
                     {/* Dropdown */}
-                    <div className="absolute z-20 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-96 overflow-hidden">
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-96 overflow-hidden">
                         {/* Search */}
                         <div className="p-3 border-b border-gray-200">
                             <div className="relative">

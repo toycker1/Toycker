@@ -4,7 +4,7 @@ import { useState, useCallback } from "react"
 import Image from "next/image"
 import { CloudArrowUpIcon, XMarkIcon } from "@heroicons/react/24/outline"
 import { getPresignedUploadUrl } from "@/lib/actions/storage"
-import { getFileUrl } from "@/lib/r2"
+import { buildPublicMediaUrl } from "@/lib/util/media-url"
 import { useToast } from "@modules/common/context/toast-context"
 import {
     UPLOAD_MAX_FILE_SIZE_MB,
@@ -67,7 +67,7 @@ export default function ImageUploader({
 
                 xhr.addEventListener("load", () => {
                     if (xhr.status === 200) {
-                        const publicUrl = getFileUrl(key)
+                        const publicUrl = buildPublicMediaUrl(key)
                         onChange(publicUrl)
                         showToast("Upload complete!", "success")
                         resolve()

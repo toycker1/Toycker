@@ -19,8 +19,8 @@ import {
 import { Plus, Image as ImageIcon, Loader2 } from "lucide-react"
 import { SortableItem } from "./sortable-item"
 import { getPresignedUploadUrl } from "@/lib/actions/storage"
-import { getFileUrl } from "@/lib/r2"
 import { cn } from "@lib/util/cn"
+import { buildPublicMediaUrl } from "@/lib/util/media-url"
 import {
     PRODUCT_MEDIA_ACCEPT_VALUE,
     PRODUCT_MEDIA_ALLOWED_TYPES_LABEL,
@@ -141,7 +141,7 @@ export default function MediaGallery({ initialImages = [], onOrderChange }: Medi
 
                     xhr.addEventListener("load", () => {
                         if (xhr.status === 200) {
-                            resolve(getFileUrl(key))
+                            resolve(buildPublicMediaUrl(key))
                         } else {
                             reject(new Error(`Upload failed for ${file.name}`))
                         }

@@ -3,6 +3,10 @@ import { createClient } from "@/lib/supabase/server"
 import { CsvProductRow, ImportStats } from "@/lib/types/import"
 import Papa from "papaparse"
 import { revalidatePath } from "next/cache"
+import {
+    validateMediaUrlList,
+    validateNoSupabaseStorageMediaUrl,
+} from "@/lib/util/media-url"
 
 // Set max duration to 5 mins only for Vercel/similar (Next.js config)
 export const maxDuration = 300
@@ -17,6 +21,29 @@ function getErrorMessage(error: unknown): string {
 function isCsvFile(file: File): boolean {
     const lowerName = file.name.toLowerCase()
     return lowerName.endsWith(".csv") || file.type === "text/csv" || file.type === "application/vnd.ms-excel"
+}
+
+function splitImageUrls(value: string | undefined): string[] {
+    if (!value) {
+        return []
+    }
+
+    return value.split(";").map((url) => url.trim()).filter(Boolean)
+}
+
+function validateCsvMediaUrls(row: CsvProductRow, handle: string): void {
+    validateNoSupabaseStorageMediaUrl(
+        row["Thumbnail URL"] || null,
+        `Product ${handle} thumbnail`
+    )
+    validateMediaUrlList(
+        splitImageUrls(row["Image URLs"]),
+        `Product ${handle} images`
+    )
+    validateNoSupabaseStorageMediaUrl(
+        row["Video URL"] || null,
+        `Product ${handle} video`
+    )
 }
 
 export async function POST(request: NextRequest) {
@@ -103,6 +130,8 @@ export async function POST(request: NextRequest) {
             try {
                 // Determine Product Data (use first row as master)
                 const master = groupRows[0]
+                validateCsvMediaUrls(master, handle)
+                const imageUrls = splitImageUrls(master["Image URLs"])
 
                 // === A. Upsert Product ===
 
@@ -126,13 +155,13 @@ export async function POST(request: NextRequest) {
                     status: (master.Status?.toLowerCase() === "active" ? "active" :
                         master.Status?.toLowerCase() === "archived" ? "archived" : "draft"),
                     thumbnail: master["Thumbnail URL"] || null,
-                    images: master["Image URLs"] ? master["Image URLs"].split(";").map((s: string) => s.trim()).filter(Boolean) : null,
+                    images: imageUrls.length > 0 ? imageUrls : null,
                     video_url: master["Video URL"] || null,
                     currency_code: master.Currency?.toLowerCase() || "inr",
                     // We calculate base price/stock later from variants or use master row default
                     price: master.Price ? Number(master.Price) : 0,
                     stock_count: master.Stock ? Number(master.Stock) : 0,
-                    image_url: master["Thumbnail URL"] || (master["Image URLs"] ? master["Image URLs"].split(";")[0] : null)
+                    image_url: master["Thumbnail URL"] || imageUrls[0] || null
                 }
 
                 if (isUpdate && productId) {

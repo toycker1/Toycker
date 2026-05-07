@@ -6,6 +6,12 @@
 
 There is no Supabase change required now. Cloudflare dashboard/cache checks are outside Supabase, but they still matter operationally.
 
+## Status
+
+`Completed and manually verified on 07 May 2026`
+
+The codebase guardrails for this risk have been implemented. Weekly Supabase and Cloudflare monitoring should still continue because CDN/cache behavior can change outside the repo.
+
 ## Why This Risk Remains
 
 Production currently serves product media from Cloudflare CDN, not Supabase Storage. That is good.
@@ -63,6 +69,45 @@ Cache-Control: public, max-age=31536000, immutable
 - Exclusive videos are limited to `20MB`.
 - Review media is limited to `20MB`.
 - Public videos use lighter preload behavior.
+- Public media URL generation now normalizes keys and direct `.r2.dev` URLs to the configured public CDN host.
+- The app preconnects to `cdn.toycker.in`, not the direct R2 public domain.
+- Product, category, collection, home banner, exclusive collection, and CSV import write paths block direct Supabase Storage media URLs.
+- Admin home-settings exclusive videos are loaded only after clicking the preview, so opening the admin page does not eagerly load every video.
+- Review media display paths use the shared public media URL helper.
+
+## Completed Implementation
+
+Code changes made:
+
+1. Added shared media URL helpers in `src/lib/util/media-url.ts`.
+2. Updated R2 URL generation to use the shared public CDN helper.
+3. Updated image URL normalization to convert keys and direct `.r2.dev` URLs to the CDN host.
+4. Updated admin image upload, image uploader, and media manager upload paths to return CDN URLs.
+5. Added Supabase Storage URL validation before saving product, category, collection, home banner, and exclusive collection media fields.
+6. Added CSV import validation so imported product media cannot save direct Supabase Storage URLs.
+7. Removed direct R2 preconnect from the app root layout.
+8. Reduced admin home-settings exclusive collection video loading by using poster/product previews until the admin clicks play.
+9. Fixed related admin selector/checkbox behavior found during manual Priority 17 testing.
+
+No Supabase migration was created. No new tables were created. No existing tables or RLS policies were changed.
+
+## Verification Completed
+
+Manual verification on 07 May 2026:
+
+1. A test CSV row using `cdn.toycker.in` media imported successfully.
+2. A test CSV row using a direct Supabase Storage URL did not save.
+3. Searching for `test-bad-supabase-product` in admin products returned no product.
+4. Local validator check confirmed CDN URLs pass and Supabase Storage URLs are blocked.
+5. Code search found no active Supabase Storage upload/display usage in `src`.
+6. Production build completed successfully with `pnpm.cmd build`.
+
+Quality-check notes:
+
+- `pnpm.cmd build` passed.
+- `git diff --check` passed.
+- `pnpm.cmd exec tsc --noEmit --pretty false` still reports an existing unrelated test type issue in `tests/lib/actions/complete-checkout.test.ts`.
+- `pnpm.cmd lint` may still fail because the current repo script uses `next lint`, which resolves `lint` as a project directory in this setup.
 
 ## What Can Still Increase Egress
 
@@ -89,7 +134,7 @@ Operational Cloudflare checks:
 3. Confirm media responses include useful cache headers.
 4. Check Cloudflare cache status for common product images.
 
-## Implementation Trigger
+## Future Implementation Trigger
 
 Only implement this file if one of these is true:
 

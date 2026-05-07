@@ -141,7 +141,7 @@ export default function CollectionFormModal({ isOpen, onClose, onSuccess, collec
                                 <Package className="w-4 h-4 text-indigo-500" />
                                 Highlighted Product
                             </label>
-                            <div className="rounded-2xl overflow-hidden ring-1 ring-slate-100">
+                            <div className="relative z-30 rounded-2xl ring-1 ring-slate-100">
                                 <ProductSelector
                                     value={formData.product_id || ""}
                                     onChange={(productId) => setFormData({ ...formData, product_id: productId })}
