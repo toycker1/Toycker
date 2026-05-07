@@ -12,6 +12,7 @@ import {
     isAllowedUploadFileType,
     type UploadFolder,
 } from "@/lib/constants/upload-file-types"
+import { getPublicMediaBaseUrl } from "@/lib/util/media-url"
 
 export async function getPresignedUploadUrl({
     fileType,
@@ -79,8 +80,8 @@ export async function deleteFile(key: string) {
  */
 export async function extractKeyFromUrl(url: string): Promise<string | null> {
     try {
-        const publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
-        if (!publicUrl || !url.startsWith(publicUrl)) {
+        const publicUrl = getPublicMediaBaseUrl()
+        if (!url.startsWith(publicUrl)) {
             return null
         }
 

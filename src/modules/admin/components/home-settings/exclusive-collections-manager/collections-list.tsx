@@ -5,6 +5,7 @@ import { deleteExclusiveCollection, updateExclusiveCollection, reorderExclusiveC
 import { type HomeExclusiveCollection } from "@/lib/types/home-exclusive-collections"
 import { useToast } from "@modules/common/context/toast-context"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 import {
     Pencil,
     Trash2,
@@ -56,6 +57,7 @@ interface SortableItemProps {
 }
 
 function SortableCollectionItem({ collection, onEdit, onDelete, onToggle, deletingId, togglingId }: SortableItemProps) {
+    const [isPreviewOpen, setIsPreviewOpen] = useState(false)
     const {
         attributes,
         listeners,
@@ -72,137 +74,174 @@ function SortableCollectionItem({ collection, onEdit, onDelete, onToggle, deleti
         opacity: isDragging ? 0.3 : 1,
     }
 
+    const previewImage =
+        collection.poster_url ||
+        collection.product?.image_url ||
+        collection.product?.images?.[0] ||
+        null
+
     return (
-        <div
-            ref={setNodeRef}
-            style={style}
-            className={`group relative bg-white rounded-xl border transition-all duration-400 ${isDragging ? "shadow-2xl ring-2 ring-indigo-500/50" : "hover:shadow-2xl hover:shadow-slate-200/50"
-                } flex flex-col overflow-hidden ${collection.is_active ? "border-gray-200" : "border-gray-200 bg-gray-50/50 opacity-80"
-                }`}
-        >
-            {/* Drag Handle Overlay */}
-            <ProtectedAction permission={PERMISSIONS.HOME_SETTINGS_UPDATE} hideWhenDisabled>
-                <div
-                    {...attributes}
-                    {...listeners}
-                    className="absolute top-4 left-1/2 -translate-x-1/2 z-20 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing bg-black/40 backdrop-blur-md p-1.5 rounded-full border border-white/20 text-white"
-                >
-                    <GripVertical className="w-4 h-4" />
-                </div>
-            </ProtectedAction>
-
-            {/* Video Header Profile */}
-            <div className="relative aspect-[9/12] w-full bg-gray-900 rounded-t-2xl overflow-hidden shadow-inner flex-shrink-0">
-                <video
-                    src={collection.video_url}
-                    className="w-full h-full object-cover opacity-80"
-                    muted
-                    loop
-                    playsInline
-                    preload="metadata"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-gray-900/80 via-transparent to-gray-900/30" />
-
-                {/* Play Overlay */}
-                <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border border-white/30 transform transition-transform group-hover:scale-110">
-                        <Play className="w-6 h-6 text-white fill-white" />
+        <>
+            <div
+                ref={setNodeRef}
+                style={style}
+                className={`group relative bg-white rounded-xl border transition-all duration-400 ${isDragging ? "shadow-2xl ring-2 ring-indigo-500/50" : "hover:shadow-2xl hover:shadow-slate-200/50"
+                    } flex flex-col overflow-hidden ${collection.is_active ? "border-gray-200" : "border-gray-200 bg-gray-50/50 opacity-80"
+                    }`}
+            >
+                {/* Drag Handle Overlay */}
+                <ProtectedAction permission={PERMISSIONS.HOME_SETTINGS_UPDATE} hideWhenDisabled>
+                    <div
+                        {...attributes}
+                        {...listeners}
+                        className="absolute top-4 left-1/2 -translate-x-1/2 z-20 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing bg-black/40 backdrop-blur-md p-1.5 rounded-full border border-white/20 text-white"
+                    >
+                        <GripVertical className="w-4 h-4" />
                     </div>
-                </div>
+                </ProtectedAction>
 
-                {/* Status Badges */}
-                <div className="absolute top-4 left-4 right-4 flex justify-between items-center">
-                    <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.1em] backdrop-blur-md border shadow-sm ${collection.is_active
-                        ? "bg-indigo-600/90 text-white border-white/20"
-                        : "bg-slate-500/80 text-white border-white/20"
-                        }`}>
-                        {collection.is_active ? "Live" : "Draft"}
-                    </div>
-                    {collection.video_duration && (
-                        <div className="px-2 py-1 bg-black/50 backdrop-blur-md rounded-md flex items-center gap-1 border border-white/10">
-                            <Clock className="w-3 h-3 text-white/70" />
-                            <span className="text-white text-[10px] font-bold">
-                                {Math.floor(collection.video_duration / 60)}:{String(collection.video_duration % 60).padStart(2, "0")}
-                            </span>
-                        </div>
+                {/* Media Header Profile */}
+                <div className="relative aspect-[9/12] w-full bg-gray-900 rounded-t-2xl overflow-hidden shadow-inner flex-shrink-0">
+                    {previewImage ? (
+                        <Image
+                            src={previewImage}
+                            alt={collection.product?.name || "Featured product preview"}
+                            fill
+                            sizes="(min-width: 768px) 25vw, 100vw"
+                            className="object-cover opacity-80"
+                        />
+                    ) : (
+                        <div className="h-full w-full bg-slate-900" />
                     )}
-                </div>
+                    <div className="absolute inset-0 bg-gradient-to-t from-gray-900/80 via-transparent to-gray-900/30" />
 
-                {/* Bottom Info Overlay */}
-                <div className="absolute p-4 left-4 right-4 bottom-4">
-                    <div className="flex items-center gap-2 mb-1">
-                        <Tag className="w-3 h-3 text-emerald-400" />
-                        <span className="text-xs font-bold text-emerald-400 uppercase tracking-tight">Featured Product</span>
+                    {/* Play Overlay */}
+                    <button
+                        type="button"
+                        onClick={() => setIsPreviewOpen(true)}
+                        className="absolute inset-0 flex items-center justify-center"
+                        aria-label={`Preview video for ${collection.product?.name || "featured collection"}`}
+                    >
+                        <span className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border border-white/30 transform transition-transform group-hover:scale-110">
+                            <Play className="w-6 h-6 text-white fill-white" />
+                        </span>
+                    </button>
+
+                    {/* Status Badges */}
+                    <div className="absolute top-4 left-4 right-4 flex justify-between items-center pointer-events-none">
+                        <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.1em] backdrop-blur-md border shadow-sm ${collection.is_active
+                            ? "bg-indigo-600/90 text-white border-white/20"
+                            : "bg-slate-500/80 text-white border-white/20"
+                            }`}>
+                            {collection.is_active ? "Live" : "Draft"}
+                        </div>
+                        {collection.video_duration && (
+                            <div className="px-2 py-1 bg-black/50 backdrop-blur-md rounded-md flex items-center gap-1 border border-white/10">
+                                <Clock className="w-3 h-3 text-white/70" />
+                                <span className="text-white text-[10px] font-bold">
+                                    {Math.floor(collection.video_duration / 60)}:{String(collection.video_duration % 60).padStart(2, "0")}
+                                </span>
+                            </div>
+                        )}
                     </div>
-                    <h3 className="text-lg font-bold text-white leading-tight line-clamp-2">
-                        {collection.product?.name || "Unknown Product"}
-                    </h3>
+
+                    {/* Bottom Info Overlay */}
+                    <div className="absolute p-4 left-4 right-4 bottom-4 pointer-events-none">
+                        <div className="flex items-center gap-2 mb-1">
+                            <Tag className="w-3 h-3 text-emerald-400" />
+                            <span className="text-xs font-bold text-emerald-400 uppercase tracking-tight">Featured Product</span>
+                        </div>
+                        <h3 className="text-lg font-bold text-white leading-tight line-clamp-2">
+                            {collection.product?.name || "Unknown Product"}
+                        </h3>
+                    </div>
+                </div>
+
+                {/* Content & Actions */}
+                <div className="p-5 flex-1 flex flex-col">
+                    <div className="flex items-center justify-between text-xs text-gray-500 mb-6 font-medium">
+                        <span className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded-md border border-gray-100">
+                            <Hash className="w-3 h-3 text-gray-400" />
+                            Order: {collection.sort_order}
+                        </span>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 mt-auto">
+                        <ProtectedAction permission={PERMISSIONS.HOME_SETTINGS_UPDATE} hideWhenDisabled>
+                            <button
+                                onClick={() => onToggle(collection)}
+                                disabled={togglingId === collection.id}
+                                className={`flex-1 inline-flex items-center justify-center gap-2 px-6 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-sm ${collection.is_active
+                                    ? "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                                    : "bg-indigo-600 text-white hover:bg-slate-900"
+                                    } disabled:opacity-50`}
+                            >
+                                {togglingId === collection.id ? (
+                                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                ) : collection.is_active ? (
+                                    <>
+                                        <EyeOff className="h-4 w-4" />
+                                        <span>Hide</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Eye className="h-4 w-4" />
+                                        <span>Show</span>
+                                    </>
+                                )}
+                            </button>
+                        </ProtectedAction>
+
+                        <ProtectedAction permission={PERMISSIONS.HOME_SETTINGS_UPDATE} hideWhenDisabled>
+                            <button
+                                onClick={() => onEdit(collection)}
+                                className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-2.5 text-xs font-black uppercase tracking-wider bg-white text-slate-900 border border-slate-200 rounded-xl hover:bg-slate-50 hover:shadow-md transition-all"
+                            >
+                                <Pencil className="h-3.5 w-3.5" />
+                                <span>Edit</span>
+                            </button>
+                        </ProtectedAction>
+
+                        <ProtectedAction permission={PERMISSIONS.HOME_SETTINGS_UPDATE} hideWhenDisabled>
+                            <button
+                                onClick={() => onDelete(collection.id, collection.product?.name || "Collection")}
+                                disabled={deletingId === collection.id}
+                                className="flex-none inline-flex items-center justify-center w-11 h-11 text-slate-300 rounded-xl hover:bg-rose-50 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100"
+                                title="Remove Collection"
+                            >
+                                {deletingId === collection.id ? (
+                                    <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                    <Trash2 className="h-5 w-5" />
+                                )}
+                            </button>
+                        </ProtectedAction>
+                    </div>
                 </div>
             </div>
-
-            {/* Content & Actions */}
-            <div className="p-5 flex-1 flex flex-col">
-                <div className="flex items-center justify-between text-xs text-gray-500 mb-6 font-medium">
-                    <span className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded-md border border-gray-100">
-                        <Hash className="w-3 h-3 text-gray-400" />
-                        Order: {collection.sort_order}
-                    </span>
+            {isPreviewOpen && (
+                <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/80 p-4">
+                    <div className="relative w-full max-w-4xl overflow-hidden rounded-2xl bg-black shadow-2xl">
+                        <button
+                            type="button"
+                            onClick={() => setIsPreviewOpen(false)}
+                            className="absolute right-3 top-3 z-10 rounded-full bg-white/90 px-3 py-1.5 text-xs font-black text-slate-900 shadow"
+                        >
+                            Close
+                        </button>
+                        <video
+                            src={collection.video_url}
+                            controls
+                            autoPlay
+                            playsInline
+                            preload="metadata"
+                            className="max-h-[80vh] w-full bg-black"
+                        />
+                    </div>
                 </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-2 mt-auto">
-                    <ProtectedAction permission={PERMISSIONS.HOME_SETTINGS_UPDATE} hideWhenDisabled>
-                        <button
-                            onClick={() => onToggle(collection)}
-                            disabled={togglingId === collection.id}
-                            className={`flex-1 inline-flex items-center justify-center gap-2 px-6 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-sm ${collection.is_active
-                                ? "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                                : "bg-indigo-600 text-white hover:bg-slate-900"
-                                } disabled:opacity-50`}
-                        >
-                            {togglingId === collection.id ? (
-                                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                            ) : collection.is_active ? (
-                                <>
-                                    <EyeOff className="h-4 w-4" />
-                                    <span>Hide</span>
-                                </>
-                            ) : (
-                                <>
-                                    <Eye className="h-4 w-4" />
-                                    <span>Show</span>
-                                </>
-                            )}
-                        </button>
-                    </ProtectedAction>
-
-                    <ProtectedAction permission={PERMISSIONS.HOME_SETTINGS_UPDATE} hideWhenDisabled>
-                        <button
-                            onClick={() => onEdit(collection)}
-                            className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-2.5 text-xs font-black uppercase tracking-wider bg-white text-slate-900 border border-slate-200 rounded-xl hover:bg-slate-50 hover:shadow-md transition-all"
-                        >
-                            <Pencil className="h-3.5 w-3.5" />
-                            <span>Edit</span>
-                        </button>
-                    </ProtectedAction>
-
-                    <ProtectedAction permission={PERMISSIONS.HOME_SETTINGS_UPDATE} hideWhenDisabled>
-                        <button
-                            onClick={() => onDelete(collection.id, collection.product?.name || "Collection")}
-                            disabled={deletingId === collection.id}
-                            className="flex-none inline-flex items-center justify-center w-11 h-11 text-slate-300 rounded-xl hover:bg-rose-50 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100"
-                            title="Remove Collection"
-                        >
-                            {deletingId === collection.id ? (
-                                <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                                <Trash2 className="h-5 w-5" />
-                            )}
-                        </button>
-                    </ProtectedAction>
-                </div>
-            </div>
-        </div>
+            )}
+        </>
     )
 }
 

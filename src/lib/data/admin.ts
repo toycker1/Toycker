@@ -31,6 +31,10 @@ import {
 import { resolveCustomerPhone } from "@/lib/util/customer-contact-phone"
 import { canEditOrderShippingAddress } from "@/lib/util/order-shipping-address-edit"
 import { DEFAULT_MANUAL_PRODUCT_STATUS } from "@/lib/util/product-visibility"
+import {
+  validateMediaUrlList,
+  validateNoSupabaseStorageMediaUrl,
+} from "@/lib/util/media-url"
 
 type EmailBackedRow = {
   email: string | null
@@ -129,6 +133,32 @@ function getTrimmedFormValue(formData: FormData, key: string): string {
   }
 
   return value.trim()
+}
+
+function getSafeMediaFormValue(formData: FormData, key: string, label: string) {
+  const value = getTrimmedFormValue(formData, key)
+  validateNoSupabaseStorageMediaUrl(value, label)
+
+  return value
+}
+
+function parseSafeMediaUrlList(
+  rawValue: FormDataEntryValue | null,
+  label: string
+) {
+  if (typeof rawValue !== "string" || rawValue.trim() === "") {
+    return []
+  }
+
+  const parsed: unknown = JSON.parse(rawValue)
+  if (!Array.isArray(parsed)) {
+    throw new Error(`${label} must be a list of media URLs.`)
+  }
+
+  const urls = parsed.filter((value): value is string => typeof value === "string")
+  validateMediaUrlList(urls, label)
+
+  return urls
 }
 
 function buildOrderShippingAddress(formData: FormData): Address {
@@ -688,7 +718,7 @@ export async function createCategory(formData: FormData) {
     name: formData.get("name") as string,
     handle: formData.get("handle") as string,
     description: formData.get("description") as string,
-    image_url: formData.get("image_url") as string | null,
+    image_url: getSafeMediaFormValue(formData, "image_url", "Category image") || null,
   }
 
   const { data: newCategory, error } = await supabase
@@ -732,7 +762,7 @@ export async function updateCategory(formData: FormData) {
     name: formData.get("name") as string,
     handle: formData.get("handle") as string,
     description: formData.get("description") as string,
-    image_url: formData.get("image_url") as string | null,
+    image_url: getSafeMediaFormValue(formData, "image_url", "Category image") || null,
   }
 
   const { error } = await supabase
@@ -1016,13 +1046,34 @@ export async function createProduct(
     ? parseFloat(formData.get("compare_at_price") as string)
     : null
 
+  let productImageUrl = ""
+  let productImages: string[] = []
+
+  try {
+    productImageUrl = getSafeMediaFormValue(
+      formData,
+      "image_url",
+      "Product image"
+    )
+    productImages = parseSafeMediaUrlList(
+      formData.get("images_json"),
+      "Product images"
+    )
+  } catch (error) {
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Invalid product media URLs.",
+    }
+  }
+
   const product = {
     name: formData.get("name") as string,
     handle: formData.get("handle") as string,
     description: formData.get("description") as string,
     price: productPrice,
     stock_count: productStockCount,
-    image_url: formData.get("image_url") as string,
+    image_url: productImageUrl,
     collection_id:
       primaryCollectionId && primaryCollectionId.trim() !== ""
         ? primaryCollectionId
@@ -1037,9 +1088,7 @@ export async function createProduct(
     },
     short_description: formData.get("short_description") as string,
     video_url: formData.get("video_url") as string,
-    images: formData.get("images_json")
-      ? JSON.parse(formData.get("images_json") as string)
-      : [],
+    images: productImages,
     seo_title: (formData.get("seo_title") as string) || null,
     seo_description: (formData.get("seo_description") as string) || null,
     seo_metadata: {
@@ -1175,7 +1224,7 @@ export async function updateProduct(formData: FormData) {
       ? parseInt(stockCountString)
       : currentProduct?.stock_count || 0
 
-  const newImageUrl = formData.get("image_url") as string
+  const newImageUrl = getSafeMediaFormValue(formData, "image_url", "Product image")
   const imageUrlChanged = newImageUrl !== currentProduct?.image_url
   const updatedHandle = formData.get("handle") as string
 
@@ -1203,9 +1252,10 @@ export async function updateProduct(formData: FormData) {
     metadata,
     short_description: formData.get("short_description") as string,
     video_url: formData.get("video_url") as string,
-    images: formData.get("images_json")
-      ? JSON.parse(formData.get("images_json") as string)
-      : currentProduct?.images || [],
+    images:
+      formData.get("images_json")
+        ? parseSafeMediaUrlList(formData.get("images_json"), "Product images")
+        : currentProduct?.images || [],
     seo_title: (formData.get("seo_title") as string) || null,
     seo_description: (formData.get("seo_description") as string) || null,
     seo_metadata: {
@@ -1845,7 +1895,7 @@ export async function createCollection(formData: FormData) {
   const collection = {
     title: formData.get("title") as string,
     handle: formData.get("handle") as string,
-    image_url: formData.get("image_url") as string | null,
+    image_url: getSafeMediaFormValue(formData, "image_url", "Collection image") || null,
   }
 
   // Insert collection and get ID
@@ -1898,7 +1948,7 @@ export async function updateCollection(formData: FormData) {
   const updates = {
     title: formData.get("title") as string,
     handle: formData.get("handle") as string,
-    image_url: formData.get("image_url") as string | null,
+    image_url: getSafeMediaFormValue(formData, "image_url", "Collection image") || null,
   }
 
   const { error } = await supabase

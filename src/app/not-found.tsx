@@ -1,6 +1,5 @@
 import { ArrowUpRight } from "lucide-react"
 import { Metadata } from "next"
-import Link from "next/link"
 
 export const metadata: Metadata = {
   title: "404",
@@ -14,7 +13,7 @@ export default function NotFound() {
       <p className="text-small-regular text-ui-fg-base">
         The page you tried to access does not exist.
       </p>
-      <Link
+      <a
         className="flex gap-x-1 items-center group"
         href="/"
       >
@@ -23,7 +22,7 @@ export default function NotFound() {
           className="group-hover:rotate-45 ease-in-out duration-150"
           size={20}
         />
-      </Link>
+      </a>
     </div>
   )
 }

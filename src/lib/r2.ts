@@ -1,4 +1,5 @@
 import { S3Client } from "@aws-sdk/client-s3"
+import { buildPublicMediaUrl } from "@/lib/util/media-url"
 
 export const r2Client = new S3Client({
   region: "auto",
@@ -10,6 +11,5 @@ export const r2Client = new S3Client({
 })
 
 export const getFileUrl = (key: string) => {
-  const publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || ""
-  return `${publicUrl}/${key}`
+  return buildPublicMediaUrl(key)
 }

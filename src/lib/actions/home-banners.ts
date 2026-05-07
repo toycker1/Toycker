@@ -4,6 +4,7 @@ import { revalidatePath, revalidateTag } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { BannerSchema, type BannerFormData, type HomeBanner } from "@/lib/types/home-banners"
 import { deleteFile, extractKeyFromUrl } from "./storage"
+import { validateNoSupabaseStorageMediaUrl } from "@/lib/util/media-url"
 
 // =============================================
 // List all banners (admin view)
@@ -36,6 +37,17 @@ export async function createHomeBanner(formData: BannerFormData) {
         return {
             error: "Invalid input data",
             details: validatedData.error.flatten().fieldErrors
+        }
+    }
+
+    try {
+        validateNoSupabaseStorageMediaUrl(
+            validatedData.data.image_url,
+            "Banner image"
+        )
+    } catch (error) {
+        return {
+            error: error instanceof Error ? error.message : "Invalid banner image URL",
         }
     }
 
@@ -100,6 +112,17 @@ export async function updateHomeBanner(id: string, formData: Partial<BannerFormD
     if (formData.is_active !== undefined) cleanData.is_active = formData.is_active
     if (formData.starts_at !== undefined) cleanData.starts_at = formData.starts_at || null
     if (formData.ends_at !== undefined) cleanData.ends_at = formData.ends_at || null
+
+    try {
+        validateNoSupabaseStorageMediaUrl(
+            typeof cleanData.image_url === "string" ? cleanData.image_url : null,
+            "Banner image"
+        )
+    } catch (error) {
+        return {
+            error: error instanceof Error ? error.message : "Invalid banner image URL",
+        }
+    }
 
     const { data, error } = await supabase
         .from("home_banners")

@@ -3,7 +3,7 @@
 import { useState, useRef } from "react"
 import { PhotoIcon, XMarkIcon } from "@heroicons/react/24/outline"
 import { getPresignedUploadUrl } from "@/lib/actions/storage"
-import { getFileUrl } from "@/lib/r2"
+import { buildPublicMediaUrl } from "@/lib/util/media-url"
 
 interface ImageUploadProps {
   name: string
@@ -59,7 +59,7 @@ export default function ImageUpload({ name, initialUrl, label = "Image URL" }: I
       xhr.addEventListener("load", () => {
         if (xhr.status === 200) {
           // Generate public URL
-          const publicUrl = getFileUrl(key)
+          const publicUrl = buildPublicMediaUrl(key)
           setImageUrl(publicUrl)
           setUploadProgress(100)
         } else {
