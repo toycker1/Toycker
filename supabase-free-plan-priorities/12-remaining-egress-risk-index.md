@@ -90,7 +90,7 @@ Evidence:
 | `16-admin-dashboard-export-risk.md` | Admin pages, exports, and backfill jobs can return large data | `code-only` | Low to Medium | Completed and verified on 07 May 2026 |
 | `17-media-cdn-cache-regression-risk.md` | Future media changes could bypass Cloudflare and hit Supabase Storage | `code-only for repo; external Cloudflare checks also required` | Medium | Completed and manually verified on 07 May 2026; weekly Supabase/Cloudflare monitoring remains |
 | `18-bot-prefetch-and-public-traffic-risk.md` | Bots, crawlers, and aggressive prefetch can multiply public reads | `code-only` | Medium | Completed and manually verified on 07 May 2026; continue weekly monitoring |
-| `19-production-monitoring-and-alerting.md` | Egress must be watched weekly before it reaches the Free Plan limit | `Supabase-only` | High | Pending |
+| `19-production-monitoring-and-alerting.md` | Egress must be watched weekly before it reaches the Free Plan limit | `Supabase-only` | High | Completed and manually verified on 07 May 2026; current egress is in watch-closely range |
 
 ## Recommended Phase Order
 
@@ -111,6 +111,16 @@ Use these rules before implementation:
 - If the issue is media, CDN, images, video, audio, or Storage, use `17-media-cdn-cache-regression-risk.md`.
 - If the issue is unexplained public traffic or repeated API hits, use `18-bot-prefetch-and-public-traffic-risk.md`.
 - If no clear issue is found, use `19-production-monitoring-and-alerting.md` and keep watching.
+
+## Priority 19 Monitoring Artifact
+
+Use this file during weekly reviews:
+
+```txt
+supabase-free-plan-priorities/19-weekly-production-monitoring-log-template.md
+```
+
+The template is read-only and Supabase-only. It should be used to record production usage numbers, threshold status, and the next action before any code or database change is proposed.
 
 ## What Should Not Be Implemented Without Evidence
 
