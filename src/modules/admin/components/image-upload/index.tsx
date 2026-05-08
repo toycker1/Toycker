@@ -3,7 +3,7 @@
 import { useState, useRef } from "react"
 import { PhotoIcon, XMarkIcon } from "@heroicons/react/24/outline"
 import { getPresignedUploadUrl } from "@/lib/actions/storage"
-import { getFileUrl } from "@/lib/r2"
+import { buildPublicMediaUrl } from "@/lib/util/media-url"
 
 interface ImageUploadProps {
   name: string
@@ -38,9 +38,10 @@ export default function ImageUpload({ name, initialUrl, label = "Image URL" }: I
 
     try {
       // Get presigned URL for upload
-      const { url, key, error } = await getPresignedUploadUrl({
+      const { url, key, cacheControl, error } = await getPresignedUploadUrl({
         fileType: file.type,
         folder: "products",
+        fileSizeBytes: file.size,
       })
 
       if (error || !url || !key) {
@@ -58,7 +59,7 @@ export default function ImageUpload({ name, initialUrl, label = "Image URL" }: I
       xhr.addEventListener("load", () => {
         if (xhr.status === 200) {
           // Generate public URL
-          const publicUrl = getFileUrl(key)
+          const publicUrl = buildPublicMediaUrl(key)
           setImageUrl(publicUrl)
           setUploadProgress(100)
         } else {
@@ -74,6 +75,9 @@ export default function ImageUpload({ name, initialUrl, label = "Image URL" }: I
 
       xhr.open("PUT", url)
       xhr.setRequestHeader("Content-Type", file.type)
+      if (cacheControl) {
+        xhr.setRequestHeader("Cache-Control", cacheControl)
+      }
       xhr.send(file)
     } catch (error) {
       console.error("Upload error:", error)

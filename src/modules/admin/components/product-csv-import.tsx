@@ -12,6 +12,8 @@ interface ImportResult extends Partial<ImportStats> {
     details?: string
 }
 
+const MAX_IMPORT_FILE_SIZE_BYTES = 5 * 1024 * 1024
+
 export default function ProductCsvImport() {
     const { showToast } = useToast()
     const [isImporting, setIsImporting] = useState(false)
@@ -23,6 +25,18 @@ export default function ProductCsvImport() {
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
         if (file) {
+            if (!file.name.toLowerCase().endsWith(".csv")) {
+                showToast("Please select a CSV file.", "error", "Invalid File")
+                e.target.value = ""
+                return
+            }
+
+            if (file.size > MAX_IMPORT_FILE_SIZE_BYTES) {
+                showToast("Maximum CSV import size is 5MB.", "error", "File Too Large")
+                e.target.value = ""
+                return
+            }
+
             setSelectedFile(file)
             setShowConfirmModal(true)
         }

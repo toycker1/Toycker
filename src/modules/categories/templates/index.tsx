@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation"
 
 import { listPaginatedProducts } from "@lib/data/products"
-import { retrieveCustomer } from "@lib/data/customer"
 import { Category } from "@/lib/supabase/types"
 import InteractiveLink from "@modules/common/components/interactive-link"
 import { SortOptions, ViewMode } from "@modules/store/components/refinement-list/types"
@@ -71,10 +70,6 @@ export default async function CategoryTemplate({
     { label: category.name },
   ]
 
-  const accountPath = "/account"
-  const customer = await retrieveCustomer()
-  const isCustomerLoggedIn = !!customer
-
   return (
     <StorefrontFiltersProvider
       countryCode={countryCode}
@@ -118,8 +113,6 @@ export default async function CategoryTemplate({
             viewMode={resolvedViewMode}
             sortBy={sort}
             pageSize={STORE_PRODUCT_PAGE_SIZE}
-            isCustomerLoggedIn={isCustomerLoggedIn}
-            loginPath={accountPath}
             clubDiscountPercentage={clubDiscountPercentage}
           />
         </div>

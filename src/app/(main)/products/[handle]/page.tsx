@@ -3,6 +3,7 @@ import { notFound } from "next/navigation"
 import { getProductByHandle, listProducts } from "@lib/data/products"
 import { getRegion } from "@lib/data/regions"
 import ProductTemplate from "@modules/products/templates"
+import { getImageUrl } from "@lib/util/get-image-url"
 
 type Props = {
   params: Promise<{ handle: string }>
@@ -77,14 +78,17 @@ export default async function ProductPage(props: Props) {
     notFound()
   }
 
-  const images = product.images ? product.images.map(url => ({ url })) : []
+  const images = (product.images ?? [])
+    .map((image) => getImageUrl(image))
+    .filter((url): url is string => Boolean(url))
+    .map((url) => ({ url }))
 
   return (
     <ProductTemplate
       product={product}
       region={region}
       countryCode="in"
-      images={images as any}
+      images={images}
       clubDiscountPercentage={clubSettings?.discount_percentage}
     />
   )

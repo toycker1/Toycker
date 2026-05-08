@@ -3,6 +3,34 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 const DEFAULT_CHECKOUT_RETURN_URL = '/checkout?step=address'
 
+function getSupabaseProjectRef(): string | null {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+
+  if (!supabaseUrl) {
+    return null
+  }
+
+  try {
+    return new URL(supabaseUrl).hostname.split('.')[0] || null
+  } catch {
+    return null
+  }
+}
+
+function hasSupabaseAuthCookie(request: NextRequest): boolean {
+  const projectRef = getSupabaseProjectRef()
+
+  if (!projectRef) {
+    return false
+  }
+
+  const authCookiePrefix = `sb-${projectRef}-auth-token`
+
+  return request.cookies
+    .getAll()
+    .some((cookie) => cookie.name === authCookiePrefix || cookie.name.startsWith(`${authCookiePrefix}.`))
+}
+
 function getCheckoutLoginReturnUrl(request: NextRequest): string {
   const cartId = request.cookies.get('toycker_cart_id')?.value?.trim()
 
@@ -19,6 +47,20 @@ function getCheckoutLoginReturnUrl(request: NextRequest): string {
 }
 
 export async function updateSession(request: NextRequest) {
+  const hasAuthCookie = hasSupabaseAuthCookie(request)
+
+  if (!hasAuthCookie) {
+    if (request.nextUrl.pathname.startsWith('/checkout')) {
+      const redirectUrl = new URL('/login', request.url)
+      redirectUrl.searchParams.set('returnUrl', getCheckoutLoginReturnUrl(request))
+      return NextResponse.redirect(redirectUrl)
+    }
+
+    return NextResponse.next({
+      request,
+    })
+  }
+
   let supabaseResponse = NextResponse.next({
     request,
   })

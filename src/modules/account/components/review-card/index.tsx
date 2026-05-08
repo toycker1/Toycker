@@ -2,6 +2,7 @@ import { Star, Video, Mic } from "lucide-react"
 import LocalizedClientLink from "@modules/common/components/localized-client-link"
 import { ReviewWithMedia } from "@/lib/actions/reviews"
 import { cn } from "@lib/util/cn"
+import { buildPublicMediaUrl } from "@/lib/util/media-url"
 
 type ReviewCardProps = {
     review: ReviewWithMedia
@@ -82,13 +83,7 @@ const ReviewCard = ({ review }: ReviewCardProps) => {
                 <div className="mt-4">
                     <div className="flex flex-wrap gap-2">
                         {review.review_media.map((media) => {
-                            let imageUrl = media.file_path
-                            if (media.file_type === "image" && !imageUrl.startsWith("http")) {
-                                const r2Hostname = process.env.NEXT_PUBLIC_R2_MEDIA_HOSTNAME || "cdn.toycker.in"
-                                // Ensure no double slashes
-                                const cleanPath = media.file_path.startsWith("/") ? media.file_path.slice(1) : media.file_path
-                                imageUrl = `https://${r2Hostname}/${cleanPath}`
-                            }
+                            const imageUrl = buildPublicMediaUrl(media.file_path)
 
                             return (
                                 <div

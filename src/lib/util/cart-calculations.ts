@@ -1,4 +1,9 @@
-import { CartItem, Product, ProductVariant, Promotion } from "@/lib/supabase/types"
+import {
+    CartItem,
+    CartProductSummary,
+    CartVariantSummary,
+    Promotion,
+} from "@/lib/supabase/types"
 import { fixUrl } from "./images"
 
 /** Raw cart item from database with nested product/variant objects */
@@ -10,8 +15,8 @@ export interface DatabaseCartItem {
     quantity: number
     created_at: string
     updated_at: string
-    product: Product | null
-    variant: ProductVariant | null
+    product: CartProductSummary | null
+    variant: CartVariantSummary | null
     metadata?: Record<string, unknown>
 }
 
@@ -27,6 +32,12 @@ export const mapCartItems = (items: DatabaseCartItem[], clubDiscountPercentage =
     return items.map((item) => {
         const product = item.product
         const variant = item.variant
+        const variantWithProduct = variant
+            ? {
+                ...variant,
+                product: variant.product ?? product ?? undefined,
+            }
+            : undefined
 
         let thumbnail = fixUrl(product?.image_url)
         if (product?.images && Array.isArray(product.images) && product.images.length > 0) {
@@ -68,7 +79,7 @@ export const mapCartItems = (items: DatabaseCartItem[], clubDiscountPercentage =
             subtotal: finalUnitPrice * item.quantity,
             has_club_discount: !isGiftWrapLine && hasClubDiscount,
             product: product ?? undefined,
-            variant: variant ?? undefined
+            variant: variantWithProduct
         }
     })
 }

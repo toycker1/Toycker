@@ -17,13 +17,17 @@ interface ProductCheckboxListProps {
 
 export function ProductCheckboxList({ products, selectedProductIds, onSelectionChange }: ProductCheckboxListProps) {
     const [searchQuery, setSearchQuery] = useState("")
+    const selectedProductIdsKey = useMemo(
+        () => selectedProductIds.slice().sort().join("|"),
+        [selectedProductIds]
+    )
     // Maintain local state for checkboxes to ensure UI is responsive and "Select All" works instantly
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(selectedProductIds))
 
-    // Sync with prop if it changes (e.g. on reset or initial load)
+    // Sync only when the actual selected product ids change, not when a parent rerender creates a new array.
     useEffect(() => {
         setSelectedIds(new Set(selectedProductIds))
-    }, [selectedProductIds])
+    }, [selectedProductIdsKey])
 
     // Notify parent of selection count changes
     useEffect(() => {

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@lib/supabase/client"
 
@@ -10,7 +10,7 @@ type RealtimeOrderManagerProps = {
 
 export const RealtimeOrderManager = ({ orderId }: RealtimeOrderManagerProps) => {
     const router = useRouter()
-    const supabase = createClient()
+    const supabase = useMemo(() => createClient(), [])
 
     useEffect(() => {
         const channel = supabase
@@ -24,7 +24,6 @@ export const RealtimeOrderManager = ({ orderId }: RealtimeOrderManagerProps) => 
                     filter: `id=eq.${orderId}`,
                 },
                 () => {
-                    // Update detected, refresh the server components
                     router.refresh()
                 }
             )

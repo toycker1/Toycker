@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server"
 
-import { retrieveCart } from "@lib/data/cart"
-import { retrieveCustomer } from "@lib/data/customer"
+import { retrieveLayoutState } from "@lib/data/layout-state"
 
 export const dynamic = "force-dynamic"
 
 export async function GET() {
   try {
-    const [customer, cart] = await Promise.all([retrieveCustomer(), retrieveCart()])
+    const { customer, cart } = await retrieveLayoutState()
 
     return NextResponse.json({ customer, cart })
   } catch (error) {

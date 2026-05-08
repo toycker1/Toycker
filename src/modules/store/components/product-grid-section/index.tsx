@@ -23,8 +23,6 @@ type ProductGridSectionProps = {
   sortBy: SortOptions
   pageSize: number
   totalCountHint?: number
-  isCustomerLoggedIn?: boolean
-  loginPath?: string
   clubDiscountPercentage?: number
 }
 
@@ -37,8 +35,6 @@ const ProductGridSection = ({
   sortBy,
   pageSize,
   totalCountHint,
-  isCustomerLoggedIn: _isCustomerLoggedIn = false,
-  loginPath: _loginPath = "/account",
   clubDiscountPercentage,
 }: ProductGridSectionProps) => {
   const context = useOptionalStorefrontFilters()

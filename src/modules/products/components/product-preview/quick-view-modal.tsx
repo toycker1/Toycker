@@ -30,6 +30,10 @@ const ProductQuickViewModal = ({
       return
     }
 
+    if (hydratedProduct?.id === product.id) {
+      return
+    }
+
     if (
       (product.options?.length ?? 0) > 0 &&
       product.variants?.some((variant) => (variant?.options?.length ?? 0) > 0)
@@ -48,6 +52,7 @@ const ProductQuickViewModal = ({
             countryCode: DEFAULT_COUNTRY_CODE,
             limit: 1,
             productsIds: [product.id],
+            includeDetails: true,
           }),
           signal: controller.signal,
         })
@@ -78,7 +83,7 @@ const ProductQuickViewModal = ({
     return () => {
       controller.abort("component_unmounted_or_product_changed")
     }
-  }, [isOpen, product])
+  }, [hydratedProduct?.id, isOpen, product])
 
   const resolvedProduct = hydratedProduct ?? product
 

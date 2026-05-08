@@ -43,6 +43,21 @@ env.cacheDir = CACHE_DIR
 
 const MODEL_ID = "Xenova/clip-vit-base-patch32"
 
+type TransformerProgress = {
+    status?: string
+    file?: string
+    progress?: number
+}
+
+type TransformerInputs = Record<string, unknown>
+type ImageProcessor = (image: RawImage) => Promise<TransformerInputs>
+type TextTokenizer = (
+    text: string[],
+    options: { padding: boolean; truncation: boolean }
+) => Promise<TransformerInputs>
+type VisionModel = (inputs: TransformerInputs) => Promise<{ image_embeds: Tensor }>
+type TextModel = (inputs: TransformerInputs) => Promise<{ text_embeds: Tensor }>
+
 function normalizeEmbedding(embedding: number[]): number[] {
     const magnitude = Math.sqrt(embedding.reduce((sum, val) => sum + val * val, 0))
     if (magnitude === 0) return embedding
@@ -130,9 +145,9 @@ class ModelContainer {
             console.log("Loading vision model...")
             this.visionModel = await CLIPVisionModelWithProjection.from_pretrained(MODEL_ID, {
                 quantized: true,
-                progress_callback: (progress: any) => {
+                progress_callback: (progress: TransformerProgress) => {
                     if (progress.status === 'progress') {
-                        console.log(`Downloading: ${progress.file} - ${Math.round(progress.progress)}%`)
+                        console.log(`Downloading: ${progress.file} - ${Math.round(progress.progress || 0)}%`)
                     }
                 }
             })
@@ -173,13 +188,15 @@ export async function generateImageEmbedding(input: string | Buffer | Uint8Array
             image = await RawImage.read(input)
         } else {
             const buffer = Buffer.isBuffer(input) ? input : Buffer.from(input)
-            const blob = new Blob([buffer as any])
-            image = await RawImage.fromBlob(blob as any)
+            const arrayBuffer = new ArrayBuffer(buffer.byteLength)
+            new Uint8Array(arrayBuffer).set(buffer)
+            const blob = new Blob([arrayBuffer])
+            image = await RawImage.fromBlob(blob)
         }
 
-        const imageInputs = await (processor as any)(image)
-        const output = await (visionModel as any)(imageInputs)
-        const imageEmbeds = output.image_embeds as Tensor
+        const imageInputs = await (processor as ImageProcessor)(image)
+        const output = await (visionModel as VisionModel)(imageInputs)
+        const imageEmbeds = output.image_embeds
         const embeddingArray = Array.from(imageEmbeds.data as Float32Array)
         return normalizeEmbedding(embeddingArray)
     } catch (error) {
@@ -196,9 +213,9 @@ export async function generateTextEmbedding(text: string): Promise<number[]> {
 
         const tokenizer = await container.getTokenizer()
         const textModel = await container.getTextModel()
-        const textInputs = await (tokenizer as any)([text], { padding: true, truncation: true })
-        const output = await (textModel as any)(textInputs)
-        const textEmbeds = output.text_embeds as Tensor
+        const textInputs = await (tokenizer as TextTokenizer)([text], { padding: true, truncation: true })
+        const output = await (textModel as TextModel)(textInputs)
+        const textEmbeds = output.text_embeds
         const embeddingArray = Array.from(textEmbeds.data as Float32Array)
         return normalizeEmbedding(embeddingArray)
     } catch (error) {

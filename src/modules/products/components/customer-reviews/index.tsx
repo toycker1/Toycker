@@ -20,6 +20,7 @@ import {
   ReviewVoiceRecorderPanel,
 } from "@/modules/reviews/components/review-form-fields"
 import { uploadReviewMedia } from "@/modules/reviews/utils/upload-review-media"
+import { buildPublicMediaUrl } from "@/lib/util/media-url"
 
 type CustomerApiResponse = {
   id?: string
@@ -408,7 +409,7 @@ const CustomerReviews = ({
             {review.review_media && review.review_media.length > 0 && (
               <div className="mt-6 flex flex-wrap gap-3">
                 {review.review_media.map((media) => {
-                  const publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL ? `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${media.file_path}` : "";
+                  const publicUrl = buildPublicMediaUrl(media.file_path)
 
                   if (media.file_type === 'video') {
                     return (
@@ -452,7 +453,7 @@ const CustomerReviews = ({
                             <span className="text-[9px] font-black uppercase tracking-widest text-indigo-400 block">Voice Note</span>
                           </div>
                         </div>
-                        <audio controls src={publicUrl} className="w-full h-8 brightness-110" />
+                        <audio controls preload="none" src={publicUrl} className="w-full h-8 brightness-110" />
                       </div>
                     )
                   }
@@ -518,6 +519,7 @@ const CustomerReviews = ({
                     src={activeVideo?.url}
                     controls
                     autoPlay
+                    preload="metadata"
                     className="max-h-[85vh] w-auto max-w-full rounded-2xl"
                   />
                   <button

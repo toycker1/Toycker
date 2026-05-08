@@ -1,6 +1,6 @@
 "use server"
 
-import { revalidatePath } from "next/cache"
+import { revalidatePath, revalidateTag, unstable_cache } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { ReviewWithMedia } from "./reviews"
 
@@ -10,6 +10,45 @@ export type HomeReview = {
     sort_order: number
     created_at?: string
     review?: ReviewWithMedia
+}
+
+type StorefrontReviewMediaRow = {
+    id: string
+    file_path: string
+    file_type: "image" | "video" | "audio"
+}
+
+type StorefrontReviewRow = {
+    id: string
+    rating: number
+    title: string
+    content: string
+    display_name: string
+    is_anonymous: boolean
+    product_id: string
+    review_media: StorefrontReviewMediaRow[] | null
+}
+
+type StorefrontHomeReviewRow = {
+    id: string
+    review_id: string
+    sort_order: number
+    review: StorefrontReviewRow | StorefrontReviewRow[] | null
+}
+
+type StorefrontReviewProductRow = {
+    id: string
+    name: string
+    price: number
+    image_url: string | null
+}
+
+const firstRelation = <T,>(value: T | T[] | null | undefined): T | null => {
+    if (Array.isArray(value)) {
+        return value[0] ?? null
+    }
+
+    return value ?? null
 }
 
 // =============================================
@@ -58,10 +97,7 @@ export async function listHomeReviewsAdmin() {
     return { reviews: reviewsWithProductNames as HomeReview[], error: null }
 }
 
-// =============================================
-// Fetch featured reviews for storefront
-// =============================================
-export async function listHomeReviewsStorefront() {
+const listHomeReviewsStorefrontInternal = async (): Promise<HomeReview[]> => {
     const supabase = await createClient()
 
     const { data, error } = await supabase
@@ -78,7 +114,11 @@ export async function listHomeReviewsStorefront() {
                 display_name,
                 is_anonymous,
                 product_id,
-                review_media (*)
+                review_media (
+                    id,
+                    file_path,
+                    file_type
+                )
             )
         `)
         .order("sort_order", { ascending: true })
@@ -97,30 +137,59 @@ export async function listHomeReviewsStorefront() {
     if (!data || data.length === 0) return []
 
     // Fetch product details for these reviews
-    const productIds = Array.from(new Set(data.map(hr => (hr.review as any)?.product_id).filter(Boolean)))
+    const rows = data as StorefrontHomeReviewRow[]
+    const productIds = Array.from(
+        new Set(
+            rows
+                .map((homeReview) => firstRelation(homeReview.review)?.product_id)
+                .filter((productId): productId is string => Boolean(productId))
+        )
+    )
 
-    const { data: products } = await supabase
-        .from("products")
-        .select("id, name, price, image_url")
-        .in("id", productIds)
+    let productMap = new Map<string, StorefrontReviewProductRow>()
 
-    const productMap = new Map(products?.map(p => [p.id, p]) || [])
+    if (productIds.length > 0) {
+        const { data: products } = await supabase
+            .from("products")
+            .select("id, name, price, image_url")
+            .in("id", productIds)
+
+        productMap = new Map(
+            ((products ?? []) as StorefrontReviewProductRow[]).map((product) => [
+                product.id,
+                product,
+            ])
+        )
+    }
 
     // Merge product data into review objects
-    const mergedData = data.map(hr => {
-        const review = (Array.isArray(hr.review) ? hr.review[0] : hr.review) as unknown as ReviewWithMedia
+    const mergedData = rows.map((homeReview) => {
+        const review = firstRelation(homeReview.review) as unknown as ReviewWithMedia | null
         if (review && review.product_id) {
             const product = productMap.get(review.product_id) || null
             review.product = product
             review.product_name = product?.name || "Unknown Product"
         }
         return {
-            ...hr,
+            ...homeReview,
             review: review
         }
     })
 
-    return mergedData as unknown as HomeReview[]
+    return mergedData as HomeReview[]
+}
+
+const cachedListHomeReviewsStorefront = unstable_cache(
+    listHomeReviewsStorefrontInternal,
+    ["home-reviews", "storefront"],
+    { revalidate: 3600, tags: ["home-reviews"] }
+)
+
+// =============================================
+// Fetch featured reviews for storefront
+// =============================================
+export async function listHomeReviewsStorefront() {
+    return cachedListHomeReviewsStorefront()
 }
 
 // =============================================
@@ -170,6 +239,7 @@ export async function addHomeReview(reviewId: string) {
         return { error: error.message }
     }
 
+    revalidateTag("home-reviews", "max")
     revalidatePath("/")
     revalidatePath("/admin/home-settings")
 
@@ -189,6 +259,7 @@ export async function removeHomeReview(id: string) {
 
     if (error) return { error: error.message }
 
+    revalidateTag("home-reviews", "max")
     revalidatePath("/")
     revalidatePath("/admin/home-settings")
 
@@ -217,6 +288,7 @@ export async function reorderHomeReviews(ids: string[]) {
         return { error: error.message }
     }
 
+    revalidateTag("home-reviews", "max")
     revalidatePath("/")
     revalidatePath("/admin/home-settings")
 

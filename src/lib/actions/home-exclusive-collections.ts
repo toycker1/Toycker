@@ -1,9 +1,10 @@
 "use server"
 
-import { revalidatePath } from "next/cache"
+import { revalidatePath, revalidateTag } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { ExclusiveCollectionSchema, type ExclusiveCollectionFormData, type HomeExclusiveCollection } from "@/lib/types/home-exclusive-collections"
 import { deleteFile, extractKeyFromUrl } from "./storage"
+import { validateNoSupabaseStorageMediaUrl } from "@/lib/util/media-url"
 
 // =============================================
 // List all collections (admin view)
@@ -48,6 +49,21 @@ export async function createExclusiveCollection(formData: ExclusiveCollectionFor
         return {
             error: "Invalid input data",
             details: validatedData.error.flatten().fieldErrors
+        }
+    }
+
+    try {
+        validateNoSupabaseStorageMediaUrl(
+            validatedData.data.video_url,
+            "Exclusive collection video"
+        )
+        validateNoSupabaseStorageMediaUrl(
+            validatedData.data.poster_url,
+            "Exclusive collection poster"
+        )
+    } catch (error) {
+        return {
+            error: error instanceof Error ? error.message : "Invalid exclusive collection media URL",
         }
     }
 
@@ -97,6 +113,7 @@ export async function createExclusiveCollection(formData: ExclusiveCollectionFor
     }
 
     // Revalidate home page cache
+    revalidateTag("exclusive-collections", "max")
     revalidatePath("/")
     revalidatePath("/admin/home-settings")
 
@@ -126,6 +143,21 @@ export async function updateExclusiveCollection(
     if (formData.video_duration !== undefined) cleanData.video_duration = formData.video_duration || null
     if (formData.sort_order !== undefined) cleanData.sort_order = formData.sort_order
     if (formData.is_active !== undefined) cleanData.is_active = formData.is_active
+
+    try {
+        validateNoSupabaseStorageMediaUrl(
+            typeof cleanData.video_url === "string" ? cleanData.video_url : null,
+            "Exclusive collection video"
+        )
+        validateNoSupabaseStorageMediaUrl(
+            typeof cleanData.poster_url === "string" ? cleanData.poster_url : null,
+            "Exclusive collection poster"
+        )
+    } catch (error) {
+        return {
+            error: error instanceof Error ? error.message : "Invalid exclusive collection media URL",
+        }
+    }
 
     const { data, error } = await supabase
         .from("home_exclusive_collections")
@@ -158,6 +190,7 @@ export async function updateExclusiveCollection(
         return { error: error.message }
     }
 
+    revalidateTag("exclusive-collections", "max")
     revalidatePath("/")
     revalidatePath("/admin/home-settings")
 
@@ -203,6 +236,7 @@ export async function deleteExclusiveCollection(id: string) {
         }
     }
 
+    revalidateTag("exclusive-collections", "max")
     revalidatePath("/")
     revalidatePath("/admin/home-settings")
 
@@ -225,6 +259,7 @@ export async function reorderExclusiveCollections(collectionIds: string[]) {
         return { error: error.message }
     }
 
+    revalidateTag("exclusive-collections", "max")
     revalidatePath("/")
     revalidatePath("/admin/home-settings")
 

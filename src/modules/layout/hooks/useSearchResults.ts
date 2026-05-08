@@ -4,6 +4,14 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { useDebounce } from "@/lib/hooks/use-debounce"
 import type { SearchResultsPayload } from "@lib/data/search"
 import { resizeImage } from "@/lib/util/image-processing"
+import {
+  SEARCH_IMAGE_CLIENT_MAX_DIMENSION,
+  SEARCH_IMAGE_UPLOAD_QUALITY,
+  MIN_SEARCH_QUERY_LENGTH,
+  SEARCH_DEBOUNCE_MS,
+  SEARCH_DEFAULT_PRODUCT_LIMIT,
+  SEARCH_DEFAULT_TAXONOMY_LIMIT,
+} from "@/lib/constants/search"
 
 type SearchStatus = "idle" | "loading" | "success" | "error"
 
@@ -15,20 +23,22 @@ type UseSearchResultsArgs = {
 
 export const useSearchResults = ({
   countryCode,
-  productLimit = 6,
-  taxonomyLimit = 5,
+  productLimit = SEARCH_DEFAULT_PRODUCT_LIMIT,
+  taxonomyLimit = SEARCH_DEFAULT_TAXONOMY_LIMIT,
 }: UseSearchResultsArgs) => {
   const [query, setQuery] = useState("")
-  const debouncedQuery = useDebounce(query.trim(), 200)
+  const debouncedQuery = useDebounce(query.trim(), SEARCH_DEBOUNCE_MS)
   const [results, setResults] = useState<SearchResultsPayload | null>(null)
   const [status, setStatus] = useState<SearchStatus>("idle")
   const [error, setError] = useState<string | null>(null)
   const cacheRef = useRef<Map<string, SearchResultsPayload>>(new Map())
   const fetchIdRef = useRef(0)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
 
   useEffect(() => {
-    if (!debouncedQuery) {
+    if (debouncedQuery.length < MIN_SEARCH_QUERY_LENGTH) {
+      abortControllerRef.current?.abort()
       setResults(null)
       setStatus("idle")
       setError(null)
@@ -51,6 +61,9 @@ export const useSearchResults = ({
 
     const currentFetchId = fetchIdRef.current + 1
     fetchIdRef.current = currentFetchId
+    abortControllerRef.current?.abort()
+    const controller = new AbortController()
+    abortControllerRef.current = controller
     let isActive = true
 
     setError(null)
@@ -67,7 +80,9 @@ export const useSearchResults = ({
           taxonomyLimit: String(taxonomyLimit),
         })
 
-        const response = await fetch(`/api/storefront/search?${params.toString()}`)
+        const response = await fetch(`/api/storefront/search?${params.toString()}`, {
+          signal: controller.signal,
+        })
 
         if (!response.ok) {
           const payload = (await response.json().catch(() => ({}))) as {
@@ -90,8 +105,16 @@ export const useSearchResults = ({
           return
         }
 
+        if (fetchError instanceof Error && fetchError.name === "AbortError") {
+          return
+        }
+
         setError(fetchError instanceof Error ? fetchError.message : "Unexpected error")
         setStatus("error")
+      } finally {
+        if (abortControllerRef.current === controller) {
+          abortControllerRef.current = null
+        }
       }
     }
 
@@ -99,6 +122,7 @@ export const useSearchResults = ({
 
     return () => {
       isActive = false
+      controller.abort()
     }
   }, [countryCode, debouncedQuery, productLimit, taxonomyLimit])
 
@@ -128,7 +152,11 @@ export const useSearchResults = ({
     setQuery("") // Clear text query when starting image search
 
     try {
-      const processedBlob = await resizeImage(file, 800) // 800px is a good balance for CLIP
+      const processedBlob = await resizeImage(
+        file,
+        SEARCH_IMAGE_CLIENT_MAX_DIMENSION,
+        SEARCH_IMAGE_UPLOAD_QUALITY
+      )
       const formData = new FormData()
       formData.append("image", processedBlob, "search.jpg")
 

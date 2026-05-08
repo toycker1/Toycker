@@ -1,6 +1,5 @@
 import { listPaginatedProducts } from "@lib/data/products"
 import { getRegion } from "@lib/data/regions"
-import { retrieveCustomer } from "@lib/data/customer"
 import {
   AvailabilityFilter,
   PriceRangeFilter,
@@ -11,6 +10,18 @@ import ProductGridSection from "@modules/store/components/product-grid-section"
 import { STORE_PRODUCT_PAGE_SIZE } from "@modules/store/constants"
 import { resolveAgeFilterValue } from "@modules/store/utils/age-filter"
 import { resolveCategoryIdentifier } from "@modules/store/utils/category"
+import {
+  MIN_SEARCH_QUERY_LENGTH,
+  SEARCH_MAX_QUERY_LENGTH,
+} from "@/lib/constants/search"
+
+const normalizeStoreSearchQuery = (value?: string) => {
+  const normalized = value?.trim().slice(0, SEARCH_MAX_QUERY_LENGTH)
+
+  return normalized && normalized.length >= MIN_SEARCH_QUERY_LENGTH
+    ? normalized
+    : undefined
+}
 
 type PaginatedProductsParams = {
   limit: number
@@ -69,8 +80,10 @@ export default async function PaginatedProducts({
     queryParams["id"] = productsIds
   }
 
-  if (searchQuery) {
-    queryParams["q"] = searchQuery
+  const resolvedSearchQuery = normalizeStoreSearchQuery(searchQuery)
+
+  if (resolvedSearchQuery) {
+    queryParams["q"] = resolvedSearchQuery
   }
 
   const region = await getRegion()
@@ -98,10 +111,6 @@ export default async function PaginatedProducts({
   const resolvedViewMode = viewMode || "grid-4"
   const resolvedSort = sortBy || "featured"
 
-  const accountPath = "/account"
-  const customer = await retrieveCustomer()
-  const isCustomerLoggedIn = !!customer
-
   return (
     <ProductGridSection
       title={title}
@@ -112,8 +121,6 @@ export default async function PaginatedProducts({
       sortBy={resolvedSort}
       pageSize={STORE_PRODUCT_PAGE_SIZE}
       totalCountHint={totalCountHint}
-      isCustomerLoggedIn={isCustomerLoggedIn}
-      loginPath={accountPath}
     />
   )
 }

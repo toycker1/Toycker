@@ -9,6 +9,7 @@ import { PERMISSIONS } from "@/lib/permissions"
 import clsx from "clsx"
 import { formatIST } from "@/lib/util/date"
 import { AdminTableWrapper } from "@modules/admin/components/admin-table-wrapper"
+import { buildPublicMediaUrl } from "@/lib/util/media-url"
 
 type ReviewMedia = ReviewWithMedia["review_media"][number]
 type ReviewTab = "all" | "pending" | "approved" | "rejected" | "voice"
@@ -270,14 +271,14 @@ export default function ReviewsTable({ reviews }: { reviews: ReviewWithMedia[] }
                                     </h5>
                                     <div className="grid grid-cols-2 gap-4">
                                         {selectedReview.review_media.map((media: ReviewMedia) => {
-                                            const publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL ? `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${media.file_path}` : "";
+                                            const publicUrl = buildPublicMediaUrl(media.file_path)
                                             return (
                                                 <div key={media.id} className="relative rounded-lg overflow-hidden border border-gray-200 bg-black/5">
                                                     {media.file_type === 'image' && (
                                                         <img src={publicUrl} alt="review media" className="w-full h-auto object-contain max-h-60" />
                                                     )}
                                                     {media.file_type === 'video' && (
-                                                        <video controls className="w-full h-auto max-h-60">
+                                                        <video controls preload="none" className="w-full h-auto max-h-60">
                                                             <source src={publicUrl} />
                                                         </video>
                                                     )}
@@ -287,7 +288,7 @@ export default function ReviewsTable({ reviews }: { reviews: ReviewWithMedia[] }
                                                                 <Mic className="h-5 w-5" />
                                                                 <span className="font-semibold text-sm">Voice Review</span>
                                                             </div>
-                                                            <audio controls className="w-full" style={{ height: '40px' }}>
+                                                            <audio controls preload="none" className="w-full" style={{ height: '40px' }}>
                                                                 <source src={publicUrl} />
                                                                 Your browser does not support the audio element.
                                                             </audio>

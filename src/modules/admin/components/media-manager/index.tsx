@@ -19,8 +19,8 @@ import {
 import { Plus, Image as ImageIcon, Loader2 } from "lucide-react"
 import { SortableItem } from "./sortable-item"
 import { getPresignedUploadUrl } from "@/lib/actions/storage"
-import { getFileUrl } from "@/lib/r2"
 import { cn } from "@lib/util/cn"
+import { buildPublicMediaUrl } from "@/lib/util/media-url"
 import {
     PRODUCT_MEDIA_ACCEPT_VALUE,
     PRODUCT_MEDIA_ALLOWED_TYPES_LABEL,
@@ -121,9 +121,10 @@ export default function MediaGallery({ initialImages = [], onOrderChange }: Medi
             const uploadedUrls: string[] = []
 
             for (const file of validFiles) {
-                const { url, key, error } = await getPresignedUploadUrl({
+                const { url, key, cacheControl, error } = await getPresignedUploadUrl({
                     fileType: file.type,
                     folder: "products",
+                    fileSizeBytes: file.size,
                 })
 
                 if (error || !url || !key) throw new Error(error || "Failed to get upload URL")
@@ -140,7 +141,7 @@ export default function MediaGallery({ initialImages = [], onOrderChange }: Medi
 
                     xhr.addEventListener("load", () => {
                         if (xhr.status === 200) {
-                            resolve(getFileUrl(key))
+                            resolve(buildPublicMediaUrl(key))
                         } else {
                             reject(new Error(`Upload failed for ${file.name}`))
                         }
@@ -149,6 +150,9 @@ export default function MediaGallery({ initialImages = [], onOrderChange }: Medi
                     xhr.addEventListener("error", () => reject(new Error("Network error")))
                     xhr.open("PUT", url)
                     xhr.setRequestHeader("Content-Type", file.type)
+                    if (cacheControl) {
+                        xhr.setRequestHeader("Cache-Control", cacheControl)
+                    }
                     xhr.send(file)
                 })
 

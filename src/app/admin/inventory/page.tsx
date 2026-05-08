@@ -18,12 +18,16 @@ export default async function AdminInventory({
 }) {
   const { page = "1", search = "", stock_status = "all" } = await searchParams
   const pageNumber = parseInt(page, 10) || 1
+  const stockStatus =
+    stock_status === "low_stock" || stock_status === "out_of_stock"
+      ? stock_status
+      : "all"
 
   const { products, count, totalPages, currentPage } = await getAdminProducts({
     page: pageNumber,
     limit: 20,
     search: search || undefined,
-    stock_status: stock_status as any
+    stock_status: stockStatus
   })
 
   const lowStockStats = await getLowStockStats()
@@ -95,36 +99,36 @@ export default async function AdminInventory({
       {/* Tabs */}
       <div className="flex items-center gap-2 border-b border-gray-200 pb-px">
         <Link
-          href={buildUrl(1, false, "all")}
+        href={buildUrl(1, false, "all")}
           className={cn(
             "px-4 py-2 text-sm font-medium transition-all relative",
-            stock_status === "all" ? "text-indigo-600" : "text-gray-500 hover:text-gray-700"
+            stockStatus === "all" ? "text-indigo-600" : "text-gray-500 hover:text-gray-700"
           )}
         >
           All Products
-          {stock_status === "all" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600" />}
+          {stockStatus === "all" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600" />}
         </Link>
         <Link
           href={buildUrl(1, false, "out_of_stock")}
           className={cn(
             "px-4 py-2 text-sm font-medium transition-all relative flex items-center gap-2",
-            stock_status === "out_of_stock" ? "text-red-600" : "text-gray-500 hover:text-gray-700"
+            stockStatus === "out_of_stock" ? "text-red-600" : "text-gray-500 hover:text-gray-700"
           )}
         >
           Out of Stock
           {lowStockStats.outOfStock > 0 && <span className="flex h-2 w-2 rounded-full bg-red-500" />}
-          {stock_status === "out_of_stock" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-600" />}
+          {stockStatus === "out_of_stock" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-600" />}
         </Link>
         <Link
           href={buildUrl(1, false, "low_stock")}
           className={cn(
             "px-4 py-2 text-sm font-medium transition-all relative flex items-center gap-2",
-            stock_status === "low_stock" ? "text-amber-600" : "text-gray-500 hover:text-gray-700"
+            stockStatus === "low_stock" ? "text-amber-600" : "text-gray-500 hover:text-gray-700"
           )}
         >
           Low Stock
           {lowStockStats.lowStock > 0 && <span className="flex h-2 w-2 rounded-full bg-amber-500" />}
-          {stock_status === "low_stock" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-600" />}
+          {stockStatus === "low_stock" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-600" />}
         </Link>
       </div>
 
@@ -138,7 +142,7 @@ export default async function AdminInventory({
 
       <div className="p-0 border-none shadow-none bg-transparent">
         {products.length > 0 ? (
-          <InventoryTable initialProducts={products as any} />
+          <InventoryTable initialProducts={products} />
         ) : (
           <div className="bg-white rounded-xl border border-admin-border overflow-hidden shadow-sm p-20 text-center">
             <div className="flex flex-col items-center">

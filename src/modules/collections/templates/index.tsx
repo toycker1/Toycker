@@ -1,5 +1,4 @@
 import { listPaginatedProducts } from "@lib/data/products"
-import { retrieveCustomer } from "@lib/data/customer"
 import { Collection } from "@/lib/supabase/types"
 import { SortOptions, ViewMode } from "@modules/store/components/refinement-list/types"
 import ProductGridSection from "@modules/store/components/product-grid-section"
@@ -47,10 +46,6 @@ export default async function CollectionTemplate({
     { value: "out_of_stock", label: "Out of stock" },
   ]
 
-  const accountPath = "/account"
-  const customer = await retrieveCustomer()
-  const isCustomerLoggedIn = !!customer
-
   return (
     <StorefrontFiltersProvider
       countryCode={countryCode}
@@ -83,8 +78,6 @@ export default async function CollectionTemplate({
             viewMode={resolvedViewMode}
             sortBy={sort}
             pageSize={STORE_PRODUCT_PAGE_SIZE}
-            isCustomerLoggedIn={isCustomerLoggedIn}
-            loginPath={accountPath}
             clubDiscountPercentage={clubDiscountPercentage}
           />
         </div>

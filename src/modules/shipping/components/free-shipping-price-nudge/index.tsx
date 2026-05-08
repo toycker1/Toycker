@@ -11,13 +11,27 @@ import { useState } from "react"
 import { useLayoutData } from "@modules/layout/context/layout-data-context"
 import { useEffect } from "react"
 import { usePathname } from "next/navigation"
+import { useCartStore } from "@modules/cart/context/cart-store-context"
+
+type ShippingPriceTarget = {
+  current_amount: number
+  target_amount: number
+  target_reached: boolean
+  target_remaining: number
+  remaining_percentage: number
+}
+
+type FreeShippingPrice = Price &
+  ShippingPriceTarget & {
+    shipping_option_id: string
+  }
 
 const computeTarget = (
   cart: Cart,
   price: Price
-) => {
+) : ShippingPriceTarget => {
   const priceRule = (price.price_rules || []).find(
-    (pr: any) => pr.attribute === "item_total"
+    (pr) => pr.attribute === "item_total"
   )!
 
   const currentAmount = cart.item_total || 0
@@ -72,11 +86,12 @@ const computeTarget = (
 }
 
 export default function ShippingPriceNudge({ variant = "inline" }: { variant?: "popup" | "inline" }) {
-  const { cart, shippingOptions, loadShippingOptions } = useLayoutData()
+  const { cart: layoutCart, shippingOptions, loadShippingOptions } = useLayoutData()
+  const { cart } = useCartStore()
   const pathname = usePathname()
 
   useEffect(() => {
-    if (!cart) {
+    if (!layoutCart) {
       return
     }
 
@@ -87,13 +102,13 @@ export default function ShippingPriceNudge({ variant = "inline" }: { variant?: "
         console.error("Failed to load shipping options", error)
       })
     }
-  }, [cart, shippingOptions.length, loadShippingOptions, pathname])
+  }, [layoutCart, shippingOptions.length, loadShippingOptions, pathname])
 
   if (!cart || !shippingOptions?.length) {
     return null
   }
 
-  // Check if any shipping options have a conditional price based on item_total
+  // Check whether shipping options have a conditional price based on item_total
   const freeShippingPrice = shippingOptions
     .map((shippingOption) => {
       const calculatedPrice = shippingOption.calculated_price
@@ -106,14 +121,14 @@ export default function ShippingPriceNudge({ variant = "inline" }: { variant?: "
       // 1. Currency code is same as the cart's
       // 2. Have a rule that is set on item_total
       const validCurrencyPrices = shippingOption.prices.filter(
-        (price: any) =>
+        (price) =>
           price.currency_code === cart.currency_code &&
           (price.price_rules || []).some(
-            (priceRule: any) => priceRule.attribute === "item_total"
+            (priceRule) => priceRule.attribute === "item_total"
           )
       )
 
-      return validCurrencyPrices.map((price: any) => {
+      return validCurrencyPrices.map((price): FreeShippingPrice => {
         return {
           ...price,
           shipping_option_id: shippingOption.id,
@@ -202,7 +217,7 @@ function FreeShippingPopup({
   price,
 }: {
   cart: Cart
-  price: any
+  price: FreeShippingPrice
 }) {
   const [isClosed, setIsClosed] = useState(false)
   const currencyCode = cart.currency_code || cart.region?.currency_code || "INR"

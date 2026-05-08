@@ -8,7 +8,6 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useRef,
   useState,
@@ -118,10 +117,10 @@ export const CartStoreProvider = ({ children }: { children: ReactNode }) => {
   const { cart: layoutCart } = useLayoutData()
   const toast = useOptionalToast()
   const showToast = toast?.showToast
-  const [cart, setCart] = useState<Cart | null>(layoutCart ?? null)
+  const [cart, setCart] = useState<Cart | null>(null)
   const [isSyncing, setIsSyncing] = useState(false)
   const [lastError, setLastError] = useState<string | null>(null)
-  const previousCartRef = useRef<Cart | null>(layoutCart ?? null)
+  const previousCartRef = useRef<Cart | null>(null)
   const addQueueRef = useRef<Promise<void>>(Promise.resolve())
   const removeQueueRef = useRef<Promise<void>>(Promise.resolve())
   const updateQueueRef = useRef<Promise<void>>(Promise.resolve())
@@ -141,15 +140,6 @@ export const CartStoreProvider = ({ children }: { children: ReactNode }) => {
     }),
     [],
   )
-
-  useEffect(() => {
-    if (!layoutCart) return
-    const hasChanged = layoutCart.updated_at !== previousCartRef.current?.updated_at
-    if (hasChanged) {
-      previousCartRef.current = layoutCart
-      setCart(layoutCart)
-    }
-  }, [layoutCart])
 
   const setFromServer = useCallback((nextCart: Cart | null) => {
     setCart(nextCart)
@@ -345,7 +335,7 @@ export const CartStoreProvider = ({ children }: { children: ReactNode }) => {
             variant,
             quantity,
             baseCart,
-            metadata as Record<string, any>,
+            metadata,
           )
           nextItems.push(optimistic)
         }

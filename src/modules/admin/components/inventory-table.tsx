@@ -1,6 +1,6 @@
 "use client"
 
-import { Product } from "@/lib/supabase/types"
+import type { AdminProductListItem } from "@/lib/data/admin"
 import { updateInventory } from "@/lib/data/admin"
 import {
   TagIcon,
@@ -22,7 +22,7 @@ import { LOW_STOCK_THRESHOLD } from "@/lib/constants/inventory"
 import { AdminTableWrapper } from "@modules/admin/components/admin-table-wrapper"
 
 type InventoryTableProps = {
-  initialProducts: Product[]
+  initialProducts: AdminProductListItem[]
 }
 
 
@@ -65,7 +65,7 @@ export default function InventoryTable({ initialProducts }: InventoryTableProps)
         </thead>
         <tbody className="bg-white divide-y divide-gray-100">
           {initialProducts.map((product) => {
-            const hasVariants = (product.variants?.length || 0) > 1 || (product.options?.length || 0) > 0
+            const hasVariants = (product.variants?.length || 0) > 1
             const isExpanded = expandedProducts[product.id]
             const isUpdatingProduct = updating[product.id]
 
