@@ -7,7 +7,24 @@ import { Order } from "@/lib/supabase/types"
 import { getAuthUser } from "./auth"
 import { logOrderEvent } from "@/lib/data/admin"
 
-export const listOrders = cache(async () => {
+export type AccountOrderSummary = Pick<
+  Order,
+  | "id"
+  | "display_id"
+  | "created_at"
+  | "status"
+  | "fulfillment_status"
+  | "payment_status"
+  | "total"
+  | "total_amount"
+  | "currency_code"
+> & {
+  first_item_title: string | null
+  first_item_thumbnail: string | null
+  item_count: number
+}
+
+export const listOrders = cache(async (): Promise<AccountOrderSummary[]> => {
   const user = await getAuthUser()
   const supabase = await createClient()
 
@@ -16,8 +33,10 @@ export const listOrders = cache(async () => {
   }
 
   const { data, error } = await supabase
-    .from("orders")
-    .select("*")
+    .from("account_order_summaries")
+    .select(
+      "id, display_id, created_at, status, fulfillment_status, payment_status, total, total_amount, currency_code, first_item_title, first_item_thumbnail, item_count"
+    )
     .eq("user_id", user.id)
     .order("created_at", { ascending: false })
 
@@ -26,7 +45,7 @@ export const listOrders = cache(async () => {
     return []
   }
 
-  return data as Order[]
+  return data as AccountOrderSummary[]
 })
 
 export async function retrieveOrder(id: string) {
@@ -61,7 +80,7 @@ export async function cancelUserOrder(orderId: string) {
 
   const { data: order, error } = await supabase
     .from("orders")
-    .select("*")
+    .select("id, status, payment_status")
     .eq("id", orderId)
     .eq("user_id", user.id)
     .maybeSingle()

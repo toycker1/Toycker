@@ -1,10 +1,12 @@
 import { ChevronRight } from "lucide-react"
 import LocalizedClientLink from "@modules/common/components/localized-client-link"
 import { convertToLocale } from "@lib/util/money"
+import { AccountOrderSummary } from "@lib/data/orders"
+import { Address, CustomerProfile } from "@/lib/supabase/types"
 
 type OverviewProps = {
-  customer: any
-  orders: any[] | null
+  customer: CustomerProfile
+  orders: AccountOrderSummary[] | null
   reviewsCount?: number
 }
 
@@ -65,7 +67,7 @@ const Overview = ({ customer, orders, reviewsCount = 0 }: OverviewProps) => {
         </div>
         <ul className="flex flex-col gap-y-3" data-testid="orders-wrapper">
           {orders && orders.length > 0 ? (
-            orders.slice(0, 5).map((order: any) => {
+            orders.slice(0, 5).map((order) => {
               return (
                 <li key={order.id} data-testid="order-wrapper" data-value={order.id}>
                   <LocalizedClientLink href={`/account/orders/details/${order.id}`}>
@@ -104,7 +106,7 @@ const Overview = ({ customer, orders, reviewsCount = 0 }: OverviewProps) => {
   )
 }
 
-const getProfileCompletion = (customer: any) => {
+const getProfileCompletion = (customer: CustomerProfile) => {
   let count = 0
 
   if (!customer) {
@@ -124,7 +126,7 @@ const getProfileCompletion = (customer: any) => {
   }
 
   const billingAddress = customer.addresses?.find(
-    (addr: any) => addr.is_default_billing
+    (addr: Address) => addr.is_default_billing
   )
 
   if (billingAddress) {

@@ -1,29 +1,17 @@
-import { useMemo } from "react"
+import Image from "next/image"
 import { Package, Clock, CheckCircle2, Truck } from "lucide-react"
 
-import Thumbnail from "@modules/products/components/thumbnail"
 import LocalizedClientLink from "@modules/common/components/localized-client-link"
 import { convertToLocale } from "@lib/util/money"
-import { Order } from "@/lib/supabase/types"
+import { AccountOrderSummary } from "@lib/data/orders"
 import { cn } from "@lib/util/cn"
+import { fixUrl } from "@lib/util/images"
 
 type OrderCardProps = {
-  order: Order
+  order: AccountOrderSummary
 }
 
 const OrderCard = ({ order }: OrderCardProps) => {
-  const numberOfLines = useMemo(() => {
-    return (
-      order.items?.reduce((acc, item) => {
-        return acc + item.quantity
-      }, 0) ?? 0
-    )
-  }, [order])
-
-  const numberOfProducts = useMemo(() => {
-    return order.items?.length ?? 0
-  }, [order])
-
   // Get order status
   const getStatusInfo = () => {
     const status = order.status || "pending"
@@ -80,6 +68,11 @@ const OrderCard = ({ order }: OrderCardProps) => {
 
   const statusInfo = getStatusInfo()
   const StatusIcon = statusInfo.icon
+  const firstItemTitle = order.first_item_title?.trim() || "Order items"
+  const itemCountLabel = getOrderItemCountLabel(order.item_count)
+  const thumbnailUrl = order.first_item_thumbnail
+    ? fixUrl(order.first_item_thumbnail)
+    : null
 
   return (
     <div
@@ -106,36 +99,32 @@ const OrderCard = ({ order }: OrderCardProps) => {
         </div>
       </div>
 
-      {/* Product Grid - Square thumbnails to prevent cutoff */}
-      <div className="mb-4">
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-thin">
-          {order.items?.slice(0, 4).map((i: any, _idx: number) => (
-            <div
-              key={i.id}
-              className="flex-shrink-0 group"
-              data-testid="order-item"
-            >
-              <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden border border-gray-200 bg-gray-50">
-                <Thumbnail
-                  thumbnail={i.thumbnail}
-                  images={[]}
-                  size="square"
-                  className="w-full h-full"
-                />
-              </div>
-            </div>
-          ))}
-          {numberOfProducts > 4 && (
-            <div className="flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center">
-              <span className="text-sm font-semibold text-gray-600">
-                +{numberOfLines - 4}
-              </span>
+      {/* Lightweight product context from the order summary view */}
+      <div className="flex items-center gap-3 mb-4">
+        <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+          {thumbnailUrl ? (
+            <Image
+              src={thumbnailUrl}
+              alt={firstItemTitle}
+              fill
+              sizes="64px"
+              className="object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-gray-400">
+              <Package className="h-6 w-6" />
             </div>
           )}
         </div>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-gray-900 line-clamp-2">
+            {firstItemTitle}
+          </p>
+          <p className="text-xs text-gray-500">{itemCountLabel}</p>
+        </div>
       </div>
 
-      {/* Order Details - Date, Amount, Items */}
+      {/* Order Details - Date, Amount, Details */}
       <div className="grid grid-cols-3 gap-4 mb-4">
         <div>
           <p className="text-xs text-gray-500 mb-1">Date</p>
@@ -165,7 +154,7 @@ const OrderCard = ({ order }: OrderCardProps) => {
         <div>
           <p className="text-xs text-gray-500 mb-1">Items</p>
           <p className="text-sm font-medium text-gray-900">
-            {numberOfLines} {numberOfLines === 1 ? "item" : "items"}
+            {itemCountLabel}
           </p>
         </div>
       </div>
@@ -183,6 +172,12 @@ const OrderCard = ({ order }: OrderCardProps) => {
       </div>
     </div>
   )
+}
+
+const getOrderItemCountLabel = (count: number) => {
+  const safeCount = Math.max(0, count)
+
+  return safeCount === 1 ? "1 item" : `${safeCount} items`
 }
 
 export default OrderCard
