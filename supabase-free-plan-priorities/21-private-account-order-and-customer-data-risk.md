@@ -8,15 +8,29 @@ These routes are lower risk than public store pages because bots normally cannot
 
 ## Status
 
-`Documented for future monitoring`
+`Completed and verified on dev and production on 08 May 2026`
 
-No immediate code change is required unless Supabase logs show these private routes are high egress sources.
+The account order list now uses a lightweight order summary path instead of returning full order rows for the list screen.
+
+Development and production both have migration `20260508170000_create_account_order_summaries_view.sql` applied and verified.
 
 ## Classification
 
-`code-only if needed`
+`both (codebase + Supabase)`
 
-No Supabase migration is expected for the first fix. A migration should only be considered later if query performance or indexes become a measured problem.
+A Supabase migration was used because the safest long-term fix is a database view for the account order list summary. The application code reads only the fields needed for the order list.
+
+The migration creates the view `public.account_order_summaries`.
+
+It does not:
+
+- create a new table
+- insert, update, or delete customer/order data
+- change existing table columns
+- create or change RLS policies
+- change checkout, payment, cancellation, or order detail data
+
+The view uses `security_invoker=true`, so existing permissions and RLS behavior still control access.
 
 ## Related Files
 
@@ -33,11 +47,13 @@ Likely areas:
 
 ## Current Code Observation
 
-Some private routes still use wider selects, including full order rows.
+The main account order list has been optimized.
 
 Examples:
 
-- `src/lib/data/orders.ts` uses `select("*")` for customer order list/detail/cancel checks.
+- `src/lib/data/orders.ts` reads `account_order_summaries` for the order list.
+- The order list receives only summary fields such as order id, display id, status, total, first item title, first item thumbnail, and item count.
+- Order detail can still load fuller order data because the detail page needs items, addresses, payment, and timeline information.
 - Customer profile/address flows fetch the fields needed for account and checkout behavior.
 - Reviews and rewards fetch private user data that can be larger as usage grows.
 
@@ -83,7 +99,7 @@ This is important because cart, checkout, payment discount, rewards, and order l
 
 ## When To Implement
 
-Implement only if monitoring shows one of these:
+The account order list implementation is complete. More private-route optimization should only be done if monitoring shows one of these:
 
 - Supabase Logs Explorer shows account/order/review/reward routes as top paths.
 - Database egress rises while public store/search/cart routes are not the cause.
@@ -91,7 +107,7 @@ Implement only if monitoring shows one of these:
 
 ## Simple Implementation Plan If Needed
 
-Use a summary/detail split.
+Use the same summary/detail split pattern if another private account page becomes a measured egress source.
 
 1. Find the page or API route causing high egress.
 2. Identify the exact fields the screen displays.
@@ -114,7 +130,40 @@ Example approach:
   - `fulfillment_status`
   - `total_amount`
   - `currency_code`
+  - `first_item_title`
+  - `first_item_thumbnail`
+  - `item_count`
 - Order detail can keep fuller data if the UI shows items, address, payment, tracking, and timeline.
+
+## Migration Verification
+
+Migration file:
+
+```txt
+supabase/migrations/20260508170000_create_account_order_summaries_view.sql
+```
+
+Verified in development project `Toycker Development`:
+
+- migration history includes `20260508170000`
+- `public.account_order_summaries` exists
+- expected columns exist
+- `security_invoker=true` is set
+
+Verified in production project `toycker`:
+
+- migration history includes `20260508170000`
+- `public.account_order_summaries` exists
+- expected columns exist
+- `security_invoker=true` is set
+
+Production backup files were created before running the migration under:
+
+```txt
+supabase/prod/backups/
+```
+
+The valid production backup set includes schema, data, roles, and RLS policy snapshots from 08 May 2026 before the account order summary view migration.
 
 ## How To Avoid Breaking Existing Workflows
 
@@ -140,5 +189,5 @@ Example approach:
 
 ## Simple Senior Explanation
 
-Private account and order pages can still return bigger data because they are real customer workflows. This is acceptable unless monitoring proves they are a top egress source. If that happens, the safe fix is to split list pages into smaller summary queries and keep full data only for detail pages.
+The account order list now uses a small database view instead of fetching full order rows. This reduces Supabase response size on the order list while keeping order detail pages complete. No order data, payment data, RLS policy, or existing table structure was changed.
 

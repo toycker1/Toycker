@@ -22,7 +22,7 @@ export const getRewardWallet = cache(async (): Promise<RewardWallet | null> => {
 
     const { data: wallet, error } = await supabase
         .from("reward_wallets")
-        .select("*")
+        .select("id, user_id, balance, created_at, updated_at")
         .eq("user_id", user.id)
         .maybeSingle()
 
@@ -47,11 +47,10 @@ export async function getRewardTransactions(): Promise<RewardTransactionWithOrde
     // 1. Fetch transactions
     const { data: transactions, error: txError } = await supabase
         .from("reward_transactions")
-        .select("*")
+        .select("id, wallet_id, amount, type, description, order_id, created_at")
         .eq("wallet_id", wallet.id)
         .order("created_at", { ascending: false })
-
-    console.log(`DEBUG: Found ${transactions?.length || 0} transactions for wallet: ${wallet.id}`)
+        .limit(50)
 
     if (txError) {
         console.error("DEBUG: Error fetching reward transactions:", {
@@ -91,7 +90,7 @@ export async function getRewardTransactions(): Promise<RewardTransactionWithOrde
     }
 
     // 4. Map display IDs back to transactions
-    return transactions.map(tx => ({
+    return transactions.map((tx) => ({
         ...tx,
         orders: tx.order_id && ordersMap[tx.order_id]
             ? { display_id: ordersMap[tx.order_id] }

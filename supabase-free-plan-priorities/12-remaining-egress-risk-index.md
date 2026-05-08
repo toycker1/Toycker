@@ -91,8 +91,8 @@ Evidence:
 | `17-media-cdn-cache-regression-risk.md` | Future media changes could bypass Cloudflare and hit Supabase Storage | `code-only for repo; external Cloudflare checks also required` | Medium | Completed and manually verified on 07 May 2026; weekly Supabase/Cloudflare monitoring remains |
 | `18-bot-prefetch-and-public-traffic-risk.md` | Bots, crawlers, and aggressive prefetch can multiply public reads | `code-only` | Medium | Completed and manually verified on 07 May 2026; continue weekly monitoring |
 | `19-production-monitoring-and-alerting.md` | Egress must be watched weekly before it reaches the Free Plan limit | `Supabase-only` | High | Completed and manually verified on 07 May 2026; current egress is in watch-closely range |
-| `20-final-remaining-egress-risk-register.md` | Final catch-all map for all residual risks after priorities 1-19 | `mixed` | High | Documentation added for future monitoring and safe implementation |
-| `21-private-account-order-and-customer-data-risk.md` | Private account, order, review, wallet, and customer data can still grow with real usage | `code-only if needed` | Low to Medium | Documented; implement only if logs show these private routes are top egress sources |
+| `20-final-remaining-egress-risk-register.md` | Final catch-all map for all residual risks after priorities 1-19 | `mixed` | High | Completed as final remaining-risk monitoring gate on 08 May 2026; no immediate code or Supabase migration required |
+| `21-private-account-order-and-customer-data-risk.md` | Private account, order, review, wallet, and customer data can still grow with real usage | `both (codebase + Supabase)` | Low to Medium | Completed and verified on dev and production on 08 May 2026; account order list uses `account_order_summaries`, while private detail pages remain intentionally fuller |
 | `22-home-page-cached-media-section-risk.md` | Cached home sections can regress if they fetch full product rows or bypass Cloudflare cache | `code-only + Cloudflare checks if needed` | Medium | Documented; current cache/media guardrails remain in place |
 | `23-low-volume-wildcard-and-admin-detail-risk.md` | Some low-volume/admin/callback/small-table paths still use broad selects | `code-only if measured` | Low to Medium | Documented; do not optimize without measured evidence |
 
@@ -115,7 +115,7 @@ Use these rules before implementation:
 - If the issue is media, CDN, images, video, audio, or Storage, use `17-media-cdn-cache-regression-risk.md`.
 - If the issue is unexplained public traffic or repeated API hits, use `18-bot-prefetch-and-public-traffic-risk.md`.
 - If no clear issue is found, use `19-production-monitoring-and-alerting.md` and keep watching.
-- If the issue does not clearly fit files 13-19, use `20-final-remaining-egress-risk-register.md` first.
+- If the issue does not clearly fit files 13-19, use `20-final-remaining-egress-risk-register.md` first. This file is a decision gate, not an automatic implementation ticket.
 - If the issue is private account, order, review, wallet, or customer data, use `21-private-account-order-and-customer-data-risk.md`.
 - If the issue is home page cached sections, banners, exclusive collections, review media, or Cloudflare media caching, use `22-home-page-cached-media-section-risk.md`.
 - If the issue is a remaining broad `select("*")`, admin detail route, payment callback, small table, or operational script, use `23-low-volume-wildcard-and-admin-detail-risk.md`.
