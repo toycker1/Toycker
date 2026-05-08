@@ -34,6 +34,9 @@ function FulfillButton({ disabled }: { disabled: boolean }) {
 
 export default function FulfillmentModal({ orderId, shippingPartners }: FulfillmentModalProps) {
     const [isOpen, setIsOpen] = useState(false)
+    const trivaraPartner = shippingPartners.find(
+        (partner) => partner.name.toLowerCase() === "trivara logistics"
+    )
 
     const handleSubmit = async (formData: FormData) => {
         try {
@@ -72,7 +75,9 @@ export default function FulfillmentModal({ orderId, shippingPartners }: Fulfillm
                                 </div>
                                 <div>
                                     <h2 className="text-lg font-bold text-gray-900">Fulfill Order</h2>
-                                    <p className="text-xs text-gray-500">Select shipping partner and add tracking</p>
+                                    <p className="text-xs text-gray-500">
+                                        Use Trivara Logistics and enter the tracking ID received from Trivara.
+                                    </p>
                                 </div>
                             </div>
                             <button
@@ -93,6 +98,7 @@ export default function FulfillmentModal({ orderId, shippingPartners }: Fulfillm
                                     name="shipping_partner_id"
                                     id="shipping_partner_id"
                                     required
+                                    defaultValue={trivaraPartner?.id || ""}
                                     className="block w-full px-4 py-3 rounded-lg border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all text-sm"
                                 >
                                     <option value="">Select a shipping partner</option>
@@ -107,17 +113,22 @@ export default function FulfillmentModal({ orderId, shippingPartners }: Fulfillm
                                         No shipping partners configured. Add partners in Settings → Shipping Partners.
                                     </p>
                                 )}
+                                {shippingPartners.length > 0 && !trivaraPartner && (
+                                    <p className="mt-2 text-xs text-amber-600">
+                                        Add Trivara Logistics in Shipping Partners before fulfilling Trivara orders.
+                                    </p>
+                                )}
                             </div>
 
                             <div>
                                 <label htmlFor="tracking_number" className="block text-sm font-bold text-gray-700 mb-2">
-                                    Tracking Number *
+                                    Trivara Tracking ID / AWB *
                                 </label>
                                 <input
                                     type="text"
                                     name="tracking_number"
                                     id="tracking_number"
-                                    placeholder="e.g., 1234567890"
+                                    placeholder="Enter the ID shared by Trivara"
                                     required
                                     className="block w-full px-4 py-3 rounded-lg border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all text-sm"
                                 />

@@ -3054,7 +3054,9 @@ async function requestTrivaraBookingForAcceptedOrder(orderId: string) {
     const response = await sendTrivaraOrderBooking(payload, config)
 
     if (!response.ok) {
-      const errorMessage = `Trivara request failed with status ${response.status}`
+      const errorMessage =
+        response.errorMessage ||
+        `Trivara request failed with status ${response.status}`
 
       await upsertTrivaraBookingRecord(orderId, {
         status: "failed",

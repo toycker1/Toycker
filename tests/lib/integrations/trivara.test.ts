@@ -18,18 +18,24 @@ import { Order } from "@/lib/supabase/types"
 const config: Pick<
   TrivaraConfig,
   | "crnNo"
-  | "pickupLocationCode"
+  | "warehouseName"
   | "service"
   | "shipmentType"
   | "servicePartner"
   | "defaultWeightGrams"
+  | "defaultLengthCm"
+  | "defaultWidthCm"
+  | "defaultHeightCm"
 > = {
-  crnNo: "857252",
-  pickupLocationCode: "857252_2",
+  crnNo: "868369",
+  warehouseName: "DOMINANT_INFOTECH_101380",
   service: "SURFACE",
   shipmentType: "PARCEL",
-  servicePartner: "",
-  defaultWeightGrams: "1500",
+  servicePartner: "DEL",
+  defaultWeightGrams: 500,
+  defaultLengthCm: 20,
+  defaultWidthCm: 15,
+  defaultHeightCm: 10,
 }
 
 const buildOrder = (overrides: Partial<Order> = {}): Order => ({
@@ -105,27 +111,35 @@ describe("Trivara order booking integration", () => {
     process.env = originalEnv
   })
 
-  it("builds COD payload from Toycker order data", () => {
+  it("builds V2 COD payload from Toycker order data", () => {
     const payload = buildTrivaraOrderBookingPayload(buildOrder(), config)
 
     expect(payload).toMatchObject({
-      crn_no: "857252",
-      order_number: "ORD1223",
-      consignee_name: "Customer Name",
-      city: "Surat",
-      state: "Gujarat",
-      country: "India",
-      address: "Shop No 1, Prabhunagar, Hirabag Circle",
-      pincode: "395006",
-      mobile: "9898989898",
-      weight: "1500",
-      payment_mode: "COD",
-      package_amount: "2500",
-      cod_amount: "2500",
-      product_detail: "Toy Car",
-      shipment_type: "PARCEL",
-      service: "SURFACE",
-      pickup_location_code: "857252_2",
+      warehouse_name: "DOMINANT_INFOTECH_101380",
+      partner_name: "DEL",
+      crn_no: "868369",
+      orders: [
+        {
+          awb_number: "",
+          consignee_name: "Customer Name",
+          mobile: "9898989898",
+          pincode: "395006",
+          address: "Shop No 1, Prabhunagar, Hirabag Circle",
+          payment_mode: "COD",
+          service: "SURFACE",
+          shipment_type: "PARCEL",
+          items: [
+            {
+              product_detail: "Toy Car",
+              weight: 500,
+              length: 20,
+              width: 15,
+              height: 10,
+              package_amount: 2500,
+            },
+          ],
+        },
+      ],
     })
   })
 
@@ -138,8 +152,7 @@ describe("Trivara order booking integration", () => {
       config
     )
 
-    expect(payload.payment_mode).toBe("PREPAID")
-    expect(payload.cod_amount).toBe("")
+    expect(payload.orders[0]?.payment_mode).toBe("PREPAID")
   })
 
   it("rejects missing required shipping fields", () => {
@@ -155,7 +168,7 @@ describe("Trivara order booking integration", () => {
     )
   })
 
-  it("sends multipart form data to Trivara and extracts reference number", async () => {
+  it("sends V2 JSON booking data to Trivara and extracts reference number", async () => {
     let capturedUrl: string | URL | null = null
     let capturedInit: RequestInit | undefined
     const fetcher = vi.fn(async (input: string | URL, init?: RequestInit) => {
@@ -172,23 +185,30 @@ describe("Trivara order booking integration", () => {
     const result = await sendTrivaraOrderBooking(
       payload,
       {
-        apiBaseUrl: "https://app.trivaralogistics.in",
+        apiBaseUrl: "https://app.trivaralogistics.com",
         apiKey: "secret-key",
       },
       fetcher
     )
 
     expect(String(capturedUrl)).toBe(
-      "https://app.trivaralogistics.in/api/users/V2/OrderBooking/create_order"
+      "https://app.trivaralogistics.com/api/users/V2/OrderBooking/create_order"
     )
     expect(capturedInit?.method).toBe("POST")
-    expect(capturedInit?.headers).toEqual({ Apikey: "secret-key" })
-    expect(capturedInit?.body).toBeInstanceOf(FormData)
-    expect((capturedInit?.body as FormData).get("order_number")).toBe("ORD1223")
+    expect(capturedInit?.headers).toEqual({
+      Apikey: "secret-key",
+      "Content-Type": "application/json",
+    })
+    expect(JSON.parse(String(capturedInit?.body))).toMatchObject({
+      warehouse_name: "DOMINANT_INFOTECH_101380",
+      partner_name: "DEL",
+      crn_no: "868369",
+    })
     expect(result).toMatchObject({
       ok: true,
       status: 200,
       referenceNumber: "857252P0000044",
+      errorMessage: null,
     })
   })
 
@@ -202,14 +222,27 @@ describe("Trivara order booking integration", () => {
 
   it("requires a service partner when live booking is enabled", () => {
     process.env.TRIVARA_BOOKING_ENABLED = "true"
-    process.env.TRIVARA_API_BASE_URL = "https://app.trivaralogistics.in"
+    process.env.TRIVARA_API_BASE_URL = "https://app.trivaralogistics.com"
     process.env.TRIVARA_API_KEY = "secret-key"
     process.env.TRIVARA_CRN_NO = "857252"
-    process.env.TRIVARA_PICKUP_LOCATION_CODE = "857252_2"
+    process.env.TRIVARA_WAREHOUSE_NAME = "DOMINANT_INFOTECH_101380"
     process.env.TRIVARA_SERVICE_PARTNER = ""
 
     expect(() => getTrivaraConfig()).toThrow(
       "Missing required environment variable: TRIVARA_SERVICE_PARTNER"
+    )
+  })
+
+  it("requires a warehouse name when live booking is enabled", () => {
+    process.env.TRIVARA_BOOKING_ENABLED = "true"
+    process.env.TRIVARA_API_BASE_URL = "https://app.trivaralogistics.com"
+    process.env.TRIVARA_API_KEY = "secret-key"
+    process.env.TRIVARA_CRN_NO = "868369"
+    process.env.TRIVARA_WAREHOUSE_NAME = ""
+    process.env.TRIVARA_SERVICE_PARTNER = "DEL"
+
+    expect(() => getTrivaraConfig()).toThrow(
+      "Missing required environment variable: TRIVARA_WAREHOUSE_NAME"
     )
   })
 
@@ -228,7 +261,7 @@ describe("Trivara order booking integration", () => {
     const result = await sendTrivaraOrderBooking(
       payload,
       {
-        apiBaseUrl: "https://app.trivaralogistics.in",
+        apiBaseUrl: "https://app.trivaralogistics.com",
         apiKey: "secret-key",
       },
       fetcher
@@ -236,14 +269,42 @@ describe("Trivara order booking integration", () => {
 
     expect(result.ok).toBe(true)
     expect(result.referenceNumber).toBeNull()
+    expect(result.errorMessage).toBeNull()
     expect(result.responsePayload).toEqual({ success: true })
+  })
+
+  it("treats Trivara business errors as failed bookings", async () => {
+    const fetcher = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          data: [{ status: "ERROR", message: "Invalid Partner" }],
+          error: "",
+          result: "Processed",
+        }),
+        { status: 200 }
+      )
+    })
+
+    const payload = buildTrivaraOrderBookingPayload(buildOrder(), config)
+    const result = await sendTrivaraOrderBooking(
+      payload,
+      {
+        apiBaseUrl: "https://app.trivaralogistics.com",
+        apiKey: "secret-key",
+      },
+      fetcher
+    )
+
+    expect(result.ok).toBe(false)
+    expect(result.referenceNumber).toBeNull()
+    expect(result.errorMessage).toBe("Invalid Partner")
   })
 
   it("includes low-level network cause details when fetch fails", async () => {
     const fetchError = Object.assign(new Error("fetch failed"), {
       cause: {
         code: "ENOTFOUND",
-        hostname: "app.trivaralogistics.in",
+        hostname: "app.trivaralogistics.com",
         syscall: "getaddrinfo",
       },
     })
@@ -262,13 +323,13 @@ describe("Trivara order booking integration", () => {
       sendTrivaraOrderBooking(
         payload,
         {
-          apiBaseUrl: "https://app.trivaralogistics.in",
+          apiBaseUrl: "https://app.trivaralogistics.com",
           apiKey: "secret-key",
         },
         fetcher
       )
     ).rejects.toThrow(
-      "Trivara request failed before receiving a response (ENOTFOUND app.trivaralogistics.in getaddrinfo)"
+      "Trivara request failed before receiving a response (ENOTFOUND app.trivaralogistics.com getaddrinfo)"
     )
   })
 })
@@ -296,30 +357,35 @@ describe("Trivara remaining endpoint integrations", () => {
     return { capturedUrl, capturedInit }
   }
 
-  it("sends tracking with the api_key header", async () => {
+  it("sends tracking with the Apikey header and waybill", async () => {
     const { capturedUrl, capturedInit } = await captureRequest((fetcher) =>
       sendTrivaraOrderTracking(
-        { crn_no: "857252", reference_number: "857252P0000044" },
-        { apiBaseUrl: "https://app.trivaralogistics.in", apiKey: "track-key" },
+        { crn_no: "857252", action: "track", waybill: "46322610057562" },
+        { apiBaseUrl: "https://app.trivaralogistics.com", apiKey: "track-key" },
         fetcher
       )
     )
 
     expect(String(capturedUrl)).toBe(
-      "https://app.trivaralogistics.in/api/users/V2/OrderBooking/track_parcel"
+      "https://app.trivaralogistics.com/api/users/V2/OrderBooking/track_parcel"
     )
-    expect(capturedInit?.headers).toEqual({ api_key: "track-key" })
-    expect((capturedInit?.body as FormData).get("reference_number")).toBe(
-      "857252P0000044"
+    expect(capturedInit?.headers).toEqual({ Apikey: "track-key" })
+    expect((capturedInit?.body as FormData).get("action")).toBe("track")
+    expect((capturedInit?.body as FormData).get("waybill")).toBe(
+      "46322610057562"
     )
   })
 
   it("sends print slip with the Apikey header", async () => {
     const { capturedUrl, capturedInit } = await captureRequest((fetcher) =>
       sendTrivaraPrintSlip(
-        { crn_no: "857252", reference_number: "857252P0000044" },
         {
-          apiBaseUrl: "https://production.trivaralogistics.in",
+          crn_no: "857252",
+          reference_number: "857252P0000044",
+          awb_number: "857252P0000044",
+        },
+        {
+          apiBaseUrl: "https://app.trivaralogistics.com",
           apiKey: "print-key",
         },
         fetcher
@@ -327,9 +393,12 @@ describe("Trivara remaining endpoint integrations", () => {
     )
 
     expect(String(capturedUrl)).toBe(
-      "https://production.trivaralogistics.in/api/users/V2/OrderBooking/print_slip"
+      "https://app.trivaralogistics.com/api/users/V2/OrderBooking/print_slip"
     )
     expect(capturedInit?.headers).toEqual({ Apikey: "print-key" })
+    expect((capturedInit?.body as FormData).get("awb_number")).toBe(
+      "857252P0000044"
+    )
   })
 
   it("sends total orders date range", async () => {
@@ -340,13 +409,13 @@ describe("Trivara remaining endpoint integrations", () => {
           start_date: "2026-04-01",
           end_date: "2026-04-28",
         },
-        { apiBaseUrl: "https://app.trivaralogistics.in", apiKey: "order-key" },
+        { apiBaseUrl: "https://app.trivaralogistics.com", apiKey: "order-key" },
         fetcher
       )
     )
 
     expect(String(capturedUrl)).toBe(
-      "https://app.trivaralogistics.in/api/users/V2/OrderBooking/get_total_orders"
+      "https://app.trivaralogistics.com/api/users/V2/OrderBooking/get_total_orders"
     )
     expect(capturedInit?.headers).toEqual({ Apikey: "order-key" })
     expect((capturedInit?.body as FormData).get("start_date")).toBe(
@@ -358,40 +427,40 @@ describe("Trivara remaining endpoint integrations", () => {
     const { capturedUrl, capturedInit } = await captureRequest((fetcher) =>
       sendTrivaraCancelOrder(
         { crn_no: "857252", reference_number: "857252P0000044" },
-        { apiBaseUrl: "https://app.trivaralogistics.in", apiKey: "cancel-key" },
+        { apiBaseUrl: "https://app.trivaralogistics.com", apiKey: "cancel-key" },
         fetcher
       )
     )
 
     expect(String(capturedUrl)).toBe(
-      "https://app.trivaralogistics.in/api/users/V2/OrderBooking/cancel_multiple_orders"
+      "https://app.trivaralogistics.com/api/users/V2/OrderBooking/cancel_order"
     )
     expect(capturedInit?.headers).toEqual({ Apikey: "cancel-key" })
   })
 
-  it("sends pickup locations and services with the api_key header", async () => {
+  it("sends pickup locations and services with the Apikey header", async () => {
     const pickup = await captureRequest((fetcher) =>
       sendTrivaraPickupLocations(
         { crn_no: "857252" },
-        { apiBaseUrl: "https://app.trivaralogistics.in", apiKey: "master-key" },
+        { apiBaseUrl: "https://app.trivaralogistics.com", apiKey: "master-key" },
         fetcher
       )
     )
     const services = await captureRequest((fetcher) =>
       sendTrivaraServices(
         { crn_no: "857252" },
-        { apiBaseUrl: "https://app.trivaralogistics.in", apiKey: "master-key" },
+        { apiBaseUrl: "https://app.trivaralogistics.com", apiKey: "master-key" },
         fetcher
       )
     )
 
     expect(String(pickup.capturedUrl)).toBe(
-      "https://app.trivaralogistics.in/api/users/V2/OrderBooking/get_pickup_location"
+      "https://app.trivaralogistics.com/api/users/V2/OrderBooking/get_pickup_location"
     )
-    expect(pickup.capturedInit?.headers).toEqual({ api_key: "master-key" })
+    expect(pickup.capturedInit?.headers).toEqual({ Apikey: "master-key" })
     expect(String(services.capturedUrl)).toBe(
-      "https://app.trivaralogistics.in/api/users/V2/Activity/get_services"
+      "https://app.trivaralogistics.com/api/users/V2/Activity/get_services"
     )
-    expect(services.capturedInit?.headers).toEqual({ api_key: "master-key" })
+    expect(services.capturedInit?.headers).toEqual({ Apikey: "master-key" })
   })
 })

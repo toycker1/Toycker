@@ -18,6 +18,7 @@ import {
   getTrivaraCrnNo,
   getTrivaraMasterApiKey,
   getTrivaraPrintSlipApiBaseUrl,
+  getTrivaraServicesApiBaseUrl,
   getTrivaraTrackingApiKey,
   sendTrivaraCancelOrder,
   sendTrivaraOrderTracking,
@@ -102,6 +103,80 @@ function getResponseStatus(payload: Record<string, unknown>): string | null {
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown Trivara error"
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+}
+
+function getPayloadString(
+  payload: Record<string, unknown>,
+  keys: string[]
+): string | null {
+  const queue: unknown[] = [payload]
+
+  while (queue.length > 0) {
+    const current = queue.shift()
+    if (!isObjectRecord(current)) {
+      continue
+    }
+
+    for (const [key, value] of Object.entries(current)) {
+      if (keys.includes(key) && typeof value === "string" && value.trim()) {
+        return value.trim()
+      }
+
+      if (isObjectRecord(value) || Array.isArray(value)) {
+        queue.push(value)
+      }
+    }
+  }
+
+  return null
+}
+
+function isTrivaraResponseSuccessful(response: {
+  ok: boolean
+  responsePayload: Record<string, unknown>
+}): boolean {
+  if (!response.ok) {
+    return false
+  }
+
+  const error = getPayloadString(response.responsePayload, ["error"])
+  if (error) {
+    return false
+  }
+
+  const success = response.responsePayload.success
+  if (typeof success === "boolean") {
+    return success
+  }
+
+  if (typeof success === "string") {
+    const normalized = success.trim().toLowerCase()
+    if (["0", "false", "failed", "error"].includes(normalized)) {
+      return false
+    }
+    if (["1", "true", "success"].includes(normalized)) {
+      return true
+    }
+  }
+
+  return true
+}
+
+function getTrivaraResponseError(
+  response: {
+    status: number
+    responsePayload: Record<string, unknown>
+  },
+  fallback: string
+): string {
+  return (
+    getPayloadString(response.responsePayload, ["error", "message"]) ||
+    `${fallback} with status ${response.status}`
+  )
 }
 
 async function getBooking(orderId: string): Promise<TrivaraOrderBooking> {
@@ -296,7 +371,8 @@ export async function trackTrivaraOrder(orderId: string) {
 
   const payload = {
     crn_no: getTrivaraCrnNo(),
-    reference_number: booking.trivara_reference_number,
+    action: "track" as const,
+    waybill: booking.trivara_reference_number,
   }
   const response = await sendTrivaraOrderTracking(payload, {
     apiBaseUrl: getTrivaraApiBaseUrl(),
@@ -328,6 +404,7 @@ export async function printTrivaraSlip(orderId: string) {
   const payload = {
     crn_no: getTrivaraCrnNo(),
     reference_number: booking.trivara_reference_number,
+    awb_number: booking.trivara_reference_number,
   }
   const response = await sendTrivaraPrintSlip(payload, {
     apiBaseUrl: getTrivaraPrintSlipApiBaseUrl(),
@@ -397,20 +474,23 @@ export async function syncTrivaraPickupLocations(): Promise<TrivaraSyncActionRes
       }
     )
 
+    const isSuccessful = isTrivaraResponseSuccessful(response)
+    const errorMessage = isSuccessful
+      ? null
+      : getTrivaraResponseError(response, "Trivara pickup locations failed")
+
     await upsertSnapshot("pickup_locations", {
       request_payload: requestPayload,
       response_payload: response.responsePayload,
-      error_message: response.ok
-        ? null
-        : `Trivara pickup locations failed with status ${response.status}`,
+      error_message: errorMessage,
       synced_at: new Date().toISOString(),
     })
 
     revalidateLogistics()
 
     return {
-      success: response.ok,
-      message: response.ok
+      success: isSuccessful,
+      message: isSuccessful
         ? "Pickup locations synced successfully."
         : "Pickup locations sync failed. Check Trivara credentials.",
     }
@@ -442,25 +522,28 @@ export async function syncTrivaraServices(): Promise<TrivaraSyncActionResult> {
     const response = await sendTrivaraServices(
       requestPayload as { crn_no: string },
       {
-        apiBaseUrl: getTrivaraApiBaseUrl(),
+        apiBaseUrl: getTrivaraServicesApiBaseUrl(),
         apiKey: getTrivaraMasterApiKey(),
       }
     )
 
+    const isSuccessful = isTrivaraResponseSuccessful(response)
+    const errorMessage = isSuccessful
+      ? null
+      : getTrivaraResponseError(response, "Trivara services failed")
+
     await upsertSnapshot("services", {
       request_payload: requestPayload,
       response_payload: response.responsePayload,
-      error_message: response.ok
-        ? null
-        : `Trivara services failed with status ${response.status}`,
+      error_message: errorMessage,
       synced_at: new Date().toISOString(),
     })
 
     revalidateLogistics()
 
     return {
-      success: response.ok,
-      message: response.ok
+      success: isSuccessful,
+      message: isSuccessful
         ? "Services synced successfully."
         : "Services sync failed. Check Trivara credentials.",
     }
@@ -519,20 +602,23 @@ export async function syncTrivaraTotalOrders(
       }
     )
 
+    const isSuccessful = isTrivaraResponseSuccessful(response)
+    const errorMessage = isSuccessful
+      ? null
+      : getTrivaraResponseError(response, "Trivara total orders failed")
+
     await upsertSnapshot("total_orders", {
       request_payload: requestPayload,
       response_payload: response.responsePayload,
-      error_message: response.ok
-        ? null
-        : `Trivara total orders failed with status ${response.status}`,
+      error_message: errorMessage,
       synced_at: new Date().toISOString(),
     })
 
     revalidateLogistics()
 
     return {
-      success: response.ok,
-      message: response.ok
+      success: isSuccessful,
+      message: isSuccessful
         ? "Total orders synced successfully."
         : "Total orders sync failed. Check Trivara credentials.",
     }

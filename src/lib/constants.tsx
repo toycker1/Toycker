@@ -32,7 +32,7 @@ const temporarilyDisabledPaymentMethods: Record<
   string,
   { badgeLabel: string }
 > = {
-  pp_system_default: { badgeLabel: "Unavailable" },
+  // pp_system_default: { badgeLabel: "Unavailable" },
 }
 
 export const isTemporarilyDisabledPaymentMethod = (

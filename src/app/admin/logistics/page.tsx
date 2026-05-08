@@ -16,7 +16,10 @@ import {
   retryTrivaraBooking,
   trackTrivaraOrder,
 } from "@/lib/data/trivara-logistics"
-import { TrivaraOrderBookingStatus } from "@/lib/supabase/types"
+import {
+  TrivaraOrderBookingStatus,
+  TrivaraSyncSnapshotKey,
+} from "@/lib/supabase/types"
 import { LogisticsSyncActions } from "./logistics-sync-actions"
 
 const STATUS_FILTERS: Array<{
@@ -60,17 +63,103 @@ function normalizePaymentMethod(method?: string | null) {
   return method || "Manual"
 }
 
-function getSnapshotSummary(payload: Record<string, unknown> | null) {
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+}
+
+function getPayloadValue(
+  payload: Record<string, unknown>,
+  keys: string[]
+): unknown {
+  const queue: unknown[] = [payload]
+
+  while (queue.length > 0) {
+    const current = queue.shift()
+    if (!isObjectRecord(current)) {
+      continue
+    }
+
+    for (const [key, value] of Object.entries(current)) {
+      if (keys.includes(key)) {
+        return value
+      }
+
+      if (isObjectRecord(value) || Array.isArray(value)) {
+        queue.push(value)
+      }
+    }
+  }
+
+  return null
+}
+
+function getArrayCount(value: unknown): number | null {
+  if (Array.isArray(value)) {
+    return value.length
+  }
+
+  if (isObjectRecord(value)) {
+    const nestedArray = Object.values(value).find(Array.isArray)
+    return Array.isArray(nestedArray) ? nestedArray.length : null
+  }
+
+  return null
+}
+
+function getStringValue(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null
+}
+
+function getSnapshotSummary(
+  syncKey: TrivaraSyncSnapshotKey,
+  payload: Record<string, unknown> | null
+) {
   if (!payload) {
     return "No response stored"
   }
 
-  const keys = Object.keys(payload)
-  if (keys.length === 0) {
+  if (Object.keys(payload).length === 0) {
     return "Empty response"
   }
 
-  return keys.slice(0, 4).join(", ")
+  const error = getStringValue(getPayloadValue(payload, ["error", "message"]))
+  const result = getStringValue(getPayloadValue(payload, ["result"]))
+  const success = getPayloadValue(payload, ["success"])
+  const data = getPayloadValue(payload, ["data", "orders", "services"])
+  const count = getArrayCount(data)
+
+  if (error) {
+    return error
+  }
+
+  if (syncKey === "total_orders") {
+    if (count !== null) {
+      return `${count} orders returned`
+    }
+
+    const total = getPayloadValue(payload, ["total", "total_orders", "count"])
+    if (typeof total === "number" || typeof total === "string") {
+      return `${total} total orders`
+    }
+  }
+
+  if (syncKey === "pickup_locations" && count !== null) {
+    return `${count} pickup locations returned`
+  }
+
+  if (syncKey === "services" && count !== null) {
+    return `${count} services returned`
+  }
+
+  if (result) {
+    return result
+  }
+
+  if (typeof success === "boolean") {
+    return success ? "Synced successfully" : "Sync failed"
+  }
+
+  return "Response stored"
 }
 
 export default async function AdminLogistics({
@@ -122,7 +211,10 @@ export default async function AdminLogistics({
                   </p>
                   <p className="text-xs text-gray-500">
                     {snapshot.error_message ||
-                      getSnapshotSummary(snapshot.response_payload)}
+                      getSnapshotSummary(
+                        snapshot.sync_key,
+                        snapshot.response_payload
+                      )}
                   </p>
                 </div>
                 <span className="text-xs text-gray-400">
