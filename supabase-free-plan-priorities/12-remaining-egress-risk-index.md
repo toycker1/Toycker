@@ -93,7 +93,7 @@ Evidence:
 | `19-production-monitoring-and-alerting.md` | Egress must be watched weekly before it reaches the Free Plan limit | `Supabase-only` | High | Completed and manually verified on 07 May 2026; current egress is in watch-closely range |
 | `20-final-remaining-egress-risk-register.md` | Final catch-all map for all residual risks after priorities 1-19 | `mixed` | High | Completed as final remaining-risk monitoring gate on 08 May 2026; no immediate code or Supabase migration required |
 | `21-private-account-order-and-customer-data-risk.md` | Private account, order, review, wallet, and customer data can still grow with real usage | `both (codebase + Supabase)` | Low to Medium | Completed and verified on dev and production on 08 May 2026; account order list uses `account_order_summaries`, while private detail pages remain intentionally fuller |
-| `22-home-page-cached-media-section-risk.md` | Cached home sections can regress if they fetch full product rows or bypass Cloudflare cache | `code-only + Cloudflare checks if needed` | Medium | Documented; current cache/media guardrails remain in place |
+| `22-home-page-cached-media-section-risk.md` | Cached home sections can regress if they fetch full product rows or bypass Cloudflare cache | `code-only + Cloudflare checks if needed` | Medium | Completed and manually verified on 09 May 2026; exclusive collections now use lightweight product fields and CDN media remains on Cloudflare |
 | `23-low-volume-wildcard-and-admin-detail-risk.md` | Some low-volume/admin/callback/small-table paths still use broad selects | `code-only if measured` | Low to Medium | Documented; do not optimize without measured evidence |
 
 ## Recommended Phase Order

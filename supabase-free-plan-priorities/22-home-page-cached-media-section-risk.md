@@ -8,9 +8,18 @@ The current setup is mostly safe because media is served from Cloudflare CDN/R2,
 
 ## Status
 
-`Documented for future monitoring`
+`Completed and manually verified on 09 May 2026`
 
-The main home page and media guardrails have already been optimized. No immediate code change is required unless monitoring shows this area is responsible for egress or performance problems.
+The main home page exclusive collections path has been optimized so it no longer fetches full product rows for cached media sections. No Supabase migration was required.
+
+Manual testing confirmed that:
+
+- The home page still renders banners and exclusive collection sections.
+- Exclusive collection product cards still show image, name, price, and club price.
+- Media requests use `https://cdn.toycker.in/...`.
+- The visible video elements do not preload full video files upfront.
+- The home layout state response remains small.
+- The exclusive collection data path no longer requests heavy product fields.
 
 ## Classification
 
@@ -42,9 +51,30 @@ Good current behavior:
 
 Remaining watch area:
 
-- Exclusive collections still include product `images` in the cached query.
-- Home page videos can still create large browser/network traffic if many videos are displayed or preloaded.
+- Home page videos can still create large Cloudflare/browser traffic if many videos are displayed.
 - Service worker/cache behavior can make repeated media requests appear in DevTools, even when served from cache.
+- Future code changes must not reintroduce full product rows in home page cached sections.
+
+Completed implementation:
+
+- `src/lib/data/exclusive-collections.ts` now selects only the product fields needed by the home page:
+  - `id`
+  - `name`
+  - `handle`
+  - `image_url`
+  - `thumbnail`
+  - `price`
+  - `currency_code`
+- `src/modules/home/components/exclusive-collections/index.tsx` now derives display image and price from the lightweight payload.
+- The previous hidden media preloader was removed.
+- Visible videos use lightweight metadata loading instead of preloading full video content.
+
+Quality checks:
+
+- `pnpm.cmd exec tsc --noEmit` passed.
+- `pnpm.cmd build` passed. The build printed expected sandbox network warnings while prerendering pages that fetch Supabase data.
+- `git diff --check` passed.
+- `pnpm.cmd lint` is still blocked by the existing repo lint script issue where `next lint` treats `lint` as a project directory.
 
 ## Why This Is Different From Supabase Egress
 
@@ -173,5 +203,5 @@ large metadata objects
 
 ## Simple Senior Explanation
 
-Home page media should stay on Cloudflare. Supabase should only return small metadata and media URLs. The risk is not the CDN itself. The risk is a future code change that fetches full product rows for home sections or accidentally stores/serves media from Supabase Storage.
+Home page media stays on Cloudflare. Supabase now returns only small metadata and the specific product fields needed for the exclusive collection cards. The large image and video bytes should come from `cdn.toycker.in`, not Supabase Storage. The remaining risk is only future regression: a later code change must not fetch full product rows or move media back to Supabase Storage.
 

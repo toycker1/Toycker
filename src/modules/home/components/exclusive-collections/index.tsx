@@ -7,11 +7,9 @@ import Autoplay from "embla-carousel-autoplay"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 
 import LocalizedClientLink from "@modules/common/components/localized-client-link"
-import { getProductPrice } from "@lib/util/get-product-price"
-import { buildDisplayPrice, type DisplayPrice } from "@lib/util/display-price"
+import type { DisplayPrice } from "@lib/util/display-price"
 import type { ExclusiveCollectionEntry } from "@lib/data/exclusive-collections"
 import { cn } from "@lib/util/cn"
-import { getImageUrl } from "@lib/util/get-image-url"
 
 type ExclusiveCollectionsProps = {
   items: ExclusiveCollectionEntry[]
@@ -20,20 +18,25 @@ type ExclusiveCollectionsProps = {
 
 const FALLBACK_POSTER = "/assets/images/slider_default.png"
 
+const formatAmount = (amount: number, currencyCode?: string | null) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: currencyCode?.toUpperCase() || "INR",
+    minimumFractionDigits: 2,
+  }).format(amount)
+
 const resolvePosterSource = (entry: ExclusiveCollectionEntry) => {
-  const firstImage = entry.product?.images?.[0]
   return (
     entry.poster_url ??
+    entry.product?.thumbnail ??
     entry.product?.image_url ??
-    (firstImage ? getImageUrl(firstImage) : null) ??
     FALLBACK_POSTER
   )
 }
 
 const resolveProductImageSource = (entry: ExclusiveCollectionEntry) => {
-  const firstImage = entry.product?.images?.[0]
   return (
-    (firstImage ? getImageUrl(firstImage) : null) ??
+    entry.product?.thumbnail ??
     entry.product?.image_url ??
     entry.poster_url ??
     FALLBACK_POSTER
@@ -48,24 +51,29 @@ const resolveDisplayPrice = (
     return { displayPrice: null, clubPrice: null }
   }
 
-  try {
-    const { cheapestPrice, variantPrice } = getProductPrice({
-      product: entry.product,
-      clubDiscountPercentage,
-    })
-
-    // Choose the price object that has the club price if available
-    const priceObj = variantPrice || cheapestPrice
-
-    return {
-      displayPrice: buildDisplayPrice(cheapestPrice),
-      clubPrice: priceObj?.club_price ?? null,
-    }
-  } catch (error) {
-    if (process.env.NODE_ENV !== "production") {
-      console.warn("Unable to compute price for exclusive entry", error)
-    }
+  const price = entry.product.price
+  if (!Number.isFinite(price)) {
     return { displayPrice: null, clubPrice: null }
+  }
+
+  const currentPrice = formatAmount(price, entry.product.currency_code)
+  const clubPrice =
+    clubDiscountPercentage && clubDiscountPercentage > 0
+      ? formatAmount(
+          Math.round(price * (1 - clubDiscountPercentage / 100)),
+          entry.product.currency_code
+        )
+      : null
+
+  return {
+    displayPrice: {
+      current: {
+        raw: currentPrice,
+        value: price,
+      },
+      isDiscounted: false,
+    },
+    clubPrice,
   }
 }
 
@@ -124,7 +132,6 @@ const ExclusiveCard = ({
   item: ExclusiveCollectionEntry
   clubDiscountPercentage?: number
 }) => {
-  const [isLoaded, setIsLoaded] = useState(false)
   const poster = resolvePosterSource(item)
   const productImage = resolveProductImageSource(item)
   const title = item.product?.name ?? "Exclusive collectible"
@@ -135,34 +142,6 @@ const ExclusiveCard = ({
   )
   const hasVideo = Boolean(item.video_url && item.video_url.trim().length > 0)
 
-  // Show skeleton until both data and media are ready
-  if (!isLoaded) {
-    return (
-      <div className="relative">
-        <ExclusiveCardSkeleton />
-        <div className="invisible absolute inset-0 -z-50 size-0 overflow-hidden">
-          {hasVideo ? (
-            <video
-              src={item.video_url}
-              preload="metadata"
-              onLoadedData={() => setIsLoaded(true)}
-              onCanPlay={() => setIsLoaded(true)}
-            />
-          ) : (
-            <Image
-              src={poster}
-              alt={title}
-              width={400}
-              height={400}
-              onLoad={() => setIsLoaded(true)}
-            />
-          )}
-        </div>
-      </div>
-    )
-  }
-
-  // Show actual content only when loaded
   return (
     <article className="flex h-full flex-col rounded-xl overflow-hidden bg-white">
       <div className="relative overflow-hidden flex-1 min-h-[320px]">
