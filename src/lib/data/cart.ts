@@ -59,6 +59,13 @@ type CartItemMetadataRow = {
   metadata?: Record<string, unknown> | null
 }
 
+type CartItemGiftWrapRemovalRow = {
+  id: string
+  cart_id: string
+  product_id: string
+  metadata?: Record<string, unknown> | null
+}
+
 const metadataMatchesExactly = (
   itemMetadata: Record<string, unknown> | null | undefined,
   expectedMetadata: Record<string, unknown> | null | undefined
@@ -105,6 +112,23 @@ const metadataMatchesCartLine = (
   }
 
   return metadataMatchesExactly(itemMetadata, expectedMetadata)
+}
+
+const removeGiftWrapMetadata = (
+  metadata: Record<string, unknown> | null | undefined
+) => {
+  if (!metadata) {
+    return null
+  }
+
+  const {
+    gift_wrap: _giftWrap,
+    gift_wrap_fee: _giftWrapFee,
+    gift_wrap_packages: _giftWrapPackages,
+    ...rest
+  } = metadata
+
+  return Object.keys(rest).length > 0 ? rest : null
 }
 
 const getCartClientForUser = async (userId: string | null) => {
@@ -679,7 +703,77 @@ export async function updateLineItem({
 export async function deleteLineItem(lineId: string) {
   const writeContext = await resolveCartWriteContext()
   const supabase = writeContext.supabase
+  const { data: lineItem } = await supabase
+    .from("cart_items")
+    .select("id, cart_id, product_id, metadata")
+    .eq("id", lineId)
+    .maybeSingle<CartItemGiftWrapRemovalRow>()
+
+  const lineMetadata = lineItem?.metadata || null
+
   await supabase.from("cart_items").delete().eq("id", lineId)
+
+  if (lineItem && isGiftWrapLineMetadata(lineMetadata)) {
+    const giftWrapFee = lineMetadata?.gift_wrap_fee
+    const productLinesQuery = supabase
+      .from("cart_items")
+      .select("id, metadata")
+      .eq("cart_id", lineItem.cart_id)
+      .eq("product_id", lineItem.product_id)
+      .contains("metadata", { gift_wrap: true })
+
+    if (giftWrapFee !== undefined) {
+      productLinesQuery.contains("metadata", { gift_wrap_fee: giftWrapFee })
+    }
+
+    const { data: productLines } = await productLinesQuery
+
+    for (const productLine of productLines || []) {
+      await supabase
+        .from("cart_items")
+        .update({
+          metadata: removeGiftWrapMetadata(
+            productLine.metadata as Record<string, unknown> | null
+          ),
+        })
+        .eq("id", productLine.id)
+    }
+  } else if (lineItem && lineMetadata?.gift_wrap === true) {
+    const giftWrapFee = lineMetadata.gift_wrap_fee
+    const remainingWrappedProductLinesQuery = supabase
+      .from("cart_items")
+      .select("id")
+      .eq("cart_id", lineItem.cart_id)
+      .eq("product_id", lineItem.product_id)
+      .contains("metadata", { gift_wrap: true })
+
+    if (giftWrapFee !== undefined) {
+      remainingWrappedProductLinesQuery.contains("metadata", {
+        gift_wrap_fee: giftWrapFee,
+      })
+    }
+
+    const { data: remainingWrappedProductLines } =
+      await remainingWrappedProductLinesQuery
+
+    if (
+      !remainingWrappedProductLines ||
+      remainingWrappedProductLines.length === 0
+    ) {
+      const giftWrapQuery = supabase
+        .from("cart_items")
+        .delete()
+        .eq("cart_id", lineItem.cart_id)
+        .eq("product_id", lineItem.product_id)
+        .contains("metadata", { gift_wrap_line: true })
+
+      if (giftWrapFee !== undefined) {
+        giftWrapQuery.contains("metadata", { gift_wrap_fee: giftWrapFee })
+      }
+
+      await giftWrapQuery
+    }
+  }
 
   revalidateTag("cart", "max")
   return retrieveCartRaw()

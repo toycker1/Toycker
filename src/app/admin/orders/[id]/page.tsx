@@ -46,6 +46,65 @@ type Props = {
   params: Promise<{ id: string }>
 }
 
+type AdminOrderItem = {
+  id: string
+  thumbnail?: string | null
+  title?: string | null
+  product_title?: string | null
+  variant?: { sku?: string | null } | null
+  unit_price?: number | string | null
+  quantity?: number | string | null
+  total?: number | string | null
+  metadata?: Record<string, unknown> | null
+}
+
+const toNumber = (value: unknown) => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value)
+    if (Number.isFinite(parsed)) {
+      return parsed
+    }
+  }
+
+  return 0
+}
+
+const isGiftWrapOrderItem = (item: AdminOrderItem) => {
+  return (
+    item.metadata?.gift_wrap_line === true ||
+    item.title?.toLowerCase().includes("gift wrap") === true ||
+    item.product_title?.toLowerCase().includes("gift wrap") === true
+  )
+}
+
+const getGiftWrapAmountFromItems = (
+  items: AdminOrderItem[] | null | undefined
+) => {
+  if (!Array.isArray(items)) {
+    return 0
+  }
+
+  return items.reduce((total, item) => {
+    if (!isGiftWrapOrderItem(item)) {
+      return total
+    }
+
+    const itemTotal = toNumber(item.total)
+    if (itemTotal > 0) {
+      return total + itemTotal
+    }
+
+    return (
+      total +
+      toNumber(item.unit_price) * Math.max(toNumber(item.quantity), 1)
+    )
+  }, 0)
+}
+
 export default async function AdminOrderDetails({ params }: Props) {
   const { id } = await params
   const order = await getAdminOrder(id)
@@ -122,6 +181,17 @@ export default async function AdminOrderDetails({ params }: Props) {
   const canMarkAsPaid = !isCodPayment && paymentStatusPending && order.status === "delivered"
 
   const rewardsUsed = Number(order.metadata?.rewards_used || 0)
+  const orderMetadata = (order.metadata || {}) as Record<string, unknown>
+  const giftWrapAmountFromItems = getGiftWrapAmountFromItems(
+    order.items as AdminOrderItem[] | null | undefined
+  )
+  const giftWrapAmount = giftWrapAmountFromItems
+  const clubSavingsAmount = toNumber(orderMetadata.club_savings)
+  const promoDiscountAmount = toNumber(orderMetadata.promo_discount)
+  const paymentDiscountAmount = toNumber(orderMetadata.payment_discount_amount)
+  const paymentDiscountPercentage = toNumber(
+    orderMetadata.payment_discount_percentage
+  )
 
   return (
     <div className="space-y-6">
@@ -161,7 +231,7 @@ export default async function AdminOrderDetails({ params }: Props) {
           {/* Items */}
           <AdminCard title="Items" className="p-0">
             <div className="divide-y divide-gray-100">
-              {order.items?.map((item: { id: string; thumbnail?: string; title: string; variant?: { sku?: string }; unit_price: number; quantity: number; total: number }) => (
+              {order.items?.map((item: AdminOrderItem) => (
                 <div key={item.id} className="p-6 flex items-center gap-5 group">
                   <div className="h-20 w-20 relative rounded-xl bg-gray-50 border border-gray-100 overflow-hidden flex-shrink-0 transition-all group-hover:border-gray-300">
                     {item.thumbnail
@@ -182,8 +252,18 @@ export default async function AdminOrderDetails({ params }: Props) {
                     )}
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-bold text-gray-900">{convertToLocale({ amount: item.unit_price, currency_code: order.currency_code })} × {item.quantity}</p>
-                    <p className="text-sm font-black text-gray-900 mt-0.5">{convertToLocale({ amount: item.total, currency_code: order.currency_code })}</p>
+                    <p className="text-sm font-bold text-gray-900">
+                      {convertToLocale({
+                        amount: toNumber(item.unit_price),
+                        currency_code: order.currency_code,
+                      })} × {toNumber(item.quantity)}
+                    </p>
+                    <p className="text-sm font-black text-gray-900 mt-0.5">
+                      {convertToLocale({
+                        amount: toNumber(item.total),
+                        currency_code: order.currency_code,
+                      })}
+                    </p>
                   </div>
                 </div>
               ))}
@@ -193,24 +273,24 @@ export default async function AdminOrderDetails({ params }: Props) {
                 <span>Subtotal</span>
                 <span className="text-gray-900 font-bold">
                   {convertToLocale({
-                    amount: (order.subtotal || 0) + Number((order.metadata as any)?.club_savings || 0) - Number((order.metadata as any)?.gift_wrap_amount || 0),
+                    amount: (order.subtotal || 0) + clubSavingsAmount - giftWrapAmount,
                     currency_code: order.currency_code
                   })}
                 </span>
               </div>
-              {Number((order.metadata as any)?.gift_wrap_amount || 0) > 0 && (
+              {giftWrapAmount > 0 && (
                 <div className="flex justify-between text-sm font-medium text-pink-600">
                   <span>Gift Wrap</span>
-                  <span className="font-bold">+{convertToLocale({ amount: Number((order.metadata as any).gift_wrap_amount), currency_code: order.currency_code })}</span>
+                  <span className="font-bold">+{convertToLocale({ amount: giftWrapAmount, currency_code: order.currency_code })}</span>
                 </div>
               )}
-              {Number((order.metadata as any)?.club_savings || 0) > 0 && (
+              {clubSavingsAmount > 0 && (
                 <div className="flex justify-between text-sm font-medium">
                   <div className="flex items-center gap-2">
                     <span className="text-blue-600">Club Savings</span>
                     <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-bold uppercase rounded-full">Member</span>
                   </div>
-                  <span className="text-blue-600 font-bold">-{convertToLocale({ amount: Number((order.metadata as any).club_savings), currency_code: order.currency_code })}</span>
+                  <span className="text-blue-600 font-bold">-{convertToLocale({ amount: clubSavingsAmount, currency_code: order.currency_code })}</span>
                 </div>
               )}
               {rewardsUsed > 0 && (
@@ -219,16 +299,16 @@ export default async function AdminOrderDetails({ params }: Props) {
                   <span className="font-bold">-{convertToLocale({ amount: rewardsUsed, currency_code: order.currency_code })}</span>
                 </div>
               )}
-              {Number((order.metadata as any)?.promo_discount || 0) > 0 && (
+              {promoDiscountAmount > 0 && (
                 <div className="flex justify-between text-sm font-medium text-orange-600">
                   <span>Promo Discount</span>
-                  <span className="font-bold">-{convertToLocale({ amount: Number((order.metadata as any).promo_discount), currency_code: order.currency_code })}</span>
+                  <span className="font-bold">-{convertToLocale({ amount: promoDiscountAmount, currency_code: order.currency_code })}</span>
                 </div>
               )}
-              {Number((order.metadata as any)?.payment_discount_amount || 0) > 0 && (
+              {paymentDiscountAmount > 0 && (
                 <div className="flex justify-between text-sm font-medium text-pink-600">
-                  <span>Payment Discount ({Number((order.metadata as any).payment_discount_percentage)}%)</span>
-                  <span className="font-bold">-{convertToLocale({ amount: Number((order.metadata as any).payment_discount_amount), currency_code: order.currency_code })}</span>
+                  <span>Payment Discount ({paymentDiscountPercentage}%)</span>
+                  <span className="font-bold">-{convertToLocale({ amount: paymentDiscountAmount, currency_code: order.currency_code })}</span>
                 </div>
               )}
               <div className="flex justify-between text-sm font-medium text-gray-500">
