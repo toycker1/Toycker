@@ -70,6 +70,7 @@ const OrderCard = ({ order }: OrderCardProps) => {
   const StatusIcon = statusInfo.icon
   const firstItemTitle = order.first_item_title?.trim() || "Order items"
   const itemCountLabel = getOrderItemCountLabel(order.item_count)
+  const additionalItemsLabel = getAdditionalItemsLabel(order.item_count)
   const thumbnailUrl = order.first_item_thumbnail
     ? fixUrl(order.first_item_thumbnail)
     : null
@@ -117,10 +118,14 @@ const OrderCard = ({ order }: OrderCardProps) => {
           )}
         </div>
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-gray-900 line-clamp-2">
-            {firstItemTitle}
+          <p className="text-sm font-semibold text-gray-900">
+            <span className="line-clamp-2">{firstItemTitle}</span>
+            {additionalItemsLabel ? (
+              <span className="mt-1 inline-flex w-fit rounded-full bg-red-50 px-2 py-0.5 text-xs font-bold text-red-600 ring-1 ring-inset ring-red-100">
+                {additionalItemsLabel}
+              </span>
+            ) : null}
           </p>
-          <p className="text-xs text-gray-500">{itemCountLabel}</p>
         </div>
       </div>
 
@@ -178,6 +183,17 @@ const getOrderItemCountLabel = (count: number) => {
   const safeCount = Math.max(0, count)
 
   return safeCount === 1 ? "1 item" : `${safeCount} items`
+}
+
+const getAdditionalItemsLabel = (count: number) => {
+  const safeCount = Math.max(0, count)
+  const additionalItems = safeCount - 1
+
+  if (additionalItems <= 0) {
+    return null
+  }
+
+  return `+${additionalItems} more`
 }
 
 export default OrderCard
