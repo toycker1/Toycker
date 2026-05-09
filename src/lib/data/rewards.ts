@@ -108,7 +108,7 @@ async function getOrCreateWallet(userId: string): Promise<RewardWallet | null> {
     // Try to get existing wallet
     const { data: existingWallet } = await supabase
         .from("reward_wallets")
-        .select("*")
+        .select("id, user_id, balance, created_at, updated_at")
         .eq("user_id", userId)
         .maybeSingle()
 
@@ -120,7 +120,7 @@ async function getOrCreateWallet(userId: string): Promise<RewardWallet | null> {
     const { data: newWallet, error } = await supabase
         .from("reward_wallets")
         .insert({ user_id: userId, balance: 0 })
-        .select()
+        .select("id, user_id, balance, created_at, updated_at")
         .single()
 
     if (error) {
