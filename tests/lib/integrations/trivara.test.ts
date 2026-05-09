@@ -5,6 +5,7 @@ import {
   getTrivaraApiBaseUrl,
   getTrivaraConfig,
   sendTrivaraCancelOrder,
+  sendTrivaraActivePartners,
   sendTrivaraOrderTracking,
   sendTrivaraPickupLocations,
   sendTrivaraPrintSlip,
@@ -21,7 +22,7 @@ const config: Pick<
   | "warehouseName"
   | "service"
   | "shipmentType"
-  | "servicePartner"
+  | "servicePartnerId"
   | "defaultWeightGrams"
   | "defaultLengthCm"
   | "defaultWidthCm"
@@ -31,7 +32,7 @@ const config: Pick<
   warehouseName: "DOMINANT_INFOTECH_101380",
   service: "SURFACE",
   shipmentType: "PARCEL",
-  servicePartner: "DEL",
+  servicePartnerId: 1,
   defaultWeightGrams: 500,
   defaultLengthCm: 20,
   defaultWidthCm: 15,
@@ -116,11 +117,12 @@ describe("Trivara order booking integration", () => {
 
     expect(payload).toMatchObject({
       warehouse_name: "DOMINANT_INFOTECH_101380",
-      partner_name: "DEL",
+      service_partner_id: 1,
       crn_no: "868369",
       orders: [
         {
-          awb_number: "",
+          user_reference_id: "toycker_order-1",
+          user_order_id: 1223,
           consignee_name: "Customer Name",
           mobile: "9898989898",
           pincode: "395006",
@@ -128,14 +130,19 @@ describe("Trivara order booking integration", () => {
           payment_mode: "COD",
           service: "SURFACE",
           shipment_type: "PARCEL",
+          length: 20,
+          width: 15,
+          height: 10,
+          weight: 500,
+          email: "buyer@example.com",
+          total_amount: 2500,
+          total_cod_amount: 2500,
           items: [
             {
               product_detail: "Toy Car",
-              weight: 500,
-              length: 20,
-              width: 15,
-              height: 10,
               package_amount: 2500,
+              product_sku: "1223-1",
+              quantity: 1,
             },
           ],
         },
@@ -201,7 +208,7 @@ describe("Trivara order booking integration", () => {
     })
     expect(JSON.parse(String(capturedInit?.body))).toMatchObject({
       warehouse_name: "DOMINANT_INFOTECH_101380",
-      partner_name: "DEL",
+      service_partner_id: 1,
       crn_no: "868369",
     })
     expect(result).toMatchObject({
@@ -220,16 +227,29 @@ describe("Trivara order booking integration", () => {
     )
   })
 
-  it("requires a service partner when live booking is enabled", () => {
+  it("requires a service partner ID when live booking is enabled", () => {
     process.env.TRIVARA_BOOKING_ENABLED = "true"
     process.env.TRIVARA_API_BASE_URL = "https://app.trivaralogistics.com"
     process.env.TRIVARA_API_KEY = "secret-key"
     process.env.TRIVARA_CRN_NO = "857252"
     process.env.TRIVARA_WAREHOUSE_NAME = "DOMINANT_INFOTECH_101380"
-    process.env.TRIVARA_SERVICE_PARTNER = ""
+    process.env.TRIVARA_SERVICE_PARTNER_ID = ""
 
     expect(() => getTrivaraConfig()).toThrow(
-      "Missing required environment variable: TRIVARA_SERVICE_PARTNER"
+      "Missing required environment variable: TRIVARA_SERVICE_PARTNER_ID"
+    )
+  })
+
+  it("rejects non-numeric service partner IDs", () => {
+    process.env.TRIVARA_BOOKING_ENABLED = "true"
+    process.env.TRIVARA_API_BASE_URL = "https://app.trivaralogistics.com"
+    process.env.TRIVARA_API_KEY = "secret-key"
+    process.env.TRIVARA_CRN_NO = "857252"
+    process.env.TRIVARA_WAREHOUSE_NAME = "DOMINANT_INFOTECH_101380"
+    process.env.TRIVARA_SERVICE_PARTNER_ID = "DEL"
+
+    expect(() => getTrivaraConfig()).toThrow(
+      "TRIVARA_SERVICE_PARTNER_ID must be a positive numeric partner ID"
     )
   })
 
@@ -239,7 +259,7 @@ describe("Trivara order booking integration", () => {
     process.env.TRIVARA_API_KEY = "secret-key"
     process.env.TRIVARA_CRN_NO = "868369"
     process.env.TRIVARA_WAREHOUSE_NAME = ""
-    process.env.TRIVARA_SERVICE_PARTNER = "DEL"
+    process.env.TRIVARA_SERVICE_PARTNER_ID = "1"
 
     expect(() => getTrivaraConfig()).toThrow(
       "Missing required environment variable: TRIVARA_WAREHOUSE_NAME"
@@ -255,7 +275,7 @@ describe("Trivara order booking integration", () => {
       buildOrder(),
       {
         ...config,
-        servicePartner: "DEL",
+        servicePartnerId: 1,
       }
     )
     const result = await sendTrivaraOrderBooking(
@@ -315,7 +335,7 @@ describe("Trivara order booking integration", () => {
       buildOrder(),
       {
         ...config,
-        servicePartner: "DEL",
+        servicePartnerId: 1,
       }
     )
 
@@ -438,7 +458,7 @@ describe("Trivara remaining endpoint integrations", () => {
     expect(capturedInit?.headers).toEqual({ Apikey: "cancel-key" })
   })
 
-  it("sends pickup locations and services with the Apikey header", async () => {
+  it("sends pickup locations, services, and active partners with the Apikey header", async () => {
     const pickup = await captureRequest((fetcher) =>
       sendTrivaraPickupLocations(
         { crn_no: "857252" },
@@ -453,6 +473,13 @@ describe("Trivara remaining endpoint integrations", () => {
         fetcher
       )
     )
+    const partners = await captureRequest((fetcher) =>
+      sendTrivaraActivePartners(
+        { crn_no: "857252" },
+        { apiBaseUrl: "https://app.trivaralogistics.com", apiKey: "master-key" },
+        fetcher
+      )
+    )
 
     expect(String(pickup.capturedUrl)).toBe(
       "https://app.trivaralogistics.com/api/users/V2/OrderBooking/get_pickup_location"
@@ -462,5 +489,9 @@ describe("Trivara remaining endpoint integrations", () => {
       "https://app.trivaralogistics.com/api/users/V2/Activity/get_services"
     )
     expect(services.capturedInit?.headers).toEqual({ Apikey: "master-key" })
+    expect(String(partners.capturedUrl)).toBe(
+      "https://app.trivaralogistics.com/api/users/V2/Activity/get_active_partners"
+    )
+    expect(partners.capturedInit?.headers).toEqual({ Apikey: "master-key" })
   })
 })

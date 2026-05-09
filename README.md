@@ -53,10 +53,11 @@ PAYU_MERCHANT_SALT=<your-payu-salt>
 For Trivara Logistics V2, copy the Trivara block from `.env.example` into
 `.env.local`, set `TRIVARA_BOOKING_ENABLED=true`, and replace
 `TRIVARA_API_KEY`, `TRIVARA_CRN_NO`, `TRIVARA_WAREHOUSE_NAME`, and
-`TRIVARA_SERVICE_PARTNER` with values confirmed for your Trivara account. If
-Trivara returns `Invalid Partner`, the `TRIVARA_SERVICE_PARTNER` value is not
-enabled for that account. In production, set the same server-side variables in
-Vercel Project Settings > Environment Variables.
+`TRIVARA_SERVICE_PARTNER_ID` with values confirmed for your Trivara account.
+Use Trivara's `get_active_partners` endpoint to confirm the numeric partner ID;
+for CRN `654822`, Trivara currently returns Delhivery as `service_partner_id`
+`1`. In production, set the same server-side variables in Vercel Project
+Settings > Environment Variables.
 
 ### Install dependencies
 

@@ -7,15 +7,14 @@ export type TrivaraService = "SURFACE" | "AIR" | "EXPRESS"
 
 export type TrivaraOrderBookingItem = {
   product_detail: string
-  weight: number
-  length: number
-  width: number
-  height: number
   package_amount: number
+  product_sku: string
+  quantity: number
 }
 
 export type TrivaraOrderBookingOrder = {
-  awb_number: string
+  user_reference_id: string
+  user_order_id: number
   consignee_name: string
   mobile: string
   pincode: string
@@ -23,12 +22,19 @@ export type TrivaraOrderBookingOrder = {
   payment_mode: TrivaraPaymentMode
   service: TrivaraService
   shipment_type: TrivaraShipmentType
+  length: number
+  width: number
+  height: number
+  weight: number
+  email: string
+  total_amount: number
+  total_cod_amount: number
   items: TrivaraOrderBookingItem[]
 }
 
 export type TrivaraOrderBookingPayload = {
   warehouse_name: string
-  partner_name: string
+  service_partner_id: number
   crn_no: string
   orders: TrivaraOrderBookingOrder[]
 }
@@ -41,7 +47,7 @@ export type TrivaraConfig = {
   warehouseName: string
   service: TrivaraService
   shipmentType: TrivaraShipmentType
-  servicePartner: string
+  servicePartnerId: number
   defaultWeightGrams: number
   defaultLengthCm: number
   defaultWidthCm: number
@@ -98,6 +104,8 @@ type OrderForTrivara = Pick<
   Order,
   | "id"
   | "display_id"
+  | "customer_email"
+  | "email"
   | "total_amount"
   | "total"
   | "currency_code"
@@ -123,6 +131,7 @@ const TOTAL_ORDERS_PATH = "/api/users/V2/OrderBooking/get_total_orders"
 const CANCEL_ORDER_PATH = "/api/users/V2/OrderBooking/cancel_order"
 const PICKUP_LOCATIONS_PATH = "/api/users/V2/OrderBooking/get_pickup_location"
 const SERVICES_PATH = "/api/users/V2/Activity/get_services"
+const ACTIVE_PARTNERS_PATH = "/api/users/V2/Activity/get_active_partners"
 
 function getTrimmedEnv(key: string): string {
   return process.env[key]?.trim() || ""
@@ -227,9 +236,21 @@ function readPositiveNumber(value: string, defaultValue: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultValue
 }
 
+function readRequiredPositiveInteger(value: string, envKey: string): number {
+  const parsed = Number(value)
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`${envKey} must be a positive numeric partner ID`)
+  }
+
+  return parsed
+}
+
 export function getTrivaraConfig(): TrivaraConfig {
   const bookingEnabled = getTrimmedEnv("TRIVARA_BOOKING_ENABLED") === "true"
-  const servicePartner = getTrimmedEnv("TRIVARA_SERVICE_PARTNER")
+  const servicePartnerIdValue =
+    getTrimmedEnv("TRIVARA_SERVICE_PARTNER_ID") ||
+    getTrimmedEnv("TRIVARA_SERVICE_PARTNER")
   const warehouseName = getTrimmedEnv("TRIVARA_WAREHOUSE_NAME")
 
   const config = {
@@ -247,7 +268,12 @@ export function getTrivaraConfig(): TrivaraConfig {
     warehouseName,
     service: readService(getTrimmedEnv("TRIVARA_SERVICE")),
     shipmentType: readShipmentType(getTrimmedEnv("TRIVARA_SHIPMENT_TYPE")),
-    servicePartner,
+    servicePartnerId: servicePartnerIdValue
+      ? readRequiredPositiveInteger(
+          servicePartnerIdValue,
+          "TRIVARA_SERVICE_PARTNER_ID"
+        )
+      : 0,
     defaultWeightGrams: readPositiveNumber(
       getTrimmedEnv("TRIVARA_DEFAULT_WEIGHT_GRAMS"),
       DEFAULT_TRIVARA_WEIGHT_GRAMS
@@ -266,8 +292,8 @@ export function getTrivaraConfig(): TrivaraConfig {
     ),
   }
 
-  if (bookingEnabled && !servicePartner) {
-    throw new Error("Missing required environment variable: TRIVARA_SERVICE_PARTNER")
+  if (bookingEnabled && !servicePartnerIdValue) {
+    throw new Error("Missing required environment variable: TRIVARA_SERVICE_PARTNER_ID")
   }
 
   if (bookingEnabled && !warehouseName) {
@@ -363,6 +389,10 @@ function formatProductDetail(order: OrderForTrivara): string {
   return titles.length > 0 ? titles.join(",") : `Toycker Order #${order.display_id}`
 }
 
+function formatProductSku(value: string | null | undefined, fallback: string): string {
+  return value?.trim() || fallback
+}
+
 function requireField(value: string, label: string): string {
   if (!value.trim()) {
     throw new Error(`${label} is required for Trivara booking`)
@@ -379,7 +409,7 @@ export function buildTrivaraOrderBookingPayload(
     | "warehouseName"
     | "service"
     | "shipmentType"
-    | "servicePartner"
+    | "servicePartnerId"
     | "defaultWeightGrams"
     | "defaultLengthCm"
     | "defaultWidthCm"
@@ -390,14 +420,16 @@ export function buildTrivaraOrderBookingPayload(
     ? "COD"
     : "PREPAID"
   const packageAmount = formatAmountNumber(order.total_amount || order.total)
+  const orderItems = order.items || []
 
   return {
     warehouse_name: requireField(config.warehouseName, "Trivara warehouse name"),
-    partner_name: requireField(config.servicePartner, "Trivara service partner"),
+    service_partner_id: config.servicePartnerId,
     crn_no: requireField(config.crnNo, "Trivara CRN number"),
     orders: [
       {
-        awb_number: "",
+        user_reference_id: `toycker_${order.id}`,
+        user_order_id: order.display_id,
         consignee_name: requireField(formatConsigneeName(order), "Consignee name"),
         mobile: requireField(
           formatMobile(order.shipping_address?.phone),
@@ -411,19 +443,38 @@ export function buildTrivaraOrderBookingPayload(
         payment_mode: paymentMode,
         service: config.service,
         shipment_type: config.shipmentType,
-        items: [
-          {
-            product_detail: requireField(
-              formatProductDetail(order),
-              "Product detail"
-            ),
-            weight: config.defaultWeightGrams,
-            length: config.defaultLengthCm,
-            width: config.defaultWidthCm,
-            height: config.defaultHeightCm,
-            package_amount: packageAmount,
-          },
-        ],
+        length: config.defaultLengthCm,
+        width: config.defaultWidthCm,
+        height: config.defaultHeightCm,
+        weight: config.defaultWeightGrams,
+        email: requireField(order.customer_email || order.email, "Customer email"),
+        total_amount: packageAmount,
+        total_cod_amount: paymentMode === "COD" ? packageAmount : 0,
+        items:
+          orderItems.length > 0
+            ? orderItems.map((item, index) => ({
+                product_detail: requireField(
+                  item.title || item.product_title || formatProductDetail(order),
+                  "Product detail"
+                ),
+                package_amount: formatAmountNumber(item.total || item.unit_price),
+                product_sku: formatProductSku(
+                  item.variant?.sku,
+                  `${order.display_id}-${index + 1}`
+                ),
+                quantity: item.quantity || 1,
+              }))
+            : [
+                {
+                  product_detail: requireField(
+                    formatProductDetail(order),
+                    "Product detail"
+                  ),
+                  package_amount: packageAmount,
+                  product_sku: String(order.display_id),
+                  quantity: 1,
+                },
+              ],
       },
     ],
   }
@@ -713,6 +764,22 @@ export async function sendTrivaraServices(
 ): Promise<TrivaraApiResponse> {
   return sendTrivaraFormRequest(
     SERVICES_PATH,
+    payload,
+    {
+      ...config,
+      apiKeyHeader: "Apikey",
+    },
+    fetcher
+  )
+}
+
+export async function sendTrivaraActivePartners(
+  payload: TrivaraCrnPayload,
+  config: { apiBaseUrl: string; apiKey: string },
+  fetcher: FetchLike = fetch
+): Promise<TrivaraApiResponse> {
+  return sendTrivaraFormRequest(
+    ACTIVE_PARTNERS_PATH,
     payload,
     {
       ...config,
