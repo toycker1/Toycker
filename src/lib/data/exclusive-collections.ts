@@ -1,8 +1,17 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { Product } from "@/lib/supabase/types"
 import { unstable_cache } from "next/cache"
+
+export type ExclusiveCollectionProduct = {
+  id: string
+  name: string
+  handle: string
+  image_url: string | null
+  thumbnail: string | null
+  price: number
+  currency_code: string | null
+}
 
 export type ExclusiveCollectionEntry = {
   id: string
@@ -11,11 +20,11 @@ export type ExclusiveCollectionEntry = {
   poster_url: string | null
   video_duration: number | null
   sort_order: number
-  product: Product | null
+  product: ExclusiveCollectionProduct | null
 }
 
 type ExclusiveCollectionRow = Omit<ExclusiveCollectionEntry, "product"> & {
-  product: Product | Product[] | null
+  product: ExclusiveCollectionProduct | ExclusiveCollectionProduct[] | null
 }
 
 const firstRelation = <T,>(value: T | T[] | null | undefined): T | null => {
@@ -48,11 +57,9 @@ export const listExclusiveCollections = unstable_cache(
           name,
           handle,
           image_url,
-          images,
+          thumbnail,
           price,
-          collection_id,
-          created_at,
-          updated_at
+          currency_code
         )
       `)
       .eq("is_active", true)

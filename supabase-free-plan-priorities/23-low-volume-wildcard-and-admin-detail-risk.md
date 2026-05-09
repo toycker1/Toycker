@@ -8,15 +8,23 @@ The goal is to document them so future AI agents do not repeatedly create new ri
 
 ## Status
 
-`Documented for future monitoring`
+`Completed for measured cart, checkout, shipping, rewards, and gift-wrap order-source-of-truth issues on 09 May 2026`
 
-No immediate code change is required unless monitoring proves one of these paths is a top egress source.
+The measured user-facing issues were implemented and verified. Remaining broad admin/detail/callback/small-table responses are still documented for future monitoring and should not be optimized without evidence that one of those paths is a top egress source.
 
 ## Classification
 
-`code-only if measured`
+`code-only if measured; Supabase migration only for measured checkout correctness`
 
-No Supabase migration is expected for normal cleanup. A migration should only be considered if database query performance, indexes, or schema shape become a measured problem.
+No Supabase migration is expected for normal broad-select cleanup. A migration should only be considered if database query performance, indexes, schema shape, or checkout correctness become a measured problem.
+
+For this completed work, one Supabase migration was required because checkout order creation depends on the database RPC `public.create_order_with_payment`. The migration does not add tables or indexes. It replaces the RPC so gift wrap is billed only from actual `gift_wrap_line` cart items, preventing stale product metadata from resurrecting a removed gift-wrap charge.
+
+Applied development migration:
+
+```txt
+supabase/migrations/20260509174500_use_gift_wrap_lines_as_order_source_of_truth.sql
+```
 
 ## Related Files And Areas
 
@@ -92,6 +100,8 @@ This is important because admin, export, cart, checkout, PayU, Easebuzz, and mon
 - A small table grows large over time but still uses `select("*")`.
 - A formerly private route becomes public.
 - A script/backfill route is run against all products repeatedly.
+
+These remaining broad responses are still part of Priority 23, but they are monitoring-only unless logs or Query Performance prove they are expensive. Their existence does not make this priority incomplete.
 
 ## When To Implement
 
@@ -170,6 +180,43 @@ git diff --check
 ```
 
 Also run typecheck/lint and report known repo caveats if they still exist.
+
+## Completed Work On 09 May 2026
+
+Implemented and verified:
+
+- Replaced measured cart, shipping, and rewards wildcard/helper responses with explicit lightweight fields.
+- Kept cart, checkout, shipping, and rewards behavior unchanged from the customer side.
+- Fixed duplicate gift-wrap service-line behavior by matching gift-wrap cart lines using `gift_wrap_line` and `gift_wrap_fee`.
+- Fixed gift-wrap removal behavior so removing gift wrap also cleans stale product gift-wrap metadata.
+- Fixed related product-line removal behavior so removing a gift-wrapped product removes its matching gift-wrap line when no matching wrapped product line remains.
+- Updated admin order detail summary to derive gift-wrap amount from actual order gift-wrap item lines instead of stale order metadata.
+- Applied `20260509174500_use_gift_wrap_lines_as_order_source_of_truth.sql` to Toycker Development and verified the remote RPC no longer uses the stale product metadata fallback.
+
+Verification completed:
+
+```txt
+pnpm.cmd exec tsc --noEmit
+pnpm.cmd build
+git diff --check
+```
+
+Known repo caveat:
+
+```txt
+pnpm.cmd lint
+```
+
+still fails because `next lint` resolves `lint` as a project directory in the current repo setup.
+
+Manual verification completed:
+
+- Shipping options response was checked in the browser console and returned only lightweight shipping fields.
+- Toycker Development migration history shows `20260509174500` applied.
+- Remote `create_order_with_payment` function verification confirmed:
+  - new `SUM(gift_wrap_fee * quantity)` logic exists
+  - old `v_has_gift_wrap_line` fallback flag does not exist
+  - stale product metadata fallback does not exist
 
 ## Simple Senior Explanation
 

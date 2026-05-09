@@ -46,6 +46,91 @@ type CustomerEmailProfileRow = {
   email: string | null
 }
 
+type CartShippingOptionRow = {
+  id: string
+  name: string
+  amount: number
+  min_order_free_shipping: number | null
+}
+
+type CartItemMetadataRow = {
+  id: string
+  quantity?: number | null
+  metadata?: Record<string, unknown> | null
+}
+
+type CartItemGiftWrapRemovalRow = {
+  id: string
+  cart_id: string
+  product_id: string
+  metadata?: Record<string, unknown> | null
+}
+
+const metadataMatchesExactly = (
+  itemMetadata: Record<string, unknown> | null | undefined,
+  expectedMetadata: Record<string, unknown> | null | undefined
+) => {
+  const itemMeta = itemMetadata || {}
+  const searchMeta = expectedMetadata || {}
+  const itemKeys = Object.keys(itemMeta)
+  const searchKeys = Object.keys(searchMeta)
+
+  if (itemKeys.length !== searchKeys.length) return false
+
+  return searchKeys.every((key) => itemMeta[key] === searchMeta[key])
+}
+
+const isGiftWrapLineMetadata = (
+  metadata: Record<string, unknown> | null | undefined
+) => metadata?.gift_wrap_line === true
+
+const buildMetadataFilter = (metadata: Record<string, unknown>) => {
+  if (!isGiftWrapLineMetadata(metadata)) {
+    return metadata
+  }
+
+  const filter: Record<string, unknown> = {
+    gift_wrap_line: true,
+  }
+
+  if (metadata.gift_wrap_fee !== undefined) {
+    filter.gift_wrap_fee = metadata.gift_wrap_fee
+  }
+
+  return filter
+}
+
+const metadataMatchesCartLine = (
+  itemMetadata: Record<string, unknown> | null | undefined,
+  expectedMetadata: Record<string, unknown> | null | undefined
+) => {
+  if (
+    isGiftWrapLineMetadata(itemMetadata) &&
+    isGiftWrapLineMetadata(expectedMetadata)
+  ) {
+    return itemMetadata?.gift_wrap_fee === expectedMetadata?.gift_wrap_fee
+  }
+
+  return metadataMatchesExactly(itemMetadata, expectedMetadata)
+}
+
+const removeGiftWrapMetadata = (
+  metadata: Record<string, unknown> | null | undefined
+) => {
+  if (!metadata) {
+    return null
+  }
+
+  const {
+    gift_wrap: _giftWrap,
+    gift_wrap_fee: _giftWrapFee,
+    gift_wrap_packages: _giftWrapPackages,
+    ...rest
+  } = metadata
+
+  return Object.keys(rest).length > 0 ? rest : null
+}
+
 const getCartClientForUser = async (userId: string | null) => {
   if (userId) {
     return createClient()
@@ -265,15 +350,17 @@ export async function retrieveCartRaw(cartId?: string): Promise<Cart | null> {
   // Get shipping threshold from active shipping options
   const { data: shippingOptions } = await supabase
     .from("shipping_options")
-    .select("*")
+    .select("id, name, amount, min_order_free_shipping")
     .eq("is_active", true)
 
-  const shippingOptionsData = (shippingOptions || []).map((opt) => ({
-    shipping_option_id: opt.id,
-    name: opt.name,
-    amount: opt.amount,
-    min_order_free_shipping: opt.min_order_free_shipping,
-  })) as CartShippingMethod[]
+  const shippingOptionsData = (shippingOptions || []).map(
+    (opt: CartShippingOptionRow) => ({
+      shipping_option_id: opt.id,
+      name: opt.name,
+      amount: opt.amount,
+      min_order_free_shipping: opt.min_order_free_shipping,
+    })
+  ) as CartShippingMethod[]
 
   const standardOption = shippingOptionsData.find((so) =>
     so.name.toLowerCase().includes("standard")
@@ -331,7 +418,7 @@ export async function getOrSetCart(context?: CartWriteContext): Promise<Cart> {
         currency_code: "inr",
         email: writeContext.email,
       })
-      .select()
+      .select("id, user_id, currency_code, email, created_at, updated_at")
       .single()
 
     if (error || !newCart) {
@@ -436,7 +523,7 @@ export async function addToCart({
     try {
       const query = supabase
         .from("cart_items")
-        .select("*")
+        .select("id, quantity, metadata")
         .eq("cart_id", cartId)
         .eq("product_id", productId)
 
@@ -447,7 +534,7 @@ export async function addToCart({
       }
 
       if (metadata) {
-        query.contains("metadata", metadata)
+        query.contains("metadata", buildMetadataFilter(metadata))
       } else {
         query.is("metadata", null)
       }
@@ -463,22 +550,11 @@ export async function addToCart({
       console.error("[addToCart] Failed to query existing items:", queryError)
     }
 
-    // Filter for exact metadata match to be safe
-    type CartItemRow = {
-      metadata?: Record<string, unknown>
-      quantity?: number
-      id: string
-    }
     const existingItem = existingItems?.find(
-      (item: unknown): item is CartItemRow => {
+      (item: unknown): item is CartItemMetadataRow => {
         if (!item || typeof item !== "object") return false
-        const cartItem = item as CartItemRow
-        const itemMeta = cartItem.metadata || {}
-        const searchMeta = metadata || {}
-        const itemKeys = Object.keys(itemMeta)
-        const searchKeys = Object.keys(searchMeta)
-        if (itemKeys.length !== searchKeys.length) return false
-        return searchKeys.every((key) => itemMeta[key] === searchMeta[key])
+        const cartItem = item as CartItemMetadataRow
+        return metadataMatchesCartLine(cartItem.metadata, metadata)
       }
     )
 
@@ -563,14 +639,29 @@ export async function addMultipleToCart(
       }
     }
 
-    const { data: existingItems } = await supabase
+    const existingQuery = supabase
       .from("cart_items")
-      .select("*")
+      .select("id, quantity, metadata")
       .eq("cart_id", cartId)
       .eq("product_id", item.productId)
-      .eq("variant_id", targetVariantId || null)
 
-    const existingItem = existingItems?.[0]
+    if (targetVariantId) {
+      existingQuery.eq("variant_id", targetVariantId)
+    } else {
+      existingQuery.is("variant_id", null)
+    }
+
+    if (item.metadata) {
+      existingQuery.contains("metadata", buildMetadataFilter(item.metadata))
+    } else {
+      existingQuery.is("metadata", null)
+    }
+
+    const { data: existingItems } = await existingQuery
+
+    const existingItem = existingItems?.find((cartItem) =>
+      metadataMatchesCartLine(cartItem.metadata, item.metadata)
+    )
 
     if (existingItem) {
       await supabase
@@ -612,7 +703,77 @@ export async function updateLineItem({
 export async function deleteLineItem(lineId: string) {
   const writeContext = await resolveCartWriteContext()
   const supabase = writeContext.supabase
+  const { data: lineItem } = await supabase
+    .from("cart_items")
+    .select("id, cart_id, product_id, metadata")
+    .eq("id", lineId)
+    .maybeSingle<CartItemGiftWrapRemovalRow>()
+
+  const lineMetadata = lineItem?.metadata || null
+
   await supabase.from("cart_items").delete().eq("id", lineId)
+
+  if (lineItem && isGiftWrapLineMetadata(lineMetadata)) {
+    const giftWrapFee = lineMetadata?.gift_wrap_fee
+    const productLinesQuery = supabase
+      .from("cart_items")
+      .select("id, metadata")
+      .eq("cart_id", lineItem.cart_id)
+      .eq("product_id", lineItem.product_id)
+      .contains("metadata", { gift_wrap: true })
+
+    if (giftWrapFee !== undefined) {
+      productLinesQuery.contains("metadata", { gift_wrap_fee: giftWrapFee })
+    }
+
+    const { data: productLines } = await productLinesQuery
+
+    for (const productLine of productLines || []) {
+      await supabase
+        .from("cart_items")
+        .update({
+          metadata: removeGiftWrapMetadata(
+            productLine.metadata as Record<string, unknown> | null
+          ),
+        })
+        .eq("id", productLine.id)
+    }
+  } else if (lineItem && lineMetadata?.gift_wrap === true) {
+    const giftWrapFee = lineMetadata.gift_wrap_fee
+    const remainingWrappedProductLinesQuery = supabase
+      .from("cart_items")
+      .select("id")
+      .eq("cart_id", lineItem.cart_id)
+      .eq("product_id", lineItem.product_id)
+      .contains("metadata", { gift_wrap: true })
+
+    if (giftWrapFee !== undefined) {
+      remainingWrappedProductLinesQuery.contains("metadata", {
+        gift_wrap_fee: giftWrapFee,
+      })
+    }
+
+    const { data: remainingWrappedProductLines } =
+      await remainingWrappedProductLinesQuery
+
+    if (
+      !remainingWrappedProductLines ||
+      remainingWrappedProductLines.length === 0
+    ) {
+      const giftWrapQuery = supabase
+        .from("cart_items")
+        .delete()
+        .eq("cart_id", lineItem.cart_id)
+        .eq("product_id", lineItem.product_id)
+        .contains("metadata", { gift_wrap_line: true })
+
+      if (giftWrapFee !== undefined) {
+        giftWrapQuery.contains("metadata", { gift_wrap_fee: giftWrapFee })
+      }
+
+      await giftWrapQuery
+    }
+  }
 
   revalidateTag("cart", "max")
   return retrieveCartRaw()
@@ -1597,7 +1758,7 @@ export async function listCartOptions(): Promise<{
   const supabase = await getCartClient()
   const { data, error } = await supabase
     .from("shipping_options")
-    .select("*")
+    .select("id, name, amount, min_order_free_shipping")
     .eq("is_active", true)
 
   if (error) {
@@ -1606,7 +1767,7 @@ export async function listCartOptions(): Promise<{
   }
 
   return {
-    shipping_options: (data || []).map((opt: ShippingOption) => ({
+    shipping_options: (data || []).map((opt: CartShippingOptionRow) => ({
       id: opt.id,
       name: opt.name,
       amount: opt.amount,
