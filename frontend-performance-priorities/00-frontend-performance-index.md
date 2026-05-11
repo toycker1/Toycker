@@ -1,7 +1,7 @@
 # Toycker Frontend Performance Priority Index
 
-Status: Planning documentation created
-Last updated: 2026-05-08
+Status: Priority 1 measurement implemented and locally verified
+Last updated: 2026-05-11
 
 This folder is separate from `supabase-free-plan-priorities`.
 
@@ -67,7 +67,7 @@ This helps the next developer or AI understand what was already optimized and av
 ## Priority Files
 
 1. `01-lighthouse-core-web-vitals-and-measurement.md`
-   - Baseline metrics, Lighthouse meaning, testing process, and success targets.
+   - Implemented. Baseline metrics, Lighthouse meaning, testing process, and success targets.
 
 2. `02-media-image-video-and-cdn-optimization.md`
    - Hero banners, product images, videos, Cloudflare cache behavior, image formats, and upload rules.
