@@ -10,11 +10,11 @@ import { notFound } from "next/navigation"
 import { Product, Region } from "@/lib/supabase/types"
 
 import ProductActionsWrapper from "./product-actions-wrapper"
-import CustomerReviews from "@modules/products/components/customer-reviews"
+import CustomerReviewsServer from "@modules/products/components/customer-reviews/server"
 import OrderInformation from "@modules/products/components/order-information"
 import RecentlyViewedTracker from "@modules/products/components/recently-viewed-tracker"
-import { getProductReviews } from "@/lib/actions/reviews"
-import FrequentlyBoughtTogether from "@modules/products/components/frequently-bought-together"
+import { getProductReviewStats } from "@/lib/actions/reviews"
+import FrequentlyBoughtTogetherServer from "@modules/products/components/frequently-bought-together/server"
 
 import { getYoutubeId, getYoutubeEmbedUrl } from "@/lib/util/youtube"
 
@@ -37,18 +37,7 @@ const ProductTemplate = async ({
     return notFound()
   }
 
-  const reviews = await getProductReviews(product.id)
-
-  // Compute review stats for the rating badge
-  const reviewCount = reviews.length
-  const averageRating =
-    reviewCount > 0
-      ? Math.round(
-          (reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / reviewCount) *
-            100
-        ) / 100
-      : 0
-  const reviewStats = { average: averageRating, count: reviewCount }
+  const reviewStats = await getProductReviewStats(product.id)
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://toycker.com"
 
@@ -176,21 +165,26 @@ const ProductTemplate = async ({
 
         {/* Lazy load product details sections */}
         <div className="mt-8 space-y-5">
-          <FrequentlyBoughtTogether
-            product={product}
-            clubDiscountPercentage={clubDiscountPercentage}
-          />
+          <LazyLoadSection minHeight="260px">
+            <Suspense fallback={null}>
+              <FrequentlyBoughtTogetherServer
+                product={product}
+                clubDiscountPercentage={clubDiscountPercentage}
+              />
+            </Suspense>
+          </LazyLoadSection>
           <LazyLoadSection minHeight="300px">
             <ProductTabs product={product} />
           </LazyLoadSection>
 
           <LazyLoadSection minHeight="400px">
-            <CustomerReviews
-              productId={product.id}
-              productHandle={product.handle}
-              reviews={reviews}
-              productThumbnail={product.thumbnail || product.image_url}
-            />
+            <Suspense fallback={null}>
+              <CustomerReviewsServer
+                productId={product.id}
+                productHandle={product.handle}
+                productThumbnail={product.thumbnail || product.image_url}
+              />
+            </Suspense>
           </LazyLoadSection>
         </div>
       </div>

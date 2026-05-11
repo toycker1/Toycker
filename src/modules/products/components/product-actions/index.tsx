@@ -31,7 +31,7 @@ import {
 } from "lucide-react"
 import { useCartSidebar } from "@modules/layout/context/cart-sidebar-context"
 import { useCartStore } from "@modules/cart/context/cart-store-context"
-import { Product } from "@/lib/supabase/types"
+import { Product, ProductOptionValue, ProductVariant } from "@/lib/supabase/types"
 import { isSimpleProduct } from "@lib/util/product"
 import { COLOR_SWATCH_MAP } from "@/lib/constants/colors"
 import { sendProductQuestion } from "@lib/actions/contact-actions"
@@ -48,8 +48,8 @@ type ProductActionsProps = {
   reviewStats?: { average: number; count: number }
 }
 
-const optionsAsKeymap = (variantOptions: any[]) => {
-  return variantOptions?.reduce((acc: Record<string, string>, varopt: any) => {
+const optionsAsKeymap = (variantOptions?: ProductOptionValue[]) => {
+  return variantOptions?.reduce((acc: Record<string, string>, varopt) => {
     if (varopt?.option_id && varopt?.value) {
       acc[varopt.option_id] = varopt.value
     }
@@ -127,7 +127,7 @@ export default function ProductActions({
 
   const isSimple = isSimpleProduct(product)
 
-  const isVariantAvailable = useCallback((variant: any) => {
+  const isVariantAvailable = useCallback((variant?: ProductVariant) => {
     if (!variant) return false
     if (!variant.manage_inventory) return true
     if (variant.allow_backorder) return true
@@ -179,7 +179,7 @@ export default function ProductActions({
     // 3. Fallback to first variant
     const preferred =
       variants.find((v) => v.id === selectedVariantId) ??
-      variants.find((v: any) => isVariantAvailable(v)) ??
+      variants.find((v) => isVariantAvailable(v)) ??
       variants[0]
 
     const variantOptions = optionsAsKeymap(preferred.options)
@@ -247,7 +247,7 @@ export default function ProductActions({
   const isValidVariant = useMemo(() => {
     if (isSimple) return true
 
-    return product.variants?.some((v: any) => {
+    return product.variants?.some((v) => {
       const variantOptions = optionsAsKeymap(v.options)
       return isEqual(variantOptions, options)
     })

@@ -82,6 +82,13 @@ const normalizePrice = (value: SearchProductRow["price"]) => {
     return 0
 }
 
+const formatSearchPrice = (amount: number, currencyCode: string) =>
+    new Intl.NumberFormat("en-IN", {
+        style: "currency",
+        currency: currencyCode || "INR",
+        minimumFractionDigits: 2,
+    }).format(amount)
+
 export const searchEntities = async ({
     query,
     countryCode: _countryCode,
@@ -107,23 +114,17 @@ export const searchEntities = async ({
 
     const supabase = await createClient()
 
-    // 1. Parallelize queries for speed
     const [productsRes, categoriesRes, collectionsRes] = await Promise.all([
-        // Search Products using Advanced Multimodal RPC (FTS part only for now)
         supabase.rpc("search_products_multimodal", {
             search_query: normalizedQuery,
             match_count: resolvedProductLimit,
             match_threshold: 0.1,
         }),
-
-        // Search Categories
         supabase
             .from("categories")
             .select("id, name, handle")
             .ilike("name", `%${normalizedQuery}%`)
             .limit(resolvedTaxonomyLimit),
-
-        // Search Collections
         supabase
             .from("collections")
             .select("id, title, handle")
@@ -131,19 +132,22 @@ export const searchEntities = async ({
             .limit(resolvedTaxonomyLimit),
     ])
 
-    // 2. Process results (Normalization)
-    const products = ((productsRes.data || []) as SearchProductRow[]).map((p) => ({
-        id: p.id,
-        title: p.name,
-        handle: p.handle,
-        thumbnail: p.image_url || p.thumbnail,
-        price: {
-            amount: normalizePrice(p.price),
-            currencyCode: p.currency_code || "INR",
-            formatted: `₹${p.price}`,
-        },
-    }))
+    const products = ((productsRes.data || []) as SearchProductRow[]).map((p) => {
+        const amount = normalizePrice(p.price)
+        const currencyCode = p.currency_code || "INR"
 
+        return {
+            id: p.id,
+            title: p.name,
+            handle: p.handle,
+            thumbnail: p.image_url || p.thumbnail,
+            price: {
+                amount,
+                currencyCode,
+                formatted: formatSearchPrice(amount, currencyCode),
+            },
+        }
+    })
 
     const categories = (categoriesRes.data || []).map((c: { id: string; name: string; handle: string }) => ({
         id: c.id,
@@ -157,11 +161,10 @@ export const searchEntities = async ({
         handle: c.handle,
     }))
 
-    // 3. Generate Smart Suggestions
     const suggestionPool = [
         normalizedQuery,
-        ...products.map((p: { title: string }) => p.title),
-        ...categories.map((c: { name: string }) => c.name),
+        ...products.map((p) => p.title),
+        ...categories.map((c) => c.name),
     ]
 
     const uniqueSuggestions = Array.from(new Set(suggestionPool)).slice(0, 6)
@@ -173,4 +176,3 @@ export const searchEntities = async ({
         suggestions: uniqueSuggestions,
     }
 }
-

@@ -109,6 +109,55 @@ const PRODUCT_DETAIL_SELECT = `
   )
 `
 
+const PRODUCT_STOREFRONT_DETAIL_SELECT = `
+  id,
+  handle,
+  name,
+  description,
+  short_description,
+  price,
+  currency_code,
+  image_url,
+  video_url,
+  thumbnail,
+  images,
+  stock_count,
+  metadata,
+  seo_title,
+  seo_description,
+  seo_metadata,
+  category_id,
+  collection_id,
+  created_at,
+  updated_at,
+  subtitle,
+  status,
+  variants:product_variants(
+    id,
+    title,
+    sku,
+    barcode,
+    price,
+    compare_at_price,
+    inventory_quantity,
+    manage_inventory,
+    allow_backorder,
+    product_id,
+    options,
+    image_url
+  ),
+  options:product_options(
+    id,
+    title,
+    values:product_option_values(
+      id,
+      value,
+      option_id,
+      metadata
+    )
+  )
+`
+
 const PRODUCT_QUICK_VIEW_SELECT = `
   id,
   handle,
@@ -353,13 +402,40 @@ export const getProductByHandle = cache(async function getProductByHandle(handle
   const supabase = await createClient()
   const { data, error } = await supabase
     .from("products")
-    .select(PRODUCT_DETAIL_SELECT)
+    .select(PRODUCT_STOREFRONT_DETAIL_SELECT)
     .eq("status", ACTIVE_PRODUCT_STATUS)
     .eq("handle", handle)
     .maybeSingle()
 
   if (error || !data) return null
   return normalizeProductImage(data as unknown as Product)
+})
+
+export const listFrequentlyBoughtTogetherProducts = cache(async function listFrequentlyBoughtTogetherProducts(
+  productId: string
+): Promise<Product[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("product_combinations")
+    .select(`
+      id,
+      related_product:products!related_product_id(
+        ${PRODUCT_CARD_SELECT}
+      )
+    `)
+    .eq("product_id", productId)
+    .limit(4)
+
+  if (error || !data) {
+    if (error) {
+      console.error("Error listing frequently bought products:", error.message)
+    }
+    return []
+  }
+
+  return data
+    .flatMap((row) => row.related_product ?? [])
+    .map((product) => normalizeProductImage(product as unknown as Product))
 })
 
 export const listPaginatedProducts = cache(async function listPaginatedProducts({

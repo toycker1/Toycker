@@ -1,4 +1,5 @@
 import { cn } from "@lib/util/cn"
+import { ProductOption, ProductOptionValue } from "@/lib/supabase/types"
 import React from "react"
 
 const COLOR_SWATCH_MAP: Record<string, string> = {
@@ -18,7 +19,7 @@ const COLOR_SWATCH_MAP: Record<string, string> = {
 }
 
 type OptionSelectProps = {
-  option: any
+  option: ProductOption
   current: string | undefined
   updateOption: (_optionId: string, _value: string) => void
   title: string
@@ -55,11 +56,11 @@ const OptionSelect: React.FC<OptionSelectProps> = ({
         className="flex flex-wrap gap-3"
         data-testid={dataTestId}
       >
-        {filteredOptions.map((optionValue: any) => {
+        {filteredOptions.map((optionValue: ProductOptionValue) => {
           const value = optionValue.value
           const normalized = value ? value.toLowerCase().trim() : ""
           const colorToken =
-            (optionValue as any)?.metadata?.hex ||
+            (typeof optionValue.metadata?.hex === "string" ? optionValue.metadata.hex : undefined) ||
             (normalized ? COLOR_SWATCH_MAP[normalized] : undefined)
 
           const isActive = normalized === (current?.toLowerCase().trim() ?? "")

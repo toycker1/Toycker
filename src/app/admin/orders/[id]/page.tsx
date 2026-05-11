@@ -51,7 +51,13 @@ type AdminOrderItem = {
   thumbnail?: string | null
   title?: string | null
   product_title?: string | null
-  variant?: { sku?: string | null } | null
+  variant?: {
+    sku?: string | null
+    title?: string | null
+    product?: {
+      name?: string | null
+    } | null
+  } | null
   unit_price?: number | string | null
   quantity?: number | string | null
   total?: number | string | null
@@ -103,6 +109,53 @@ const getGiftWrapAmountFromItems = (
       toNumber(item.unit_price) * Math.max(toNumber(item.quantity), 1)
     )
   }, 0)
+}
+
+const isDefaultVariantTitle = (title?: string | null) => {
+  if (!title) {
+    return true
+  }
+
+  const normalized = title.trim().toLowerCase()
+  return (
+    normalized === "" ||
+    normalized === "default" ||
+    normalized === "default title" ||
+    normalized === "title: default title" ||
+    normalized === "default variant" ||
+    normalized === "default variant title"
+  )
+}
+
+const getOrderItemProductTitle = (item: AdminOrderItem) => {
+  if (isGiftWrapOrderItem(item)) {
+    return "Gift Wrap"
+  }
+
+  return (
+    item.product_title ||
+    item.variant?.product?.name ||
+    item.title ||
+    "Product"
+  )
+}
+
+const getOrderItemVariantTitle = (item: AdminOrderItem) => {
+  if (isGiftWrapOrderItem(item)) {
+    return null
+  }
+
+  const variantTitle = item.variant?.title || item.title
+  const productTitle = getOrderItemProductTitle(item)
+
+  if (
+    isDefaultVariantTitle(variantTitle) ||
+    variantTitle?.trim() === productTitle.trim()
+  ) {
+    return null
+  }
+
+  return variantTitle
 }
 
 export default async function AdminOrderDetails({ params }: Props) {
@@ -242,9 +295,16 @@ export default async function AdminOrderDetails({ params }: Props) {
                     }
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-gray-900">{item.title}</p>
+                    <p className="text-sm font-bold text-gray-900">
+                      {getOrderItemProductTitle(item)}
+                    </p>
+                    {getOrderItemVariantTitle(item) && (
+                      <p className="text-xs text-gray-500 font-semibold mt-1">
+                        Variant: {getOrderItemVariantTitle(item)}
+                      </p>
+                    )}
                     <p className="text-xs text-gray-400 font-bold uppercase tracking-tighter mt-1">SKU: {item.variant?.sku || 'N/A'}</p>
-                    {(item as any).metadata?.gift_wrap && (
+                    {item.metadata?.gift_wrap === true && (
                       <div className="mt-2 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-pink-50 border border-pink-100 w-fit">
                         <GiftIcon className="h-3 w-3 text-pink-500" />
                         <span className="text-[10px] font-bold text-pink-600 uppercase tracking-wider">Gift Wrapped</span>

@@ -1,7 +1,8 @@
 import { Text } from "@modules/common/components/text"
 import { cn } from "@lib/util/cn"
+import type { VariantPrice } from "@/types/global"
 
-export default function PreviewPrice({ price }: { price: any | null }) {
+export default function PreviewPrice({ price }: { price: VariantPrice | null }) {
   if (!price) {
     return null
   }

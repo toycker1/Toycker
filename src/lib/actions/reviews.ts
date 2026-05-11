@@ -331,8 +331,21 @@ export async function getProductReviews(productId: string) {
     const { data, error } = await supabase
         .from("reviews")
         .select(`
-      *,
-      review_media (*)
+      id,
+      product_id,
+      user_id,
+      rating,
+      title,
+      content,
+      approval_status,
+      is_anonymous,
+      display_name,
+      created_at,
+      review_media (
+        id,
+        file_path,
+        file_type
+      )
     `)
         .eq("product_id", productId)
         .eq("approval_status", "approved")
@@ -343,6 +356,31 @@ export async function getProductReviews(productId: string) {
         return []
     }
     return data as ReviewWithMedia[]
+}
+
+export async function getProductReviewStats(productId: string) {
+    const supabase = await createClient()
+
+    const { data, error } = await supabase
+        .from("reviews")
+        .select("rating")
+        .eq("product_id", productId)
+        .eq("approval_status", "approved")
+
+    if (error || !data?.length) {
+        if (error) {
+            console.error("Error fetching review stats:", error)
+        }
+        return { average: 0, count: 0 }
+    }
+
+    const totalRating = data.reduce((sum, review) => sum + Number(review.rating || 0), 0)
+    const count = data.length
+
+    return {
+        average: Math.round((totalRating / count) * 100) / 100,
+        count,
+    }
 }
 
 export async function getAllReviewsForAdmin(params: { page?: number; limit?: number; search?: string } = {}) {

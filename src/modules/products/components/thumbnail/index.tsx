@@ -10,6 +10,7 @@ type ThumbnailProps = {
   images?: { url: string }[] | null
   size?: "small" | "medium" | "large" | "full" | "square"
   isFeatured?: boolean
+  priority?: boolean
   className?: string
   "data-testid"?: string
 }
@@ -19,6 +20,7 @@ const Thumbnail: React.FC<ThumbnailProps> = ({
   images,
   size = "small",
   isFeatured,
+  priority = false,
   className,
   "data-testid": dataTestid,
 }) => {
@@ -46,9 +48,9 @@ const Thumbnail: React.FC<ThumbnailProps> = ({
     >
       {primaryImage ? (
         <div className="relative h-full w-full">
-          <MediaLayer url={primaryImage} isPrimary hasHoverImage={hasHoverImage} />
+          <MediaLayer url={primaryImage} isPrimary hasHoverImage={hasHoverImage} priority={priority} />
           {hasHoverImage && secondaryImage && (
-            <MediaLayer url={secondaryImage} isPrimary={false} hasHoverImage={hasHoverImage} />
+            <MediaLayer url={secondaryImage} isPrimary={false} hasHoverImage={hasHoverImage} priority={false} />
           )}
         </div>
       ) : (
@@ -81,10 +83,12 @@ const MediaLayer = ({
   url,
   isPrimary,
   hasHoverImage,
+  priority,
 }: {
   url: string
   isPrimary: boolean
   hasHoverImage: boolean
+  priority: boolean
 }) => {
   const type = classifyMedia(url)
   const baseClass = cn(
@@ -116,6 +120,8 @@ const MediaLayer = ({
       alt="Product thumbnail"
       fill
       draggable={false}
+      priority={priority}
+      loading={priority ? undefined : "lazy"}
       quality={95}
       unoptimized={type === "gif"}
       sizes="(max-width: 768px) 50vw, (max-width: 1024px) 25vw, 20vw"
