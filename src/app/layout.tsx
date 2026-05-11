@@ -8,6 +8,7 @@ import NextTopLoader from "nextjs-toploader"
 import Providers from "./providers"
 import { grandstander, inter } from "@lib/fonts"
 import PWAClientWrapper from "@/components/pwa-client-wrapper"
+import WebVitalsReporter from "@/components/web-vitals-reporter"
 import "@/styles/globals.css"
 
 export const metadata: Metadata = {
@@ -44,6 +45,7 @@ export default function RootLayout(props: { children: React.ReactNode }) {
           <PWAClientWrapper />
         </Providers>
         <MetaPixel />
+        <WebVitalsReporter />
         <SpeedInsights />
         <Analytics />
       </body>

@@ -1,6 +1,6 @@
 # Priority 1: Lighthouse, Core Web Vitals, And Measurement
 
-Status: Pending implementation
+Status: Implemented and locally verified on 2026-05-11
 Change type: code-only for instrumentation, manual testing for measurement
 Supabase migration required: No
 
@@ -28,6 +28,38 @@ From the live Lighthouse screenshots:
 - TBT: 1,200ms
 - CLS: 0
 - Speed Index: 3.3s
+
+## Local Baseline Captured On 2026-05-11
+
+The measurement instrumentation was verified locally with `pnpm.cmd build` and `pnpm.cmd start`.
+
+Verified pages:
+
+- `/`
+- `/store`
+- `/cart`
+- `/checkout?step=address`
+- `/admin`
+- `/admin/products`
+
+For each verified page, DevTools Network showed `/api/cache/telemetry` requests returning `204`.
+
+Homepage local Lighthouse mobile baseline:
+
+| Run | Performance | FCP | LCP | TBT | CLS | Speed Index |
+| --- | --- | --- | --- | --- | --- | --- |
+| Before 1 | 37 | 1.4s | 42.5s | 4,780ms | 0 | 7.6s |
+| Before 2 | 39 | 1.4s | 41.9s | 4,850ms | 0 | 6.3s |
+| Before 3 | 38 | 1.4s | 41.1s | 4,770ms | 0 | 6.7s |
+
+Network baseline from local homepage:
+
+- Request count: 89
+- Transfer size: 2.7 MB
+- Resource size: 31.0 MB
+- Largest visible transferred image: `7974c50c-8fbb-423c-aeaf-e5b9b76bb5df.jpg`, 117 kB
+- Largest visible JavaScript chunks: `76834_react-icons_fa6_index_mjs_60ed0b55._js`, 519 kB, and `76834_react-icons_fa_index_mjs_409e004f._js`, 455 kB
+- Media files appeared mostly from disk cache during this local run.
 
 Plain meaning:
 

@@ -116,7 +116,7 @@ const MediaLayer = ({
       alt="Product thumbnail"
       fill
       draggable={false}
-      quality={type === "gif" ? 90 : 50}
+      quality={95}
       unoptimized={type === "gif"}
       sizes="(max-width: 768px) 50vw, (max-width: 1024px) 25vw, 20vw"
       className={baseClass}

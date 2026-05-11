@@ -1,7 +1,7 @@
 # Toycker Frontend Performance Priority Index
 
-Status: Planning documentation created
-Last updated: 2026-05-08
+Status: Priority 1 measurement implemented; Priority 2 media optimization implemented and manually verified; Priority 3 homepage performance implemented and manually verified
+Last updated: 2026-05-11
 
 This folder is separate from `supabase-free-plan-priorities`.
 
@@ -67,13 +67,13 @@ This helps the next developer or AI understand what was already optimized and av
 ## Priority Files
 
 1. `01-lighthouse-core-web-vitals-and-measurement.md`
-   - Baseline metrics, Lighthouse meaning, testing process, and success targets.
+   - Implemented. Baseline metrics, Lighthouse meaning, testing process, and success targets.
 
 2. `02-media-image-video-and-cdn-optimization.md`
-   - Hero banners, product images, videos, Cloudflare cache behavior, image formats, and upload rules.
+   - Implemented. Hero banners, product images, videos, Cloudflare cache behavior, image formats, and upload rules.
 
 3. `03-home-page-performance-plan.md`
-   - Homepage hero, popular toy set, best selling, shop by age, exclusive collections, reviews, footer, and above-the-fold loading.
+   - Implemented. Homepage hero, lightweight product rails, category marquee, shop by age, exclusive collections, reviews, footer, and above-the-fold loading.
 
 4. `04-store-search-product-detail-performance-plan.md`
    - Store listing, categories, collections, search drawer, visual search, product detail, galleries, related products, and recently viewed.
