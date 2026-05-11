@@ -1,8 +1,38 @@
 # Priority 2: Media, Image, Video, And CDN Optimization
 
-Status: Pending implementation
+Status: Implemented and manually verified on 2026-05-11
 Change type: both code + Cloudflare/media
 Supabase migration required: No
+
+## Implementation Status
+
+Implemented on 2026-05-11.
+
+What changed:
+
+- Next.js image optimization is enabled for Cloudflare-hosted media instead of serving every remote image at original size.
+- Public storefront media now uses high-quality responsive image delivery.
+- Hero banners, product thumbnails, exclusive collection posters, and product gallery images request `quality={95}`.
+- Product gallery zoom keeps original image quality by bypassing recompression for the zoomed image.
+- GIFs remain unoptimized so animation is not broken.
+- Exclusive Collection videos still autoplay, loop, stay muted, and keep their original uploaded video quality.
+- Uploaded media gets long immutable cache headers through the existing R2 upload flow.
+- Upload limits remain prototype-friendly while allowing better source media quality: product/banner/category/collection images up to 5 MB, exclusive videos up to 20 MB.
+- A lossless WebP fallback was added for the homepage fallback banner.
+
+Manual verification completed:
+
+- Homepage hero image requests use `/_next/image` with `q=95`.
+- Store product card image requests use `/_next/image` with `q=95`.
+- Product detail gallery and zoom quality checks passed.
+- Exclusive Collection autoplay video checks passed.
+
+Supabase check:
+
+- No Supabase migration was required.
+- Supabase continues to return media URL fields such as `image_url`, `thumbnail`, `poster_url`, `video_url`, and `images`.
+- Supabase does not return actual image or video file bytes for this Priority 2 work.
+- Heavy media downloads are handled by Cloudflare/Next image delivery in the browser, not by Supabase responses.
 
 ## Goal
 

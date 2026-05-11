@@ -16,7 +16,7 @@ type ExclusiveCollectionsProps = {
   clubDiscountPercentage?: number
 }
 
-const FALLBACK_POSTER = "/assets/images/slider_default.png"
+const FALLBACK_POSTER = "/assets/images/slider_default.webp"
 
 const formatAmount = (amount: number, currencyCode?: string | null) =>
   new Intl.NumberFormat("en-IN", {
@@ -164,6 +164,7 @@ const ExclusiveCard = ({
             alt={title}
             fill
             className="object-cover"
+            quality={95}
             sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 20vw"
           />
         )}
@@ -178,6 +179,7 @@ const ExclusiveCard = ({
               src={productImage}
               alt={title}
               fill
+              quality={95}
               sizes="56px"
               className="object-cover"
             />

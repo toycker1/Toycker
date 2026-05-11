@@ -161,7 +161,7 @@ export default function CollectionFormModal({ isOpen, onClose, onSuccess, collec
                                     value={formData.video_url || ""}
                                     onChange={(url) => setFormData({ ...formData, video_url: url })}
                                     acceptedFormats={["video/mp4", "video/webm"]}
-                                    maxSizeMB={20}
+                                    maxSizeMB={10}
                                 />
                             </div>
                         </div>
@@ -179,7 +179,7 @@ export default function CollectionFormModal({ isOpen, onClose, onSuccess, collec
                                     value={formData.poster_url || ""}
                                     onChange={(url) => setFormData({ ...formData, poster_url: url })}
                                     acceptedFormats={["image/jpeg", "image/png", "image/webp"]}
-                                    maxSizeMB={5}
+                                    maxSizeMB={2}
                                 />
                             </div>
                             <p className="text-[11px] text-slate-500 font-medium ml-2">

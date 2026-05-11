@@ -13,7 +13,7 @@ const FALLBACK_BANNERS: HomeHeroBanner[] = [
   {
     id: "fallback-1",
     title: "Featured toys adventure",
-    image_url: "/assets/images/slider_default.png",
+    image_url: "/assets/images/slider_default.webp",
     alt_text: "Featured toys adventure",
     link_url: null,
     sort_order: 0,
@@ -99,7 +99,10 @@ const Hero = ({ banners }: HeroProps) => {
                     src={banner.image_url}
                     alt={banner.alt_text || banner.title || "Homepage banner"}
                     fill
-                    priority={index < 3}
+                    priority={index === 0}
+                    loading={index === 0 ? undefined : "lazy"}
+                    fetchPriority={index === 0 ? "high" : "auto"}
+                    quality={95}
                     sizes={IMAGE_SIZES}
                     className="object-cover"
                   />
@@ -149,6 +152,9 @@ const Hero = ({ banners }: HeroProps) => {
                       alt={slide.alt_text || slide.title || "Homepage banner"}
                       fill
                       priority={index === 0}
+                      loading={index === 0 ? undefined : "lazy"}
+                      fetchPriority={index === 0 ? "high" : "auto"}
+                      quality={95}
                       sizes={IMAGE_SIZES}
                       className="object-cover"
                       onLoad={() => {

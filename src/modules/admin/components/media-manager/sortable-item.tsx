@@ -42,6 +42,8 @@ export function SortableItem({ id, url, isPrimary, onRemove }: SortableItemProps
             <img
                 src={url}
                 alt="Product"
+                loading="lazy"
+                decoding="async"
                 className="w-full h-full object-cover select-none"
                 onError={(e) => {
                     const target = e.target as HTMLImageElement;

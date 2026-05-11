@@ -28,7 +28,7 @@ export default function CatalogImageSection({ initialImageUrl, folder }: Props) 
                     value={imageUrl}
                     onChange={setImageUrl}
                     acceptedFormats={["image/jpeg", "image/png", "image/webp"]}
-                    maxSizeMB={5}
+                    maxSizeMB={2}
                 />
             </div>
         </div>
