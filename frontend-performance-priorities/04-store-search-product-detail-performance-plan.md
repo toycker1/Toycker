@@ -1,8 +1,20 @@
 # Priority 4: Store, Search, And Product Detail Performance Plan
 
-Status: Pending implementation
+Status: Implemented and manually verified on 2026-05-11
 Change type: mostly code-only; media/CDN support for images
-Supabase migration required: No by default
+Supabase migration required: No
+
+## Implementation Summary
+
+- Store, category, and collection product listings continue to use lightweight product card data and database pagination.
+- Product cards disable large product-detail prefetching and only priority-load the first visible images.
+- Quick View modal code loads only when the modal is opened.
+- Product detail storefront data no longer includes `related_combinations` in the initial product query.
+- Frequently Bought Together products load separately with lightweight card fields.
+- Review stats load with a small rating-only query, and full reviews load separately with explicit review fields.
+- Text search and visual search return lightweight result summaries instead of full product detail payloads.
+- Product detail gallery, variant selection, add to cart, reviews, related products, and search flows were manually checked.
+- Admin order detail item display was corrected so product name and selected variant are shown separately.
 
 ## Goal
 

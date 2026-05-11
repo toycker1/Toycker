@@ -1,7 +1,9 @@
 "use client"
 
 import { useState, useMemo, useTransition } from "react"
+import Image from "next/image"
 import { Product } from "@/lib/supabase/types"
+import type { VariantPrice } from "@/types/global"
 import { buildDisplayPrice } from "@lib/util/display-price"
 import { getProductPrice } from "@lib/util/get-product-price"
 import { Button } from "@modules/common/components/button"
@@ -13,11 +15,13 @@ import ProductPreview from "@modules/products/components/product-preview"
 
 type FrequentlyBoughtTogetherProps = {
   product: Product
+  relatedProducts?: Product[]
   clubDiscountPercentage?: number
 }
 
 export default function FrequentlyBoughtTogether({
   product,
+  relatedProducts,
   clubDiscountPercentage,
 }: FrequentlyBoughtTogetherProps) {
   const { openCart } = useCartSidebar()
@@ -25,16 +29,9 @@ export default function FrequentlyBoughtTogether({
   const [isAdding, startTransition] = useTransition()
   const [isMobileExpanded, setIsMobileExpanded] = useState(true)
 
-  // Get related products from the pre-fetched combinations
   const relatedItems = useMemo(() => {
-    return (product.related_combinations || [])
-      .map((c) => c.related_product)
-      .filter(Boolean)
-  }, [product.related_combinations])
-
-  if (relatedItems.length === 0) {
-    return null
-  }
+    return relatedProducts ?? []
+  }, [relatedProducts])
 
   // All products in the bundle (main + related)
   const allProducts = useMemo(
@@ -93,9 +90,26 @@ export default function FrequentlyBoughtTogether({
 
   const displayTotalPrice = buildDisplayPrice({
     calculated_price_number: totalPrice,
-    calculated_price: "",
+    calculated_price: new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: product.currency_code || "INR",
+      minimumFractionDigits: 2,
+    }).format(totalPrice),
+    original_price_number: totalPrice,
+    original_price: new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: product.currency_code || "INR",
+      minimumFractionDigits: 2,
+    }).format(totalPrice),
     currency_code: product.currency_code || "inr",
-  } as any)
+    price_type: "default",
+    percentage_diff: "0",
+    is_discounted: false,
+  } as VariantPrice)
+
+  if (relatedItems.length === 0) {
+    return null
+  }
 
   const handleAddBundle = () => {
     if (isAdding || selectedIds.length === 0) return
@@ -289,7 +303,7 @@ export default function FrequentlyBoughtTogether({
         {/* Mobile Specific List View */}
         {isMobileExpanded && (
           <div className="sm:hidden flex flex-col p-3 gap-0">
-            {allProducts.map((p, index) => {
+            {allProducts.map((p) => {
               const isSelected = selectedIds.includes(p.id)
               const isMainProduct = p.id === product.id
               const { cheapestPrice } = getProductPrice({
@@ -307,10 +321,14 @@ export default function FrequentlyBoughtTogether({
                 >
                   {/* Thumbnail */}
                   <div className="w-20 h-20 rounded-lg overflow-hidden border border-gray-100 bg-white shrink-0">
-                    <img
+                    <Image
                       src={p.thumbnail || p.image_url || "/placeholder.jpg"}
                       alt={p.name}
-                      className="w-full h-full object-cover"
+                      width={80}
+                      height={80}
+                      quality={95}
+                      sizes="80px"
+                      className="h-full w-full object-cover"
                     />
                   </div>
 

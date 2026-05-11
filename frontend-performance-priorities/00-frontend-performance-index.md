@@ -1,6 +1,6 @@
 # Toycker Frontend Performance Priority Index
 
-Status: Priority 1 measurement implemented; Priority 2 media optimization implemented and manually verified; Priority 3 homepage performance implemented and manually verified
+Status: Priority 1 measurement implemented; Priority 2 media optimization implemented and manually verified; Priority 3 homepage performance implemented and manually verified; Priority 4 store/search/product detail performance implemented and manually verified
 Last updated: 2026-05-11
 
 This folder is separate from `supabase-free-plan-priorities`.
@@ -76,7 +76,7 @@ This helps the next developer or AI understand what was already optimized and av
    - Implemented. Homepage hero, lightweight product rails, category marquee, shop by age, exclusive collections, reviews, footer, and above-the-fold loading.
 
 4. `04-store-search-product-detail-performance-plan.md`
-   - Store listing, categories, collections, search drawer, visual search, product detail, galleries, related products, and recently viewed.
+   - Implemented. Store listing, categories, collections, search drawer, visual search, product detail, galleries, related products, and recently viewed.
 
 5. `05-cart-checkout-wishlist-account-orders-performance-plan.md`
    - Cart, checkout, wishlist, customer account, order history, and order detail performance.
