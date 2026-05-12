@@ -11,6 +11,10 @@ interface BeforeInstallPromptEvent extends Event {
     prompt(): Promise<void>;
 }
 
+type IOSWindow = Window & {
+    MSStream?: unknown;
+};
+
 interface PWAContextType {
     isInstallable: boolean;
     isStandalone: boolean;
@@ -32,7 +36,7 @@ export function PWAProvider({ children }: { children: React.ReactNode }) {
         setIsStandalone(standalone);
 
         // Detect iOS
-        const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !((window as any).MSStream);
+        const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as IOSWindow).MSStream;
         setIsIOS(ios);
 
         if (ios) {

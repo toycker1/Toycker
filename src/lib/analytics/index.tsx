@@ -1,4 +1,7 @@
+"use client"
+
 import { GoogleTagManager } from "@next/third-parties/google"
+import { usePathname } from "next/navigation"
 import Script from "next/script"
 
 /**
@@ -16,9 +19,17 @@ import Script from "next/script"
  * Both scripts only load when environment variables are set.
  */
 
-export function Analytics() {
+const ADMIN_PATH_PREFIX = "/admin"
+
+export function ThirdPartyAnalytics() {
+    const pathname = usePathname()
     const gtmId = process.env.NEXT_PUBLIC_GTM_ID
     const contentsquareId = process.env.NEXT_PUBLIC_CONTENTSQUARE_ID
+    const isAdmin = pathname?.startsWith(ADMIN_PATH_PREFIX)
+
+    if (isAdmin) {
+        return null
+    }
 
     // Only render analytics scripts if at least one ID is provided
     const hasGTM = gtmId !== undefined && gtmId !== ""
@@ -34,16 +45,14 @@ export function Analytics() {
             {hasGTM && <GoogleTagManager gtmId={gtmId} />}
 
             {/* Contentsquare - for heatmaps and session recordings */}
-            {/* Using beforeInteractive ensures script is in initial server-rendered HTML */}
             {hasContentsquare && (
                 <Script
                     src={`https://t.contentsquare.net/uxa/${contentsquareId}.js`}
-                    strategy="beforeInteractive"
+                    strategy="lazyOnload"
                 />
             )}
         </>
     )
 }
 
-export default Analytics
-
+export default ThirdPartyAnalytics

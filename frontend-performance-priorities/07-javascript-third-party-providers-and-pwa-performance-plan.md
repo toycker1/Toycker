@@ -1,6 +1,6 @@
 # Priority 7: JavaScript, Third-Party Scripts, Providers, And PWA Performance Plan
 
-Status: Pending implementation
+Status: Implemented and manually verified
 Change type: code-only
 Supabase migration required: No
 
@@ -168,11 +168,34 @@ pnpm.cmd analyze
 
 ## Expected Result
 
-- Lower TBT.
-- Less main-thread work.
-- Fewer initial scripts before the page is usable.
-- Same analytics behavior where business-critical.
+- Lower TBT through less global client-side provider work.
+- Less main-thread work by keeping storefront-only providers out of admin routes.
+- Fewer initial scripts before the page is usable by lazy-loading analytics and chatbot shell where possible.
+- Same analytics behavior on public storefront pages where business-critical.
 - Same cart/wishlist/chatbot/PWA behavior after page is interactive.
+- Admin routes do not load storefront layout state, chatbot, Facebook, GTM, or Contentsquare scripts.
+- PWA service worker registers in production and avoids dedicated audio/video runtime caches.
+
+## Implementation Notes
+
+- No Supabase migration was required.
+- Root providers were reduced to shared toast UI only.
+- Storefront and checkout provider stacks were moved into route-group layouts.
+- Chatbot/contact hub loading was delayed on public storefront pages and kept out of admin.
+- Third-party analytics were route-gated so admin pages do not load marketing scripts.
+- Contentsquare and Meta Pixel were moved to later loading strategies.
+- Sentry client setup now runs only when a DSN is configured, with lower sampling.
+- PWA registration was delayed until after page load/idle time.
+- Service worker caching was adjusted to avoid dedicated audio/video media caches.
+
+## Verification Completed
+
+- `pnpm.cmd build` completed successfully.
+- Targeted ESLint passed for changed Priority 7 files.
+- TypeScript check passed.
+- Production start was tested locally after build.
+- Admin Network tab searches returned no results for `layout-state`, `chatbot`, `facebook`, `googletagmanager`, and `contentsquare`.
+- Service worker registration was verified in production mode with `/sw.js` active.
 
 ## Sources
 
