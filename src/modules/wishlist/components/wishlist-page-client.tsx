@@ -11,11 +11,13 @@ type WishlistPageClientProps = {
 const WishlistPageClient = ({
   countryCode,
   clubDiscountPercentage,
+  initialItems,
 }: WishlistPageClientProps) => {
   return (
     <WishlistContent
       countryCode={countryCode}
       clubDiscountPercentage={clubDiscountPercentage}
+      initialItems={initialItems}
     />
   )
 }

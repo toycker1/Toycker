@@ -3,9 +3,10 @@ import { Loader2 } from "lucide-react"
 import { cn } from "@lib/util/cn"
 import RadioComponent from "@modules/common/components/radio"
 import { convertToLocale } from "@lib/util/money"
+import type { ShippingOption } from "@/lib/supabase/types"
 
 type ShippingMethodOptionProps = {
-  option: any
+  option: ShippingOption
   selectedId: string | null
   currencyCode: string
   price?: number | null

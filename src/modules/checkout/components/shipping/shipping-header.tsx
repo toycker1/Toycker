@@ -1,11 +1,12 @@
 import { CheckCircle } from "lucide-react"
 import { Text } from "@modules/common/components/text"
 import { cn } from "@lib/util/cn"
+import type { Cart } from "@/lib/supabase/types"
 
 type ShippingHeaderProps = {
   isOpen: boolean
   hasMethods: boolean
-  cart: any
+  cart: Cart
   onEdit: () => void
 }
 

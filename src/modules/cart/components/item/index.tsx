@@ -23,6 +23,9 @@ type ItemProps = {
   currencyCode: string
 }
 
+const hasGiftWrap = (metadata: CartItem["metadata"]) =>
+  metadata?.gift_wrap === true
+
 const Item = ({ item, type = "full", currencyCode }: ItemProps) => {
   const { optimisticUpdateQuantity, isUpdating, isRemoving } = useCartStore()
   const [error, setError] = useState<string | null>(null)
@@ -34,8 +37,8 @@ const Item = ({ item, type = "full", currencyCode }: ItemProps) => {
   const handleQuantityChange = async (newQuantity: number) => {
     try {
       await optimisticUpdateQuantity(item.id, newQuantity)
-    } catch (err: any) {
-      setError(err.message || "Failed to update quantity")
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to update quantity")
     }
   }
 
@@ -129,7 +132,7 @@ const Item = ({ item, type = "full", currencyCode }: ItemProps) => {
           </div>
         )}
 
-        {(item.metadata as any)?.gift_wrap && (
+        {hasGiftWrap(item.metadata) && (
           <div className="mt-1.5 flex items-center gap-1">
             <span className="text-[10px] font-bold text-pink-500 uppercase tracking-wider">Includes Gift Wrap</span>
           </div>

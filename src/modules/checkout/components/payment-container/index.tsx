@@ -1,14 +1,9 @@
 import { Radio as RadioGroupOption } from "@headlessui/react"
 import { Text } from "@modules/common/components/text"
 import { cn } from "@lib/util/cn"
-import React, { useContext, useMemo, type JSX } from "react"
+import React, { type JSX } from "react"
 
 import Radio from "@modules/common/components/radio"
-
-import SkeletonCardDetails from "@modules/skeletons/components/skeleton-card-details"
-import { CardElement } from "@stripe/react-stripe-js"
-import { StripeCardElementOptions } from "@stripe/stripe-js"
-import { StripeContext } from "../payment-wrapper/stripe-wrapper"
 
 type PaymentContainerProps = {
   paymentProviderId: string
@@ -98,73 +93,3 @@ const PaymentContainer: React.FC<PaymentContainerProps> = ({
 }
 
 export default PaymentContainer
-
-export const StripeCardContainer = ({
-  paymentProviderId,
-  selectedPaymentOptionId,
-  paymentInfoMap,
-  disabled = false,
-  badgeLabel = null,
-  setCardBrand,
-  setError,
-  setCardComplete,
-}: Omit<PaymentContainerProps, "children"> & {
-  setCardBrand: (_brand: string) => void
-  setError: (_error: string | null) => void
-  setCardComplete: (_complete: boolean) => void
-}) => {
-  const stripeReady = useContext(StripeContext)
-
-  const useOptions: StripeCardElementOptions = useMemo(() => {
-    return {
-      style: {
-        base: {
-          fontFamily: "Inter, sans-serif",
-          color: "#1f2937",
-          fontSize: "16px",
-          "::placeholder": {
-            color: "#9ca3af",
-          },
-        },
-      },
-      classes: {
-        base: "block w-full px-4 py-3.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all",
-      },
-    }
-  }, [])
-
-  return (
-    <PaymentContainer
-      paymentProviderId={paymentProviderId}
-      selectedPaymentOptionId={selectedPaymentOptionId}
-      paymentInfoMap={paymentInfoMap}
-      disabled={disabled}
-      badgeLabel={badgeLabel}
-    >
-      {selectedPaymentOptionId === paymentProviderId &&
-        (stripeReady ? (
-          <div>
-            <Text className="text-sm font-semibold text-gray-800 mb-3 block">
-              Card details
-            </Text>
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-              <CardElement
-                options={useOptions as StripeCardElementOptions}
-                onChange={(e) => {
-                  setCardBrand(
-                    e.brand && e.brand.charAt(0).toUpperCase() + e.brand.slice(1)
-                  )
-                  setError(e.error?.message || null)
-                  setCardComplete(e.complete)
-                }}
-              />
-            </div>
-          </div>
-        ) : (
-          <div>
-            <SkeletonCardDetails />
-          </div>
-        ))}
-    </PaymentContainer>
-  )
-}

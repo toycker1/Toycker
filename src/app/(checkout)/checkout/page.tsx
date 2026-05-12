@@ -7,6 +7,7 @@ import CheckoutSummary from "@modules/checkout/templates/checkout-summary"
 import Breadcrumbs from "@modules/common/components/breadcrumbs"
 import { Metadata } from "next"
 import { redirect } from "next/navigation"
+import type { ShippingMethod } from "@/lib/supabase/types"
 
 export const metadata: Metadata = {
   title: "Checkout",
@@ -70,7 +71,7 @@ export default async function Checkout({ searchParams }: CheckoutProps) {
     const { autoSelectStandardShipping } = await import("@lib/data/cart")
     const methodData = await autoSelectStandardShipping(cart.id, true)
     if (methodData) {
-      cart.shipping_methods = [methodData as any]
+      cart.shipping_methods = [methodData as ShippingMethod]
       // Trigger a re-calculation of totals if needed, but since we are in RSC, 
       // we'll rely on the provider/summary to handle the math based on this cart object.
     }

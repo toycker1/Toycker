@@ -9,8 +9,10 @@ export const metadata: Metadata = {
 }
 
 export default async function CartPage() {
-    const cart = await retrieveCart()
-    const customer = await retrieveCustomer()
+    const [cart, customer] = await Promise.all([
+        retrieveCart(),
+        retrieveCustomer(),
+    ])
 
     return <CartTemplate cart={cart} customer={customer} />
 }

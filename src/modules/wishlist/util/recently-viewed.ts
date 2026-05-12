@@ -1,5 +1,6 @@
 export const RECENTLY_VIEWED_KEY = "toycker_recently_viewed"
 const MAX_RECENT_ITEMS = 12
+export const RECENTLY_VIEWED_DISPLAY_LIMIT = 4
 
 export const getRecentlyViewedIds = (): string[] => {
   if (typeof window === "undefined") {

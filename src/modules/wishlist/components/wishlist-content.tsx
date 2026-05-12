@@ -8,6 +8,7 @@ import { useWishlist } from "@modules/products/context/wishlist"
 import ProductPreview from "@modules/products/components/product-preview"
 import LocalizedClientLink from "@modules/common/components/localized-client-link"
 import {
+  RECENTLY_VIEWED_DISPLAY_LIMIT,
   RECENTLY_VIEWED_KEY,
   getRecentlyViewedIds,
 } from "@modules/wishlist/util/recently-viewed"
@@ -15,13 +16,22 @@ import {
 type WishlistContentProps = {
   countryCode: string
   clubDiscountPercentage?: number
+  initialItems?: string[]
 }
 
-const WishlistContent = ({ countryCode, clubDiscountPercentage }: WishlistContentProps) => {
+const getDisplayError = (error: unknown) =>
+  error instanceof Error ? error.message : "Failed to load products"
+
+const WishlistContent = ({
+  countryCode,
+  clubDiscountPercentage,
+  initialItems = [],
+}: WishlistContentProps) => {
   const { items, toggleWishlist, isInitialized } = useWishlist()
   const [recentIdsRaw, setRecentIds] = useState<string[]>([])
 
-  const itemsMemo = useMemo(() => items, [items])
+  const visibleItems = isInitialized ? items : initialItems
+  const itemsMemo = useMemo(() => visibleItems, [visibleItems])
   const recentIdsMemo = useMemo(() => recentIdsRaw, [recentIdsRaw])
 
   const wishlistState = useProductsByIds(itemsMemo, countryCode)
@@ -32,11 +42,11 @@ const WishlistContent = ({ countryCode, clubDiscountPercentage }: WishlistConten
       return
     }
 
-    setRecentIds(getRecentlyViewedIds())
+    setRecentIds(getRecentlyViewedIds().slice(0, RECENTLY_VIEWED_DISPLAY_LIMIT))
 
     const handleStorage = (event: StorageEvent) => {
       if (!event.key || event.key === RECENTLY_VIEWED_KEY) {
-        setRecentIds(getRecentlyViewedIds())
+        setRecentIds(getRecentlyViewedIds().slice(0, RECENTLY_VIEWED_DISPLAY_LIMIT))
       }
     }
 
@@ -45,24 +55,24 @@ const WishlistContent = ({ countryCode, clubDiscountPercentage }: WishlistConten
   }, [])
 
   const handleClear = useCallback(() => {
-    items.forEach((id) => toggleWishlist(id))
-  }, [items, toggleWishlist])
+    itemsMemo.forEach((id) => toggleWishlist(id))
+  }, [itemsMemo, toggleWishlist])
 
   const showRecentlyViewedSection = recentIdsMemo.length > 0 || recentState.isLoading
 
-  if (!isInitialized) {
+  if (!isInitialized && initialItems.length === 0) {
     return <ProductGridSkeleton />
   }
 
   return (
     <div className="space-y-12">
       <section className="space-y-6">
-        {items.length ? (
+        {itemsMemo.length ? (
           <>
             <div className="flex flex-wrap items-center justify-between gap-4">
               <p className="text-sm text-slate-600">
-                You have <span className="font-semibold text-slate-900">{items.length}</span> saved
-                {items.length === 1 ? " item" : " items"}.
+                You have <span className="font-semibold text-slate-900">{itemsMemo.length}</span> saved
+                {itemsMemo.length === 1 ? " item" : " items"}.
               </p>
               <button
                 type="button"
@@ -217,11 +227,11 @@ const useProductsByIds = (ids: string[], countryCode: string) => {
         if (active) {
           setProducts(payload.products)
         }
-      } catch (fetchError: any) {
+      } catch (fetchError: unknown) {
         if (!active) {
           return
         }
-        setError(fetchError.message)
+        setError(getDisplayError(fetchError))
       } finally {
         if (active) {
           setIsLoading(false)

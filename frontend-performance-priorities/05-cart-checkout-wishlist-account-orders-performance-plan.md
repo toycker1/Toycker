@@ -1,8 +1,19 @@
 # Priority 5: Cart, Checkout, Wishlist, Account, And Orders Performance Plan
 
-Status: Pending implementation
+Status: Implemented and manually verified
 Change type: mostly code-only
 Supabase migration required: No by default
+
+Completed: 2026-05-12
+
+## Implementation Summary
+
+- Cart and account pages now parallelize safe server data loading.
+- Checkout no longer loads Stripe-specific code unless a Stripe-like payment method is used.
+- Wishlist uses the server-fetched wishlist IDs immediately and keeps recently viewed products limited.
+- Account order history continues to use lightweight order summary data.
+- No new Supabase migration was required.
+- Manual cart, checkout, wishlist, account, order list, and order detail testing passed.
 
 ## Goal
 
