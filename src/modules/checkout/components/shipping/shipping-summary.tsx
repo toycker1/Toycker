@@ -1,9 +1,10 @@
 import { convertToLocale } from "@lib/util/money"
 import { Text } from "@modules/common/components/text"
+import type { Cart, ShippingOption } from "@/lib/supabase/types"
 
 type ShippingSummaryProps = {
-  cart: any
-  availableShippingMethods: any[] | null
+  cart: Cart
+  availableShippingMethods: ShippingOption[] | null
   calculatedPricesMap: Record<string, number>
 }
 
@@ -59,7 +60,7 @@ const ShippingSummary = ({
                 if (
                   matchedOption &&
                   matchedOption.price_type === "flat" &&
-                  matchedOption.amount
+                  matchedOption.amount != null
                 ) {
                   return (
                     <>

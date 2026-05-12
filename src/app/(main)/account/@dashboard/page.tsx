@@ -11,9 +11,11 @@ export const metadata: Metadata = {
 }
 
 export default async function DashboardPage() {
-  const customer = await retrieveCustomer()
-  const orders = await listOrders()
-  const reviewsCount = await getUserReviewCount()
+  const [customer, orders, reviewsCount] = await Promise.all([
+    retrieveCustomer(),
+    listOrders(),
+    getUserReviewCount(),
+  ])
 
   if (!customer) {
     notFound()
