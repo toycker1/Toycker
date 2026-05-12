@@ -3,7 +3,9 @@
 import { onCLS, onINP, onLCP, onTTFB, type Metric } from "web-vitals"
 import * as Sentry from "@sentry/nextjs";
 
-export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
+export const onRouterTransitionStart = process.env.NEXT_PUBLIC_SENTRY_DSN
+  ? Sentry.captureRouterTransitionStart
+  : undefined;
 
 
 type LoggedMetric = {
@@ -108,12 +110,15 @@ export function register() {
     return
   }
 
+  const sentryDsn = process.env.NEXT_PUBLIC_SENTRY_DSN
+
+  if (sentryDsn) {
   Sentry.init({
-    dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
-    tracesSampleRate: 1.0,
+    dsn: sentryDsn,
+    tracesSampleRate: 0.1,
     debug: false,
-    replaysOnErrorSampleRate: 1.0,
-    replaysSessionSampleRate: 0.1,
+    replaysOnErrorSampleRate: 0.05,
+    replaysSessionSampleRate: 0,
     integrations: [
       Sentry.replayIntegration({
         maskAllText: true,
@@ -121,6 +126,7 @@ export function register() {
       }),
     ],
   })
+  }
 
   onLCP(logMetric)
   onCLS(logMetric)

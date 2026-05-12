@@ -1,6 +1,6 @@
 # Toycker Frontend Performance Priority Index
 
-Status: Priority 1 measurement implemented; Priority 2 media optimization implemented and manually verified; Priority 3 homepage performance implemented and manually verified; Priority 4 store/search/product detail performance implemented and manually verified; Priority 5 cart/checkout/wishlist/account/orders performance implemented and manually verified; Priority 6 admin dashboard/products/orders/home settings performance implemented and manually verified
+Status: Priority 1 measurement implemented; Priority 2 media optimization implemented and manually verified; Priority 3 homepage performance implemented and manually verified; Priority 4 store/search/product detail performance implemented and manually verified; Priority 5 cart/checkout/wishlist/account/orders performance implemented and manually verified; Priority 6 admin dashboard/products/orders/home settings performance implemented and manually verified; Priority 7 JavaScript, third-party scripts, providers, and PWA performance implemented and manually verified
 Last updated: 2026-05-12
 
 This folder is separate from `supabase-free-plan-priorities`.
@@ -85,7 +85,7 @@ This helps the next developer or AI understand what was already optimized and av
    - Admin dashboard, admin product lists, import/export, orders, home settings, media previews, reviews, and global search.
 
 7. `07-javascript-third-party-providers-and-pwa-performance-plan.md`
-   - GTM, Meta Pixel, Contentsquare, Vercel analytics, Sentry, global providers, chatbot, PWA service worker, and client bundle weight.
+   - Implemented. GTM, Meta Pixel, Contentsquare, Vercel analytics, Sentry, global providers, chatbot, PWA service worker, and client bundle weight.
 
 8. `08-implementation-order-and-quality-checks.md`
    - Safe execution order, what is code-only vs Cloudflare-only vs both, and required quality checks.

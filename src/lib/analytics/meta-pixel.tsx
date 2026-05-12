@@ -66,7 +66,7 @@ export default function MetaPixel() {
 
   return (
     <>
-      <Script id={META_PIXEL_BASE_SCRIPT_ID} strategy="afterInteractive">
+      <Script id={META_PIXEL_BASE_SCRIPT_ID} strategy="lazyOnload">
         {buildMetaPixelScript(pixelId)}
       </Script>
       <noscript>

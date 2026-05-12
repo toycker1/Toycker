@@ -1,14 +1,9 @@
 import { getBaseURL } from "@lib/util/env"
 import { Metadata } from "next"
-import { SpeedInsights } from "@vercel/speed-insights/next"
-import { Analytics } from "@vercel/analytics/next"
-import { Analytics as GTMAnalytics } from "@lib/analytics"
-import MetaPixel from "@lib/analytics/meta-pixel"
 import NextTopLoader from "nextjs-toploader"
 import Providers from "./providers"
 import { grandstander, inter } from "@lib/fonts"
-import PWAClientWrapper from "@/components/pwa-client-wrapper"
-import WebVitalsReporter from "@/components/web-vitals-reporter"
+import SiteAnalytics from "@lib/analytics/site-analytics"
 import "@/styles/globals.css"
 
 export const metadata: Metadata = {
@@ -35,19 +30,14 @@ export default function RootLayout(props: { children: React.ReactNode }) {
   return (
     <html lang="en" data-mode="light" suppressHydrationWarning className={`${grandstander.variable} ${inter.variable}`}>
       <head>
-        <GTMAnalytics />
         <link rel="preconnect" href="https://cdn.toycker.in" crossOrigin="anonymous" />
       </head>
       <body suppressHydrationWarning className="font-sans">
         <NextTopLoader color="#059669" showSpinner={false} height={3} />
         <Providers>
           {props.children}
-          <PWAClientWrapper />
         </Providers>
-        <MetaPixel />
-        <WebVitalsReporter />
-        <SpeedInsights />
-        <Analytics />
+        <SiteAnalytics />
       </body>
     </html>
   )
