@@ -73,6 +73,18 @@ type CustomerPhoneRow = {
   phone: string | null
 }
 
+type AdminSupabaseClient = Awaited<ReturnType<typeof createAdminClient>>
+
+type RewardTransactionRow = {
+  order_id?: string | null
+  [key: string]: unknown
+}
+
+type OrderDisplayRow = {
+  id: string
+  display_id: number
+}
+
 type AdminProductVariantListItem = Pick<
   ProductVariant,
   | "id"
@@ -847,6 +859,7 @@ interface GetAdminProductsParams {
   status?: string
   search?: string
   stock_status?: "all" | "low_stock" | "out_of_stock"
+  includeVariantDetails?: boolean
 }
 
 interface PaginatedProductsResponse {
@@ -861,8 +874,31 @@ export async function getAdminProducts(
 ): Promise<PaginatedProductsResponse> {
   await ensureAdmin()
 
-  const { page = 1, limit = 20, status, search } = params
+  const {
+    page = 1,
+    limit = 20,
+    status,
+    search,
+    includeVariantDetails = true,
+  } = params
   const supabase = await createClient()
+  const variantSelect = includeVariantDetails
+    ? `
+        id,
+        product_id,
+        title,
+        sku,
+        price,
+        inventory_quantity,
+        manage_inventory,
+        allow_backorder,
+        image_url
+      `
+    : `
+        id,
+        price,
+        inventory_quantity
+      `
 
   // Calculate total count first
   let countQuery = supabase
@@ -912,15 +948,7 @@ export async function getAdminProducts(
       status,
       created_at,
       variants:product_variants(
-        id,
-        product_id,
-        title,
-        sku,
-        price,
-        inventory_quantity,
-        manage_inventory,
-        allow_backorder,
-        image_url
+        ${variantSelect}
       )
     `
     )
@@ -1017,7 +1045,7 @@ export async function createProduct(
   // Deprecated single category_id for DB column
   const primaryCategoryId = categoryIds.length > 0 ? categoryIds[0] : null
 
-  // Get variants JSON if any
+  // Get variants JSON when present
   const variantsJson = formData.get("variants") as string | null
   const variantsData: VariantFormData[] = variantsJson
     ? JSON.parse(variantsJson)
@@ -2151,6 +2179,25 @@ export async function getAdminOrders(
   }
 }
 
+export async function getRecentAdminOrders(
+  limit: number = 5
+): Promise<AdminOrderListItem[]> {
+  await ensureAdmin()
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("orders")
+    .select(
+      "id, display_id, created_at, customer_email, payment_status, payment_method, payu_txn_id, gateway_txn_id, fulfillment_status, total_amount, currency_code, status"
+    )
+    .order("created_at", { ascending: false })
+    .limit(limit)
+
+  if (error) throw error
+
+  return (data || []) as AdminOrderListItem[]
+}
+
 export async function getAdminOrder(id: string): Promise<AdminOrder | null> {
   await ensureAdmin()
   const supabase = await createClient()
@@ -2213,7 +2260,7 @@ export async function updateOrderStatus(id: string, status: string) {
   await ensureAdmin()
   const supabase = await createClient()
 
-  const updates: any = { status }
+  const updates: Record<string, string> = { status }
   if (status === "order_placed") {
     updates.payment_status = "captured"
   }
@@ -2467,27 +2514,27 @@ export async function getPaginatedCustomerRewardTransactions(
   // 2. Fetch order display IDs for these transactions
   const orderIds = Array.from(
     new Set(
-      transactions
-        .filter((tx: any) => tx.order_id)
-        .map((tx: any) => tx.order_id)
+      (transactions as RewardTransactionRow[])
+        .filter((tx) => Boolean(tx.order_id))
+        .map((tx) => tx.order_id as string)
     )
   )
 
-  let ordersMap: Record<string, any> = {}
+  const ordersMap: Record<string, OrderDisplayRow> = {}
   if (orderIds.length > 0) {
     const { data: orders } = await supabase
       .from("orders")
       .select("id, display_id")
       .in("id", orderIds)
 
-    orders?.forEach((o) => {
+    ;(orders as OrderDisplayRow[] | null)?.forEach((o) => {
       ordersMap[o.id] = o
     })
   }
 
-  const data = transactions.map((tx) => ({
+  const data = (transactions as RewardTransactionRow[]).map((tx) => ({
     ...tx,
-    orders: ordersMap[tx.order_id] || null,
+    orders: tx.order_id ? ordersMap[tx.order_id] || null : null,
   }))
 
   return {
@@ -2500,8 +2547,9 @@ export async function getPaginatedCustomerRewardTransactions(
 
 export async function getAdminRewardTransactions(
   userId: string,
-  supabase?: any
+  supabaseClient?: AdminSupabaseClient
 ): Promise<RewardTransactionWithOrder[]> {
+  let supabase = supabaseClient
   if (!supabase) {
     await ensureAdmin()
     supabase = await createAdminClient()
@@ -2527,9 +2575,9 @@ export async function getAdminRewardTransactions(
   // 2. Collect unique order IDs
   const orderIds = Array.from(
     new Set(
-      transactions
-        .filter((tx: any) => tx.order_id)
-        .map((tx: any) => tx.order_id)
+      (transactions as RewardTransactionRow[])
+        .filter((tx) => Boolean(tx.order_id))
+        .map((tx) => tx.order_id as string)
     )
   )
 
@@ -2542,7 +2590,7 @@ export async function getAdminRewardTransactions(
       .in("id", orderIds)
 
     if (orders) {
-      ordersMap = orders.reduce((acc: Record<string, number>, order: any) => {
+      ordersMap = (orders as OrderDisplayRow[]).reduce((acc, order) => {
         acc[order.id] = order.display_id
         return acc
       }, {} as Record<string, number>)
@@ -2550,7 +2598,7 @@ export async function getAdminRewardTransactions(
   }
 
   // 4. Map display IDs back to transactions
-  return transactions.map((tx: any) => ({
+  return (transactions as RewardTransactionRow[]).map((tx) => ({
     ...tx,
     orders:
       tx.order_id && ordersMap[tx.order_id]
@@ -3113,7 +3161,7 @@ export async function cancelOrder(orderId: string) {
     throw error
   }
 
-  // Deduct Club Membership savings if any
+  // Deduct Club Membership savings when present
   try {
     const { deductClubSavingsFromOrder } = await import("@lib/data/club")
     await deductClubSavingsFromOrder(orderId)

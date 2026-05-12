@@ -31,7 +31,6 @@ export type HomeExclusiveCollection = {
         name: string
         handle: string
         image_url: string | null
-        images: string[] | null
         price: number
     } | null
 }

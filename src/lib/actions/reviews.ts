@@ -409,8 +409,21 @@ export async function getAllReviewsForAdmin(params: { page?: number; limit?: num
     let query = supabase
         .from("reviews")
         .select(`
-      *,
-      review_media (*)
+      id,
+      product_id,
+      user_id,
+      rating,
+      title,
+      content,
+      approval_status,
+      is_anonymous,
+      display_name,
+      created_at,
+      review_media (
+        id,
+        file_path,
+        file_type
+      )
     `)
         .order("created_at", { ascending: false })
         .range(from, to)

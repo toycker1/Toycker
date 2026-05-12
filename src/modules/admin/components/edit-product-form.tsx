@@ -4,7 +4,7 @@ import { Product, ProductVariant, Category, Collection } from "@/lib/supabase/ty
 import { updateProduct } from "@/lib/data/admin"
 import AdminCard from "./admin-card"
 import { SubmitButton } from "./submit-button"
-import RichTextEditor from "./rich-text-editor"
+import RichTextEditor from "./rich-text-editor-loader"
 import CategoryCheckboxList from "./category-checkbox-list"
 import CollectionCheckboxList from "./collection-checkbox-list"
 import AdminBadge from "./admin-badge"

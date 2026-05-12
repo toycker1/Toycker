@@ -60,10 +60,26 @@ export async function listHomeReviewsAdmin() {
     const { data, error } = await supabase
         .from("home_reviews")
         .select(`
-            *,
+            id,
+            review_id,
+            sort_order,
+            created_at,
             review:reviews (
-                *,
-                review_media (*)
+                id,
+                product_id,
+                user_id,
+                rating,
+                title,
+                content,
+                approval_status,
+                is_anonymous,
+                display_name,
+                created_at,
+                review_media (
+                    id,
+                    file_path,
+                    file_type
+                )
             )
         `)
         .order("sort_order", { ascending: true })

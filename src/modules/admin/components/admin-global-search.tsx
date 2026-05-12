@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useTransition } from "react"
+import React, { useState, useEffect, useRef, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { Dialog, Combobox, Transition } from "@headlessui/react"
 import {
@@ -46,6 +46,7 @@ export function AdminGlobalSearch() {
     const [query, setQuery] = useState("")
     const [results, setResults] = useState<AdminSearchResult[]>([])
     const [isPending, startTransition] = useTransition()
+    const requestIdRef = useRef(0)
 
     // Handle Hotkeys
     useEffect(() => {
@@ -62,12 +63,17 @@ export function AdminGlobalSearch() {
     // Handle Search Fetching with Debounce
     useEffect(() => {
         const timer = setTimeout(() => {
+            requestIdRef.current += 1
+            const requestId = requestIdRef.current
+
             if (query.trim().length >= 2) {
                 startTransition(async () => {
                     try {
                         const data = await getAdminGlobalSearch(query)
+                        if (requestId !== requestIdRef.current) return
                         setResults(data || [])
                     } catch (error) {
+                        if (requestId !== requestIdRef.current) return
                         console.error("Global search error:", error)
                         setResults([])
                     }
@@ -141,7 +147,7 @@ export function AdminGlobalSearch() {
                             leaveTo="opacity-0 scale-95 translate-y-4"
                         >
                             <Dialog.Panel className="mx-auto max-w-3xl transform overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5 transition-all outline-none font-inter">
-                                <Combobox value={null as any} onChange={handleSelect}>
+                                <Combobox<string | null> value={null} onChange={handleSelect}>
                                     <div className="relative group">
                                         <div className="absolute inset-y-0 left-0 flex items-center pl-5 pointer-events-none">
                                             <MagnifyingGlassIcon className={cn("h-6 w-6 transition-colors duration-200", isPending ? "text-emerald-500" : "text-gray-400 group-focus-within:text-emerald-500")} />
@@ -231,7 +237,7 @@ export function AdminGlobalSearch() {
                                                                                     active ? "bg-white/20 border-white/30" : "bg-gray-100 border-gray-200"
                                                                                 )}>
                                                                                     {result.thumbnail ? (
-                                                                                        <img src={result.thumbnail} alt={result.title} className="h-full w-full object-cover" />
+                                                                                        <img src={result.thumbnail} alt={result.title} loading="lazy" decoding="async" className="h-full w-full object-cover" />
                                                                                     ) : (
                                                                                         <Icon className={cn("h-6 w-6", active ? "text-white" : "text-gray-500")} />
                                                                                     )}

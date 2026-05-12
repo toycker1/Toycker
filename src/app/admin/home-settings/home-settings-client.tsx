@@ -1,25 +1,49 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState, useTransition } from "react"
+import dynamic from "next/dynamic"
 import { type HomeBanner } from "@/lib/types/home-banners"
 import { type HomeExclusiveCollection } from "@/lib/types/home-exclusive-collections"
 import { type HomeReview } from "@/lib/actions/home-reviews"
-import { type ReviewWithMedia } from "@/lib/actions/reviews"
-import BannersManager from "@/modules/admin/components/home-settings/banners-manager"
-import ExclusiveCollectionsManager from "@/modules/admin/components/home-settings/exclusive-collections-manager"
-import ReviewsManager from "@/modules/admin/components/home-settings/reviews-manager"
+import { getAllReviewsForAdmin, type ReviewWithMedia } from "@/lib/actions/reviews"
+
+const ManagerLoading = () => (
+    <div className="min-h-[360px] rounded-xl border border-dashed border-gray-200 bg-gray-50/50" />
+)
+
+const BannersManager = dynamic(
+    () => import("@/modules/admin/components/home-settings/banners-manager"),
+    { ssr: false, loading: ManagerLoading }
+)
+const ExclusiveCollectionsManager = dynamic(
+    () => import("@/modules/admin/components/home-settings/exclusive-collections-manager"),
+    { ssr: false, loading: ManagerLoading }
+)
+const ReviewsManager = dynamic(
+    () => import("@/modules/admin/components/home-settings/reviews-manager"),
+    { ssr: false, loading: ManagerLoading }
+)
+
+type HomeSettingsTab = "banners" | "collections" | "reviews"
 
 type Props = {
     banners: HomeBanner[]
     collections: HomeExclusiveCollection[]
     homeReviews: HomeReview[]
-    allApprovedReviews: ReviewWithMedia[]
 }
 
-export default function HomeSettingsClient({ banners, collections, homeReviews, allApprovedReviews }: Props) {
-    const [activeTab, setActiveTab] = useState<"banners" | "collections" | "reviews">("banners")
+export default function HomeSettingsClient({ banners, collections, homeReviews }: Props) {
+    const [activeTab, setActiveTab] = useState<HomeSettingsTab>("banners")
+    const [allApprovedReviews, setAllApprovedReviews] = useState<ReviewWithMedia[] | null>(null)
+    const [reviewsLoadError, setReviewsLoadError] = useState<string | null>(null)
+    const [isLoadingReviews, startLoadingReviews] = useTransition()
 
-    const tabs = [
+    const tabs: Array<{
+        id: HomeSettingsTab
+        label: string
+        description: string
+        count: number
+    }> = [
         {
             id: "banners",
             label: "Hero Banners",
@@ -40,13 +64,36 @@ export default function HomeSettingsClient({ banners, collections, homeReviews, 
         }
     ]
 
+    useEffect(() => {
+        if (activeTab !== "reviews" || allApprovedReviews) {
+            return
+        }
+
+        startLoadingReviews(async () => {
+            try {
+                const { reviews } = await getAllReviewsForAdmin({ limit: 100 })
+                setReviewsLoadError(null)
+                setAllApprovedReviews(
+                    reviews.filter((review) => review.approval_status === "approved")
+                )
+            } catch (error) {
+                setReviewsLoadError(
+                    error instanceof Error
+                        ? error.message
+                        : "Failed to load approved reviews."
+                )
+                setAllApprovedReviews([])
+            }
+        })
+    }, [activeTab, allApprovedReviews])
+
     return (
         <>
             {/* Header section with glass effect on scroll (conceptual) */}
             <div className="mb-6">
                 <h1 className="text-xl font-semibold text-gray-900">Home Appearance</h1>
                 <p className="mt-1 text-sm text-gray-500">
-                    Manage your storefront's first impression. Customize banners, featured collections, and top-rated customer reviews.
+                    Manage your storefront&apos;s first impression. Customize banners, featured collections, and top-rated customer reviews.
                 </p>
             </div>
 
@@ -56,7 +103,7 @@ export default function HomeSettingsClient({ banners, collections, homeReviews, 
                     {tabs.map((tab) => (
                         <button
                             key={tab.id}
-                            onClick={() => setActiveTab(tab.id as any)}
+                            onClick={() => setActiveTab(tab.id)}
                             className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === tab.id
                                 ? "bg-white text-black shadow-sm"
                                 : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"
@@ -97,10 +144,24 @@ export default function HomeSettingsClient({ banners, collections, homeReviews, 
                                 <ExclusiveCollectionsManager initialCollections={collections} />
                             )}
                             {activeTab === "reviews" && (
-                                <ReviewsManager
-                                    initialHomeReviews={homeReviews}
-                                    allApprovedReviews={allApprovedReviews}
-                                />
+                                allApprovedReviews ? (
+                                    <ReviewsManager
+                                        initialHomeReviews={homeReviews}
+                                        allApprovedReviews={allApprovedReviews}
+                                    />
+                                ) : (
+                                    <div className="min-h-[360px] rounded-xl border border-dashed border-gray-200 bg-gray-50/50" />
+                                )
+                            )}
+                            {activeTab === "reviews" && reviewsLoadError && (
+                                <p className="mt-4 text-sm font-medium text-red-600">
+                                    {reviewsLoadError}
+                                </p>
+                            )}
+                            {activeTab === "reviews" && isLoadingReviews && (
+                                <p className="mt-4 text-sm font-medium text-gray-500">
+                                    Loading approved reviews...
+                                </p>
                             )}
                         </div>
                     </div>

@@ -108,18 +108,23 @@ export default function ReportsChart({ initialData }: Props) {
                                             <p className="text-xs text-gray-500 mb-2 font-medium">{label}</p>
 
                                             {/* Sales - usually payload[0] if Bar is first */}
-                                            {payload.map((entry: any) => (
-                                                <div key={entry.name} className="flex justify-between items-center mb-1 last:mb-0 text-xs">
+                                            {payload.map((entry) => {
+                                                const name = typeof entry.name === "string" ? entry.name : ""
+                                                const value = typeof entry.value === "number" ? entry.value : Number(entry.value || 0)
+
+                                                return (
+                                                <div key={name} className="flex justify-between items-center mb-1 last:mb-0 text-xs">
                                                     <span style={{ color: entry.color }} className="font-medium">
-                                                        {entry.name === "sales" ? "Revenue" : "Orders"}
+                                                        {name === "sales" ? "Revenue" : "Orders"}
                                                     </span>
                                                     <span className="font-bold text-gray-900">
-                                                        {entry.name === "sales"
-                                                            ? convertToLocale({ amount: entry.value * 100, currency_code: 'inr' })
-                                                            : entry.value}
+                                                        {name === "sales"
+                                                            ? convertToLocale({ amount: value * 100, currency_code: 'inr' })
+                                                            : value}
                                                     </span>
                                                 </div>
-                                            ))}
+                                                )
+                                            })}
                                         </div>
                                     )
                                 }

@@ -1,6 +1,6 @@
 # Toycker Frontend Performance Priority Index
 
-Status: Priority 1 measurement implemented; Priority 2 media optimization implemented and manually verified; Priority 3 homepage performance implemented and manually verified; Priority 4 store/search/product detail performance implemented and manually verified; Priority 5 cart/checkout/wishlist/account/orders performance implemented and manually verified
+Status: Priority 1 measurement implemented; Priority 2 media optimization implemented and manually verified; Priority 3 homepage performance implemented and manually verified; Priority 4 store/search/product detail performance implemented and manually verified; Priority 5 cart/checkout/wishlist/account/orders performance implemented and manually verified; Priority 6 admin dashboard/products/orders/home settings performance implemented and manually verified
 Last updated: 2026-05-12
 
 This folder is separate from `supabase-free-plan-priorities`.
