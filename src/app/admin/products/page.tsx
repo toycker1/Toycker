@@ -35,6 +35,7 @@ export default async function AdminProducts({
     limit: 20,
     status,
     search: search || undefined,
+    includeVariantDetails: false,
   })
 
   const TABS = [
@@ -162,14 +163,14 @@ export default async function AdminProducts({
                   >
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="h-10 w-10 rounded-lg border border-gray-200 overflow-hidden bg-gray-50 flex items-center justify-center">
-                        {product.image_url ? (
+                        {product.thumbnail || product.image_url ? (
                           <Image
-                            src={product.image_url}
+                            src={product.thumbnail || product.image_url || ""}
                             alt={product.name}
                             width={40}
                             height={40}
                             className="object-cover w-full h-full"
-                            unoptimized
+                            sizes="40px"
                           />
                         ) : (
                           <PhotoIcon className="h-5 w-5 text-gray-400" />

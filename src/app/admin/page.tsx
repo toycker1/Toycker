@@ -1,4 +1,4 @@
-import { getAdminOrders } from "@/lib/data/admin"
+import { getRecentAdminOrders } from "@/lib/data/admin"
 import { getTopProducts, getDashboardStats } from "@/lib/data/analytics"
 import { getChartData } from "@/lib/data/chart"
 import { convertToLocale } from "@lib/util/money"
@@ -7,14 +7,13 @@ import AdminPageHeader from "@modules/admin/components/admin-page-header"
 import { ShoppingBagIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon } from "@heroicons/react/24/outline"
 import Link from "next/link"
 import { formatIST } from "@/lib/util/date"
-import ReportsChart from "@modules/admin/components/charts/reports-chart"
+import ReportsChartLoader from "@modules/admin/components/charts/reports-chart-loader"
 import TopProducts from "@modules/admin/components/dashboard/top-products"
 import { cn } from "@lib/util/cn"
 
 export default async function AdminDashboard() {
   const stats = await getDashboardStats()
-  const { orders: allOrders } = await getAdminOrders()
-  const latestOrders = allOrders.slice(0, 5)
+  const latestOrders = await getRecentAdminOrders(5)
 
   // Fetch analytics
   const initialChartData = await getChartData("1m") // Default to monthly view
@@ -58,7 +57,7 @@ export default async function AdminDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <AdminCard title="Reports">
-            <ReportsChart initialData={initialChartData} />
+            <ReportsChartLoader initialData={initialChartData} />
           </AdminCard>
 
           <AdminCard title="Recent Orders" className="p-0">

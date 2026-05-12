@@ -13,6 +13,32 @@ export const maxDuration = 300
 
 const MAX_IMPORT_FILE_SIZE_BYTES = 5 * 1024 * 1024
 const MAX_IMPORT_ROWS = 1000
+const EXPECTED_CSV_COLUMNS = [
+    "Handle",
+    "Title",
+    "Description",
+    "Short Description",
+    "Subtitle",
+    "Status",
+    "Product Type",
+    "Thumbnail URL",
+    "Image URLs",
+    "Video URL",
+    "Category Handles",
+    "Collection Handles",
+    "Currency",
+    "SKU",
+    "Price",
+    "Compare At Price",
+    "Stock",
+    "Barcode",
+    "Option 1 Name",
+    "Option 1 Value",
+    "Option 2 Name",
+    "Option 2 Value",
+    "Option 3 Name",
+    "Option 3 Value",
+] as const
 
 function getErrorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error)
@@ -44,6 +70,26 @@ function validateCsvMediaUrls(row: CsvProductRow, handle: string): void {
         row["Video URL"] || null,
         `Product ${handle} video`
     )
+}
+
+function validateCsvHeaders(fields: string[] | undefined): string | null {
+    if (!fields || fields.length === 0) {
+        return "CSV header row is missing."
+    }
+
+    const expected = [...EXPECTED_CSV_COLUMNS]
+    const missing = expected.filter((column) => !fields.includes(column))
+    const unknown = fields.filter((field) => !expected.includes(field as typeof EXPECTED_CSV_COLUMNS[number]))
+
+    if (missing.length > 0) {
+        return `Missing columns: ${missing.join(", ")}.`
+    }
+
+    if (unknown.length > 0) {
+        return `Unexpected columns: ${unknown.join(", ")}.`
+    }
+
+    return null
 }
 
 export async function POST(request: NextRequest) {
@@ -87,6 +133,14 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({
                 error: "Invalid CSV format",
                 details: parseResult.errors[0].message
+            }, { status: 400 })
+        }
+
+        const headerError = validateCsvHeaders(parseResult.meta.fields)
+        if (headerError) {
+            return NextResponse.json({
+                error: "Invalid CSV template",
+                details: headerError,
             }, { status: 400 })
         }
 

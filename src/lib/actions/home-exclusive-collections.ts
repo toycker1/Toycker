@@ -15,13 +15,22 @@ export async function listExclusiveCollectionsAdmin() {
     const { data, error } = await supabase
         .from("home_exclusive_collections")
         .select(`
-      *,
+      id,
+      product_id,
+      video_url,
+      poster_url,
+      video_duration,
+      sort_order,
+      is_active,
+      created_at,
+      updated_at,
+      created_by,
+      updated_by,
       product:products (
         id,
         name,
         handle,
         image_url,
-        images,
         price
       )
     `)
@@ -34,7 +43,7 @@ export async function listExclusiveCollectionsAdmin() {
     }
 
     // Success - return data (may be empty array)
-    return { collections: (data || []) as HomeExclusiveCollection[], error: null }
+    return { collections: (data || []) as unknown as HomeExclusiveCollection[], error: null }
 }
 
 // =============================================
@@ -89,13 +98,22 @@ export async function createExclusiveCollection(formData: ExclusiveCollectionFor
             updated_by: user.id,
         })
         .select(`
-      *,
+      id,
+      product_id,
+      video_url,
+      poster_url,
+      video_duration,
+      sort_order,
+      is_active,
+      created_at,
+      updated_at,
+      created_by,
+      updated_by,
       product:products (
         id,
         name,
         handle,
         image_url,
-        images,
         price
       )
     `)
@@ -117,7 +135,7 @@ export async function createExclusiveCollection(formData: ExclusiveCollectionFor
     revalidatePath("/")
     revalidatePath("/admin/home-settings")
 
-    return { collection: data as HomeExclusiveCollection, error: null }
+    return { collection: data as unknown as HomeExclusiveCollection, error: null }
 }
 
 // =============================================
@@ -168,13 +186,22 @@ export async function updateExclusiveCollection(
         })
         .eq("id", id)
         .select(`
-      *,
+      id,
+      product_id,
+      video_url,
+      poster_url,
+      video_duration,
+      sort_order,
+      is_active,
+      created_at,
+      updated_at,
+      created_by,
+      updated_by,
       product:products (
         id,
         name,
         handle,
         image_url,
-        images,
         price
       )
     `)
@@ -194,7 +221,7 @@ export async function updateExclusiveCollection(
     revalidatePath("/")
     revalidatePath("/admin/home-settings")
 
-    return { collection: data as HomeExclusiveCollection, error: null }
+    return { collection: data as unknown as HomeExclusiveCollection, error: null }
 }
 
 // =============================================

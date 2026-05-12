@@ -14,7 +14,7 @@ export async function listHomeBannersAdmin() {
 
     const { data, error } = await supabase
         .from("home_banners")
-        .select("*")
+        .select("id, title, image_url, alt_text, link_url, sort_order, is_active, starts_at, ends_at, created_at, updated_at, created_by, updated_by")
         .order("sort_order", { ascending: true })
 
     if (error) {

@@ -77,7 +77,6 @@ function SortableCollectionItem({ collection, onEdit, onDelete, onToggle, deleti
     const previewImage =
         collection.poster_url ||
         collection.product?.image_url ||
-        collection.product?.images?.[0] ||
         null
 
     return (
@@ -233,9 +232,9 @@ function SortableCollectionItem({ collection, onEdit, onDelete, onToggle, deleti
                         <video
                             src={collection.video_url}
                             controls
-                            autoPlay
                             playsInline
-                            preload="metadata"
+                            preload="none"
+                            poster={previewImage || undefined}
                             className="max-h-[80vh] w-full bg-black"
                         />
                     </div>
