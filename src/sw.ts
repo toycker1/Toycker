@@ -1,6 +1,6 @@
 import { defaultCache } from "@serwist/next/worker";
 import type { PrecacheEntry, RuntimeCaching, SerwistGlobalConfig } from "serwist";
-import { Serwist } from "serwist";
+import { NetworkOnly, Serwist } from "serwist";
 
 type SerwistWorkerGlobal = typeof globalThis &
     SerwistGlobalConfig & {
@@ -14,11 +14,33 @@ const uncachedMediaMatchers = [
     /\.(?:mp4|webm)$/i,
 ];
 
-const runtimeCaching: RuntimeCaching[] = defaultCache.filter(({ matcher }) => {
-    const matcherSource = String(matcher);
+const userSpecificRoutePrefixes = [
+    "/api/cart",
+    "/api/storefront/layout-state",
+    "/cart",
+    "/checkout",
+    "/account",
+];
 
-    return !uncachedMediaMatchers.some((pattern) => pattern.test(matcherSource));
-});
+const isUserSpecificPath = (pathname: string) =>
+    userSpecificRoutePrefixes.some(
+        (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+    );
+
+const userSpecificRuntimeCaching: RuntimeCaching = {
+    matcher: ({ sameOrigin, url }) =>
+        sameOrigin && isUserSpecificPath(url.pathname),
+    handler: new NetworkOnly(),
+};
+
+const runtimeCaching: RuntimeCaching[] = [
+    userSpecificRuntimeCaching,
+    ...defaultCache.filter(({ matcher }) => {
+        const matcherSource = String(matcher);
+
+        return !uncachedMediaMatchers.some((pattern) => pattern.test(matcherSource));
+    }),
+];
 
 const precacheEntries = (self.__SW_MANIFEST ?? []).filter((entry) => {
     const url = typeof entry === "string" ? entry : entry.url;

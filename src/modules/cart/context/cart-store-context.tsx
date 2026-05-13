@@ -160,11 +160,6 @@ export const CartStoreProvider = ({ children }: { children: ReactNode }) => {
 
   const optimisticRemove = useCallback(
     async (lineId: string) => {
-      if (!cart) {
-        setLastError("No cart found to remove item from")
-        return
-      }
-
       setLastError(null)
 
       setRemovingIds((prev) => {
@@ -177,9 +172,7 @@ export const CartStoreProvider = ({ children }: { children: ReactNode }) => {
         setIsSyncing(true)
         try {
           const serverCart = await deleteLineItem(lineId)
-          if (serverCart) {
-            setFromServer(serverCart)
-          }
+          setFromServer(serverCart)
         } catch (error) {
           const errorMessage = (error as Error)?.message ?? "Failed to remove item"
           setLastError(errorMessage)
@@ -202,7 +195,7 @@ export const CartStoreProvider = ({ children }: { children: ReactNode }) => {
       removeQueueRef.current = promise
       return promise
     },
-    [cart, setFromServer, showToast],
+    [setFromServer, showToast],
   )
 
   const optimisticAdd = useCallback(
@@ -461,11 +454,6 @@ export const CartStoreProvider = ({ children }: { children: ReactNode }) => {
 
   const optimisticUpdateQuantity = useCallback(
     async (lineId: string, quantity: number) => {
-      if (!cart) {
-        setLastError("No cart found")
-        return
-      }
-
       setLastError(null)
       setUpdatingIds((prev) => {
         const next = new Set(prev)
@@ -475,27 +463,29 @@ export const CartStoreProvider = ({ children }: { children: ReactNode }) => {
 
       const previousCart = cart
 
-      const nextItems = cart.items?.map((item) => {
-        if (item.id === lineId) {
-          const baseUnitPrice = item.unit_price ?? 0
+      if (cart) {
+        const nextItems = cart.items?.map((item) => {
+          if (item.id === lineId) {
+            const baseUnitPrice = item.unit_price ?? 0
 
-          // Note: unit_price should already include gift wrap fee if it was fetched correctly,
-          // but we ensure it matches the metadata for consistent optimistic UI.
-          const total = baseUnitPrice * quantity
+            // Note: unit_price should already include gift wrap fee if it was fetched correctly,
+            // but we ensure it matches the metadata for consistent optimistic UI.
+            const total = baseUnitPrice * quantity
 
-          return {
-            ...item,
-            quantity,
-            total: total,
-            original_total: (item.original_unit_price ?? baseUnitPrice) * quantity,
-            updated_at: new Date().toISOString(),
+            return {
+              ...item,
+              quantity,
+              total: total,
+              original_total: (item.original_unit_price ?? baseUnitPrice) * quantity,
+              updated_at: new Date().toISOString(),
+            }
           }
-        }
-        return item
-      })
+          return item
+        })
 
-      if (nextItems) {
-        setCart(mergeLineItems(cart, nextItems))
+        if (nextItems) {
+          setCart(mergeLineItems(cart, nextItems))
+        }
       }
 
       const runServerUpdate = async () => {

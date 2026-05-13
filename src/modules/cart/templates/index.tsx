@@ -9,6 +9,7 @@ import { useCartStore } from "@modules/cart/context/cart-store-context"
 import { Cart, CustomerProfile } from "@/lib/supabase/types"
 import { Shield, Truck, RotateCcw, Sparkles } from "lucide-react"
 import LocalizedClientLink from "@modules/common/components/localized-client-link"
+import { useEffect } from "react"
 
 type CartTemplateProps = {
   cart: Cart | null
@@ -19,10 +20,16 @@ const CartTemplate = ({
   cart,
   customer,
 }: CartTemplateProps) => {
-  const { cart: clientCart } = useCartStore()
+  const { cart: clientCart, setFromServer } = useCartStore()
   const activeCart = clientCart ?? cart
   const isClubMember = customer?.is_club_member || activeCart?.is_club_member || false
   // const itemCount = activeCart?.items?.length || 0
+
+  useEffect(() => {
+    if (cart && (!clientCart || clientCart.id !== cart.id)) {
+      setFromServer(cart)
+    }
+  }, [cart, clientCart, setFromServer])
 
   return (
     <div className="min-h-screen py-6 sm:py-8 lg:py-12">
