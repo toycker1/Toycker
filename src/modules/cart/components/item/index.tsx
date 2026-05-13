@@ -95,7 +95,7 @@ const Item = ({ item, type = "full", currencyCode }: ItemProps) => {
   }
 
   return (
-    <div className="grid grid-cols-[auto_1fr_auto] md:grid-cols-[auto_1fr_auto] lg:grid-cols-[auto_1fr_100px_120px_100px] gap-x-4 gap-y-3 w-full py-5 sm:py-6 border-b border-slate-100 last:border-0" data-testid="product-row">
+    <div className="grid grid-cols-[auto_1fr] lg:grid-cols-[auto_1fr_100px_120px_100px] gap-x-4 gap-y-3 w-full py-5 sm:py-6 border-b border-slate-100 last:border-0" data-testid="product-row">
       {/* Thumbnail Column */}
       <div className="!pl-0 !pr-0">
         {renderThumbnail()}
@@ -138,6 +138,16 @@ const Item = ({ item, type = "full", currencyCode }: ItemProps) => {
           </div>
         )}
 
+        {type === "full" && (
+          <div className="lg:hidden mt-2">
+            <LineItemPrice
+              item={item}
+              style="tight"
+              currencyCode={currencyCode}
+            />
+          </div>
+        )}
+
         {/* Desktop: Remove button below title */}
         {type === "full" && (
           <div className="hidden lg:block mt-3">
@@ -145,9 +155,9 @@ const Item = ({ item, type = "full", currencyCode }: ItemProps) => {
           </div>
         )}
 
-        {/* Mobile-only: Quantity and Remove buttons below title */}
+        {/* Mobile/tablet: Quantity and Remove buttons below title */}
         {type === "full" && (
-          <div className="flex md:hidden items-center gap-2 mt-3">
+          <div className="flex lg:hidden items-center gap-2 mt-3">
             <div className="flex items-center gap-2 flex-1">
               <span className="text-xs text-slate-500">Qty:</span>
               <QuantitySelector
@@ -193,7 +203,7 @@ const Item = ({ item, type = "full", currencyCode }: ItemProps) => {
       )}
 
       {/* Total Price Column - All views */}
-      <div className="flex items-center justify-end min-w-[90px]">
+      <div className="hidden lg:flex items-center justify-end min-w-[90px]">
         <LineItemPrice
           item={item}
           style="tight"
