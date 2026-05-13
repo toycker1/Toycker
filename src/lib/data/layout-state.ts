@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { getAuthUserId } from "@lib/data/auth"
 import { getCartId } from "@lib/data/cookies"
+import { findLatestActiveCartIdForUser } from "@lib/data/cart"
 import type {
   LayoutCartSummary,
   LayoutCustomer,
@@ -49,13 +50,18 @@ export async function retrieveLayoutCustomer(): Promise<LayoutCustomer | null> {
 }
 
 export async function retrieveLayoutCartSummary(): Promise<LayoutCartSummary | null> {
-  const cartId = await getCartId()
+  const userId = await getAuthUserId()
+  const cookieCartId = await getCartId()
+  let cartId = cookieCartId ?? null
+
+  if (!cartId && userId) {
+    cartId = await findLatestActiveCartIdForUser(userId)
+  }
 
   if (!cartId) {
     return null
   }
 
-  const userId = await getAuthUserId()
   const supabase = await createClient()
   const { data: cart } = await supabase
     .from("carts")
@@ -77,9 +83,40 @@ export async function retrieveLayoutCartSummary(): Promise<LayoutCartSummary | n
   }
 
   if (cart.user_id && cart.user_id !== userId) {
-    return null
+    const accountCartId = userId
+      ? await findLatestActiveCartIdForUser(userId)
+      : null
+
+    if (!accountCartId || accountCartId === cart.id) {
+      return null
+    }
+
+    const { data: accountCart } = await supabase
+      .from("carts")
+      .select(
+        `
+        id,
+        user_id,
+        region_id,
+        currency_code,
+        updated_at,
+        items:cart_items(quantity)
+      `
+      )
+      .eq("id", accountCartId)
+      .maybeSingle<LayoutCartRow>()
+
+    if (!accountCart) {
+      return null
+    }
+
+    return buildLayoutCartSummary(accountCart)
   }
 
+  return buildLayoutCartSummary(cart)
+}
+
+const buildLayoutCartSummary = (cart: LayoutCartRow): LayoutCartSummary => {
   const itemCount = (cart.items ?? []).reduce((total, item) => {
     return total + Math.max(Number(item.quantity ?? 0), 0)
   }, 0)

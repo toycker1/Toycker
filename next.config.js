@@ -23,10 +23,6 @@ const withSerwist = withSerwistInit({
 /**
  * @type {import('next').NextConfig}
  */
-const IMAGE_QUALITIES = [75, 85, 95, 100]
-const DISABLE_NEXT_IMAGE_OPTIMIZATION =
-  process.env.DISABLE_NEXT_IMAGE_OPTIMIZATION === "true"
-
 const nextConfig = {
   reactStrictMode: true,
 
@@ -43,8 +39,6 @@ const nextConfig = {
     },
   },
   images: {
-    formats: ["image/webp"],
-    minimumCacheTTL: 31536000,
     remotePatterns: [
       {
         protocol: "http",
@@ -95,8 +89,10 @@ const nextConfig = {
         ]
         : []),
     ],
-    qualities: IMAGE_QUALITIES,
-    unoptimized: DISABLE_NEXT_IMAGE_OPTIMIZATION,
+    // Serve Cloudflare/R2 media directly instead of routing through Vercel
+    // Image Optimization. This keeps live media available when Vercel image
+    // transformation limits are reached.
+    unoptimized: true,
   },
   experimental: {
     optimizePackageImports: [

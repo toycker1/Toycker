@@ -8,7 +8,8 @@ import { revalidatePath, revalidateTag } from "next/cache"
 import { redirect } from "next/navigation"
 import { cookies as nextCookies } from "next/headers"
 import { ActionResult } from "@/lib/types/action-result"
-import { getCustomerFacingEmail, isSyntheticWhatsAppEmail } from "@/lib/util/customer-email"
+import { getCustomerFacingEmail } from "@/lib/util/customer-email"
+import { mergeOrClaimGuestCartForUser } from "@lib/data/cart"
 import {
   PHONE_LOGIN_OTP_DIGITS_REGEX,
   PHONE_LOGIN_OTP_MAX_EXCLUSIVE,
@@ -22,12 +23,6 @@ type ProfileLookup = {
   email: string | null
   contact_email: string | null
   role: string | null
-}
-
-type CartOwnershipLookup = {
-  id: string
-  user_id: string | null
-  email: string | null
 }
 
 const DEFAULT_RESEND_COOLDOWN_SECONDS = 60
@@ -209,8 +204,7 @@ async function syncAuthUserPhone(
   return true
 }
 
-async function claimGuestCartForUser(
-  adminClient: Awaited<ReturnType<typeof createAdminClient>>,
+async function handoffGuestCartForUser(
   userId: string,
   publicEmail: string | null
 ): Promise<void> {
@@ -221,55 +215,19 @@ async function claimGuestCartForUser(
     return
   }
 
-  const { data: cartData, error: cartError } = await adminClient
-    .from("carts")
-    .select("id, user_id, email")
-    .eq("id", cartId)
-    .maybeSingle<CartOwnershipLookup>()
+  const activeCartId = await mergeOrClaimGuestCartForUser({
+    cartId,
+    userId,
+    email: publicEmail,
+  })
 
-  if (cartError) {
-    console.warn("Failed to load cart during OTP login handoff:", cartError)
-    return
-  }
-
-  if (!cartData) {
-    return
-  }
-
-  if (cartData.user_id === userId) {
-    return
-  }
-
-  if (cartData.user_id && cartData.user_id !== userId) {
-    console.warn(
-      `Skipping cart claim because cart ${cartId} already belongs to a different user.`
-    )
-    return
-  }
-
-  const updatePayload: {
-    user_id: string
-    email?: string | null
-    updated_at: string
-  } = {
-    user_id: userId,
-    updated_at: new Date().toISOString(),
-  }
-
-  if (publicEmail) {
-    updatePayload.email = publicEmail
-  } else if (isSyntheticWhatsAppEmail(cartData.email)) {
-    updatePayload.email = null
-  }
-
-  const { error: claimError } = await adminClient
-    .from("carts")
-    .update(updatePayload)
-    .eq("id", cartId)
-    .is("user_id", null)
-
-  if (claimError) {
-    console.warn("Failed to claim guest cart during OTP login handoff:", claimError)
+  if (activeCartId) {
+    cookieStore.set("toycker_cart_id", activeCartId, {
+      maxAge: 60 * 60 * 24 * 7,
+      httpOnly: true,
+      sameSite: "strict",
+      secure: process.env.NODE_ENV === "production",
+    })
   }
 }
 
@@ -592,7 +550,7 @@ export async function verifyOtp(
     return { success: false, error: "Failed to sign in. Please try again." }
   }
 
-  await claimGuestCartForUser(adminClient, userId, publicEmail)
+  await handoffGuestCartForUser(userId, publicEmail)
 
   // Revalidate caches
   revalidatePath("/", "layout")
