@@ -59,6 +59,31 @@ type CartItemMetadataRow = {
   metadata?: Record<string, unknown> | null
 }
 
+type CartOwnershipRow = {
+  id: string
+  user_id: string | null
+  email: string | null
+  updated_at: string | null
+}
+
+type CartMergeItemRow = {
+  id: string
+  cart_id: string
+  product_id: string
+  variant_id: string | null
+  quantity: number | null
+  metadata: Record<string, unknown> | null
+}
+
+type OrderCartMetadataRow = {
+  metadata: Record<string, unknown> | null
+}
+
+type ActiveCartCandidateRow = {
+  id: string
+  updated_at: string | null
+}
+
 type CartItemGiftWrapRemovalRow = {
   id: string
   cart_id: string
@@ -131,6 +156,16 @@ const removeGiftWrapMetadata = (
   return Object.keys(rest).length > 0 ? rest : null
 }
 
+const cloneMetadata = (
+  metadata: Record<string, unknown> | null | undefined
+): Record<string, unknown> | null => {
+  if (!metadata) {
+    return null
+  }
+
+  return JSON.parse(JSON.stringify(metadata)) as Record<string, unknown>
+}
+
 const getCartClientForUser = async (userId: string | null) => {
   if (userId) {
     return createClient()
@@ -193,6 +228,301 @@ const resolveCartWriteContext = async (): Promise<CartWriteContext> => {
   }
 }
 
+const isOrderedCartForUser = async (
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  cartId: string
+): Promise<boolean> => {
+  const { data, error } = await supabase
+    .from("orders")
+    .select("id")
+    .eq("user_id", userId)
+    .contains("metadata", { cart_id: cartId })
+    .in("status", ["pending", "order_placed", "accepted", "shipped", "delivered"])
+    .limit(1)
+
+  if (error || !data) {
+    if (error) {
+      console.warn("Failed to check ordered cart status:", error)
+    }
+    return false
+  }
+
+  return data.length > 0
+}
+
+const findLatestActiveCartIdForUserWithClient = async (
+  supabase: CartWriteContext["supabase"],
+  userId: string
+): Promise<string | null> => {
+  const { data, error } = await supabase
+    .from("carts")
+    .select("id, updated_at")
+    .eq("user_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(10)
+
+  if (error || !data) {
+    if (error) {
+      console.warn("Failed to load active cart for user:", error)
+    }
+    return null
+  }
+
+  const cartCandidates = data as ActiveCartCandidateRow[]
+  const candidateIds = cartCandidates.map((cart) => cart.id)
+
+  if (candidateIds.length === 0) {
+    return null
+  }
+
+  const { data: orderRows, error: orderError } = await supabase
+    .from("orders")
+    .select("metadata")
+    .eq("user_id", userId)
+    .in("status", ["pending", "order_placed", "accepted", "shipped", "delivered"])
+    .in("metadata->>cart_id", candidateIds)
+
+  if (orderError) {
+    console.warn("Failed to load ordered cart candidates:", orderError)
+  }
+
+  const orderedCartIds = new Set(
+    ((orderRows || []) as OrderCartMetadataRow[])
+      .map((order) => order.metadata?.cart_id)
+      .filter((cartId): cartId is string => typeof cartId === "string")
+  )
+
+  const latestCart = cartCandidates.find((cart) => !orderedCartIds.has(cart.id))
+
+  return latestCart?.id ?? null
+}
+
+export const findLatestActiveCartIdForUser = async (
+  userId: string
+): Promise<string | null> => {
+  const supabase = await createClient()
+  return findLatestActiveCartIdForUserWithClient(supabase, userId)
+}
+
+const getCookieCartForUser = async (
+  userId: string | null,
+  cartId: string
+): Promise<CartOwnershipRow | null> => {
+  const supabase = userId ? await createClient() : await createAdminClient()
+  const { data, error } = await supabase
+    .from("carts")
+    .select("id, user_id, email, updated_at")
+    .eq("id", cartId)
+    .maybeSingle<CartOwnershipRow>()
+
+  if (error || !data) {
+    return null
+  }
+
+  return data
+}
+
+const resolveCartIdForRead = async (
+  requestedCartId?: string
+): Promise<string | null> => {
+  const user = await getAuthUser()
+  const cookieCartId = requestedCartId || (await getCartId())
+
+  if (requestedCartId) {
+    return requestedCartId
+  }
+
+  if (!user) {
+    return cookieCartId ?? null
+  }
+
+  if (cookieCartId) {
+    const cookieCart = await getCookieCartForUser(user.id, cookieCartId)
+
+    if (cookieCart?.user_id === user.id || cookieCart?.user_id === null) {
+      const supabase = await createClient()
+      const isOrderedCart = await isOrderedCartForUser(
+        supabase,
+        user.id,
+        cookieCart.id
+      )
+
+      if (isOrderedCart) {
+        return findLatestActiveCartIdForUser(user.id)
+      }
+
+      return cookieCart.id
+    }
+  }
+
+  return findLatestActiveCartIdForUser(user.id)
+}
+
+const touchCart = async (
+  supabase: CartWriteContext["supabase"],
+  cartId: string
+) => {
+  await supabase
+    .from("carts")
+    .update({ updated_at: new Date().toISOString() })
+    .eq("id", cartId)
+}
+
+const loadCartMergeItems = async (
+  supabase: Awaited<ReturnType<typeof createAdminClient>>,
+  cartId: string
+): Promise<CartMergeItemRow[]> => {
+  const { data, error } = await supabase
+    .from("cart_items")
+    .select("id, cart_id, product_id, variant_id, quantity, metadata")
+    .eq("cart_id", cartId)
+
+  if (error || !data) {
+    if (error) {
+      console.warn("Failed to load cart items for merge:", error)
+    }
+    return []
+  }
+
+  return data as CartMergeItemRow[]
+}
+
+const mergeCartItems = async ({
+  supabase,
+  sourceCartId,
+  targetCartId,
+}: {
+  supabase: Awaited<ReturnType<typeof createAdminClient>>
+  sourceCartId: string
+  targetCartId: string
+}) => {
+  const [sourceItems, targetItems] = await Promise.all([
+    loadCartMergeItems(supabase, sourceCartId),
+    loadCartMergeItems(supabase, targetCartId),
+  ])
+
+  for (const sourceItem of sourceItems) {
+    const matchingTarget = targetItems.find(
+      (targetItem) =>
+        targetItem.product_id === sourceItem.product_id &&
+        targetItem.variant_id === sourceItem.variant_id &&
+        metadataMatchesCartLine(targetItem.metadata, sourceItem.metadata)
+    )
+
+    if (matchingTarget) {
+      const nextQuantity =
+        Number(matchingTarget.quantity ?? 0) + Number(sourceItem.quantity ?? 0)
+
+      const { error } = await supabase
+        .from("cart_items")
+        .update({ quantity: nextQuantity })
+        .eq("id", matchingTarget.id)
+
+      if (!error) {
+        matchingTarget.quantity = nextQuantity
+      }
+      continue
+    }
+
+    const { data: insertedItem, error } = await supabase
+      .from("cart_items")
+      .insert({
+        cart_id: targetCartId,
+        product_id: sourceItem.product_id,
+        variant_id: sourceItem.variant_id,
+        quantity: sourceItem.quantity ?? 0,
+        metadata: cloneMetadata(sourceItem.metadata),
+      })
+      .select("id, cart_id, product_id, variant_id, quantity, metadata")
+      .single<CartMergeItemRow>()
+
+    if (!error && insertedItem) {
+      targetItems.push(insertedItem)
+    }
+  }
+
+  await supabase.from("cart_items").delete().eq("cart_id", sourceCartId)
+  await supabase.from("carts").delete().eq("id", sourceCartId).is("user_id", null)
+  await touchCart(supabase, targetCartId)
+}
+
+export async function mergeOrClaimGuestCartForUser({
+  cartId,
+  userId,
+  email,
+}: {
+  cartId: string
+  userId: string
+  email: string | null
+}): Promise<string | null> {
+  const adminSupabase = await createAdminClient()
+  const { data: guestCart, error: guestCartError } = await adminSupabase
+    .from("carts")
+    .select("id, user_id, email, updated_at")
+    .eq("id", cartId)
+    .maybeSingle<CartOwnershipRow>()
+
+  if (guestCartError || !guestCart) {
+    if (guestCartError) {
+      console.warn("Failed to load guest cart during login handoff:", guestCartError)
+    }
+    return null
+  }
+
+  if (guestCart.user_id === userId) {
+    return guestCart.id
+  }
+
+  if (guestCart.user_id && guestCart.user_id !== userId) {
+    console.warn(
+      `Skipping cart handoff because cart ${cartId} already belongs to a different user.`
+    )
+    return findLatestActiveCartIdForUserWithClient(adminSupabase, userId)
+  }
+
+  const existingCartId = await findLatestActiveCartIdForUserWithClient(
+    adminSupabase,
+    userId
+  )
+  const updatePayload = {
+    user_id: userId,
+    email,
+    updated_at: new Date().toISOString(),
+  }
+
+  if (!existingCartId || existingCartId === guestCart.id) {
+    const { error } = await adminSupabase
+      .from("carts")
+      .update(updatePayload)
+      .eq("id", guestCart.id)
+      .is("user_id", null)
+
+    if (error) {
+      console.warn("Failed to claim guest cart during login handoff:", error)
+      return null
+    }
+
+    return guestCart.id
+  }
+
+  await mergeCartItems({
+    supabase: adminSupabase,
+    sourceCartId: guestCart.id,
+    targetCartId: existingCartId,
+  })
+
+  await adminSupabase
+    .from("carts")
+    .update({
+      email,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", existingCartId)
+
+  return existingCartId
+}
+
 export async function retrieveCart(cartId?: string): Promise<Cart | null> {
   return cachedRetrieveCart(cartId)
 }
@@ -204,7 +534,7 @@ const cachedRetrieveCart = cache(
 )
 
 export async function retrieveCartRaw(cartId?: string): Promise<Cart | null> {
-  const id = cartId || (await getCartId())
+  const id = await resolveCartIdForRead(cartId)
   if (!id) return null
 
   const user = await getAuthUser()
@@ -590,7 +920,7 @@ export async function addToCart({
             product_id: productId,
             variant_id: targetVariantId,
             quantity,
-            metadata: metadata ? JSON.parse(JSON.stringify(metadata)) : null,
+            metadata: cloneMetadata(metadata),
           })
 
         if (insertError) {
@@ -604,6 +934,7 @@ export async function addToCart({
     }
 
     revalidateTag("cart", "max")
+    await touchCart(supabase, cartId)
     return retrieveCartRaw(cartId)
   } catch (error) {
     console.error("[addToCart] Fatal error:", error)
@@ -674,14 +1005,13 @@ export async function addMultipleToCart(
         product_id: item.productId,
         variant_id: targetVariantId || null,
         quantity: item.quantity,
-        metadata: item.metadata
-          ? JSON.parse(JSON.stringify(item.metadata))
-          : null,
+        metadata: cloneMetadata(item.metadata),
       })
     }
   }
 
   revalidateTag("cart", "max")
+  await touchCart(supabase, cartId)
   return retrieveCartRaw(cartId)
 }
 
@@ -696,8 +1026,13 @@ export async function updateLineItem({
   const supabase = writeContext.supabase
   await supabase.from("cart_items").update({ quantity }).eq("id", lineId)
 
+  const cart = await retrieveCartRaw()
+  if (cart) {
+    await touchCart(supabase, cart.id)
+  }
+
   revalidateTag("cart", "max")
-  return retrieveCartRaw()
+  return cart
 }
 
 export async function deleteLineItem(lineId: string) {
@@ -773,6 +1108,10 @@ export async function deleteLineItem(lineId: string) {
 
       await giftWrapQuery
     }
+  }
+
+  if (lineItem) {
+    await touchCart(supabase, lineItem.cart_id)
   }
 
   revalidateTag("cart", "max")
@@ -1199,8 +1538,8 @@ export async function setShippingMethod({
 }
 
 export async function setPaymentProvider(providerId: string) {
-  const cartId = await getCartId()
-  if (!cartId) return
+  const cart = await retrieveCartRaw()
+  if (!cart) return
 
   const supabase = await getCartClient()
 
@@ -1218,8 +1557,9 @@ export async function setPaymentProvider(providerId: string) {
     .from("carts")
     .update({
       payment_collection: paymentCollection as Record<string, unknown>,
+      updated_at: new Date().toISOString(),
     })
-    .eq("id", cartId)
+    .eq("id", cart.id)
 
   if (error) {
     console.error("Error setting payment provider:", error)
@@ -1727,7 +2067,7 @@ export async function createBuyNowCart({
       product_id: targetProductId,
       variant_id: variantId || null,
       quantity: quantity,
-      metadata: metadata ? JSON.parse(JSON.stringify(metadata)) : null,
+      metadata: cloneMetadata(metadata),
     })
 
     // If gift wrap is selected, add as a separate line
@@ -1783,16 +2123,20 @@ export async function updateRegion(countryCode: string, currentPath: string) {
 }
 
 export async function applyPromotions(codes: string[]) {
-  const cartId = await getCartId()
-  if (!cartId) throw new Error("No cart found")
+  const cart = await retrieveCartRaw()
+  if (!cart) throw new Error("No cart found")
 
   const supabase = await getCartClient()
 
   if (codes.length === 0) {
     const { error } = await supabase
       .from("carts")
-      .update({ promo_code: null, discount_total: 0 })
-      .eq("id", cartId)
+      .update({
+        promo_code: null,
+        discount_total: 0,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", cart.id)
     if (error) throw new Error("Could not remove promotion code")
     revalidateTag("cart", "max")
     return
@@ -1829,7 +2173,6 @@ export async function applyPromotions(codes: string[]) {
   }
 
   // Check min order amount against current cart
-  const cart = await retrieveCart(cartId)
   if (cart && (cart.item_subtotal ?? 0) < (promotion.min_order_amount || 0)) {
     throw new Error(
       `Minimum order amount of ₹${promotion.min_order_amount} required to use this code`
@@ -1853,23 +2196,24 @@ export async function applyPromotions(codes: string[]) {
     .update({
       promo_code: code,
       discount_total: discountAmount,
+      updated_at: new Date().toISOString(),
     })
-    .eq("id", cartId)
+    .eq("id", cart.id)
 
   if (error) throw new Error("Could not apply promotion code")
 
   revalidateTag("cart", "max")
 }
 export async function updateCartRewards(points: number) {
-  const cartId = await getCartId()
-  if (!cartId) throw new Error("No cart found")
+  const activeCart = await retrieveCartRaw()
+  if (!activeCart) throw new Error("No cart found")
 
   const supabase = await getCartClient()
 
   const { data: cart } = await supabase
     .from("carts")
     .select("metadata")
-    .eq("id", cartId)
+    .eq("id", activeCart.id)
     .single()
 
   const metadata = {
@@ -1879,8 +2223,11 @@ export async function updateCartRewards(points: number) {
 
   const { error } = await supabase
     .from("carts")
-    .update({ metadata })
-    .eq("id", cartId)
+    .update({
+      metadata,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", activeCart.id)
 
   if (error) throw new Error("Could not update rewards")
 
