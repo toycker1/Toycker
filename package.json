@@ -13,7 +13,7 @@
     "dev": "next dev --turbopack -p 3000",
     "build": "next build --webpack",
     "start": "next start -p 3000",
-    "lint": "next lint",
+    "lint": "eslint src next.config.js tailwind.config.js postcss.config.js --ext .js,.jsx,.ts,.tsx",
     "analyze": "cross-env ANALYZE=true next build",
     "test": "vitest run"
   },

@@ -95,14 +95,14 @@ const Item = ({ item, type = "full", currencyCode }: ItemProps) => {
   }
 
   return (
-    <div className="grid grid-cols-[auto_1fr] lg:grid-cols-[auto_1fr_100px_120px_100px] gap-x-4 gap-y-3 w-full py-5 sm:py-6 border-b border-slate-100 last:border-0" data-testid="product-row">
+    <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr_100px_120px_100px] gap-x-4 gap-y-4 w-full py-5 sm:py-6 border-b border-slate-100 last:border-0" data-testid="product-row">
       {/* Thumbnail Column */}
       <div className="!pl-0 !pr-0">
         {renderThumbnail()}
       </div>
 
       {/* Product Info Column */}
-      <div className="flex flex-col justify-center min-w-0 pr-2">
+      <div className="flex flex-col justify-center min-w-0">
         {canNavigate ? (
           <LocalizedClientLink
             href={`/products/${item.product_handle}`}
@@ -155,27 +155,28 @@ const Item = ({ item, type = "full", currencyCode }: ItemProps) => {
           </div>
         )}
 
-        {/* Mobile/tablet: Quantity and Remove buttons below title */}
-        {type === "full" && (
-          <div className="flex lg:hidden items-center gap-2 mt-3">
-            <div className="flex items-center gap-2 flex-1">
-              <span className="text-xs text-slate-500">Qty:</span>
-              <QuantitySelector
-                quantity={item.quantity}
-                onChange={handleQuantityChange}
-                max={maxQuantity}
-                loading={isUpdating(item.id)}
-                disabled={isRemoving(item.id)}
-                size="small"
-                data-testid="product-select-button"
-              />
-            </div>
-            <div className="flex-shrink-0 ml-auto">
-              <DeleteButton id={item.id} data-testid="product-delete-button" />
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* Mobile/tablet: full-width action row */}
+      {type === "full" && (
+        <div className="flex lg:hidden items-center justify-between gap-3 pt-1">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="text-xs text-slate-500 shrink-0">Qty:</span>
+            <QuantitySelector
+              quantity={item.quantity}
+              onChange={handleQuantityChange}
+              max={maxQuantity}
+              loading={isUpdating(item.id)}
+              disabled={isRemoving(item.id)}
+              size="small"
+              data-testid="product-select-button"
+            />
+          </div>
+          <div className="flex shrink-0 justify-end">
+            <DeleteButton id={item.id} data-testid="product-delete-button" />
+          </div>
+        </div>
+      )}
 
       {/* Quantity Column - Desktop only */}
       {type === "full" && (

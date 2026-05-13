@@ -40,7 +40,7 @@ export default async function CategoriesPage(props: {
                         Shop by Category
                     </h1>
                     <p className="mt-4 text-lg text-slate-600">
-                        Find exactly what you're looking for by browsing our curated categories.
+                        Find exactly what you&apos;re looking for by browsing our curated categories.
                     </p>
                 </div>
 
