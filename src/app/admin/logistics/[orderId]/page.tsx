@@ -72,6 +72,82 @@ function DetailRow({
   )
 }
 
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+}
+
+function getPayloadValue(
+  payload: Record<string, unknown> | null,
+  keys: string[]
+): unknown {
+  const queue: unknown[] = payload ? [payload] : []
+
+  while (queue.length > 0) {
+    const current = queue.shift()
+    if (!isObjectRecord(current)) {
+      continue
+    }
+
+    for (const [key, value] of Object.entries(current)) {
+      if (keys.includes(key)) {
+        return value
+      }
+
+      if (isObjectRecord(value) || Array.isArray(value)) {
+        queue.push(value)
+      }
+    }
+  }
+
+  return null
+}
+
+function getPayloadNumberOrString(
+  payload: Record<string, unknown> | null,
+  keys: string[]
+): string | number | null {
+  const value = getPayloadValue(payload, keys)
+
+  if (typeof value === "string" && value.trim()) {
+    return value.trim()
+  }
+
+  if (typeof value === "number") {
+    return value
+  }
+
+  return null
+}
+
+function getDimensions(payload: Record<string, unknown> | null): string | null {
+  const length = getPayloadNumberOrString(payload, ["length"])
+  const width = getPayloadNumberOrString(payload, ["width"])
+  const height = getPayloadNumberOrString(payload, ["height"])
+
+  if (!length || !width || !height) {
+    return null
+  }
+
+  return `${length} x ${width} x ${height} cm`
+}
+
+function getWeight(payload: Record<string, unknown> | null): string | null {
+  const weight = getPayloadNumberOrString(payload, ["weight"])
+  return weight ? `${weight} g` : null
+}
+
+function getTrivaraErrorHelp(errorMessage: string | null): string | null {
+  if (!errorMessage) {
+    return null
+  }
+
+  if (errorMessage.trim().toLowerCase() !== "forward failed") {
+    return null
+  }
+
+  return "Trivara processed the request, but the downstream courier forward booking failed. Ask Trivara to check Delhivery forward/COD serviceability, warehouse mapping, and the hidden courier rejection reason."
+}
+
 export default async function AdminLogisticsDetail({ params }: Props) {
   const { orderId } = await params
   const record = await getTrivaraLogisticsRecord(orderId)
@@ -83,6 +159,7 @@ export default async function AdminLogisticsDetail({ params }: Props) {
   const statusBadge = getStatusBadge(record.status)
   const canRetry = record.status === "failed" || record.status === "skipped"
   const hasReference = Boolean(record.trivara_reference_number)
+  const trivaraErrorHelp = getTrivaraErrorHelp(record.error_message)
 
   return (
     <div className="space-y-6">
@@ -232,10 +309,74 @@ export default async function AdminLogisticsDetail({ params }: Props) {
         </AdminCard>
       </div>
 
+      <AdminCard title="Booking Diagnostics">
+        <div className="grid grid-cols-1 gap-x-8 md:grid-cols-2">
+          <DetailRow
+            label="CRN"
+            value={getPayloadNumberOrString(record.request_payload, ["crn_no"])}
+          />
+          <DetailRow
+            label="Warehouse"
+            value={getPayloadNumberOrString(record.request_payload, [
+              "warehouse_name",
+            ])}
+          />
+          <DetailRow
+            label="Service partner ID"
+            value={getPayloadNumberOrString(record.request_payload, [
+              "service_partner_id",
+            ])}
+          />
+          <DetailRow
+            label="Service"
+            value={getPayloadNumberOrString(record.request_payload, ["service"])}
+          />
+          <DetailRow
+            label="Shipment type"
+            value={getPayloadNumberOrString(record.request_payload, [
+              "shipment_type",
+            ])}
+          />
+          <DetailRow
+            label="Payment mode"
+            value={getPayloadNumberOrString(record.request_payload, [
+              "payment_mode",
+            ])}
+          />
+          <DetailRow
+            label="Delivery pincode"
+            value={getPayloadNumberOrString(record.request_payload, ["pincode"])}
+          />
+          <DetailRow
+            label="Weight"
+            value={getWeight(record.request_payload)}
+          />
+          <DetailRow
+            label="Dimensions"
+            value={getDimensions(record.request_payload)}
+          />
+          <DetailRow
+            label="COD amount"
+            value={getPayloadNumberOrString(record.request_payload, [
+              "total_cod_amount",
+            ])}
+          />
+        </div>
+      </AdminCard>
+
       {(record.error_message || record.cancel_error_message) && (
         <AdminCard title="Errors">
           {record.error_message && (
-            <p className="text-sm text-red-700">{record.error_message}</p>
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-red-700">
+                {record.error_message}
+              </p>
+              {trivaraErrorHelp && (
+                <p className="text-sm leading-6 text-gray-600">
+                  {trivaraErrorHelp}
+                </p>
+              )}
+            </div>
           )}
           {record.cancel_error_message && (
             <p className="mt-2 text-sm text-red-700">
