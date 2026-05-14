@@ -114,6 +114,7 @@ const ImageGallery = ({ images, variant = "default" }: ImageGalleryProps) => {
               alt="Primary product image"
               fill
               priority
+              quality={95}
               sizes="(min-width: 1024px) 620px, 100vw"
               className="object-cover"
             />
@@ -182,6 +183,8 @@ const ImageGallery = ({ images, variant = "default" }: ImageGalleryProps) => {
                     alt={`Product image ${index + 1}`}
                     fill
                     priority={index === 0}
+                    loading={index === 0 ? undefined : "lazy"}
+                    quality={95}
                     sizes="(min-width: 1024px) 620px, 100vw"
                     className="object-cover"
                   />
@@ -279,6 +282,7 @@ const ImageGallery = ({ images, variant = "default" }: ImageGalleryProps) => {
                             sizes="100vw"
                             className="object-contain"
                             priority={index === zoomIndex}
+                            unoptimized
                           />
                         ) : (
                           <div className="h-full w-full bg-ui-bg-subtle" />
@@ -332,6 +336,7 @@ const ImageThumb = ({
           src={image.url}
           alt={`Thumbnail ${index + 1}`}
           fill
+          quality={95}
           sizes="120px"
           className="object-cover"
         />

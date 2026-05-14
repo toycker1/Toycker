@@ -1,15 +1,16 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useCallback, useState, useRef, useEffect } from "react"
+import Image from "next/image"
 import ReactCrop, { type Crop, type PixelCrop, } from "react-image-crop"
 import "react-image-crop/dist/ReactCrop.css"
 import { MagnifyingGlassIcon, SparklesIcon, PhotoIcon, CloudArrowUpIcon, CameraIcon } from "@heroicons/react/24/outline"
 import { useImageSearchStore } from "@/lib/store/image-search-store"
 import { useRouter } from "next/navigation"
-import ProductPreview from "@modules/products/components/product-preview"
-import { Product } from "@/lib/supabase/types"
 import { ProductCardSkeleton } from "@modules/common/components/skeleton/product-grid-skeleton"
 import { resizeImageCropFromElement } from "@/lib/util/image-processing"
+import LocalizedClientLink from "@modules/common/components/localized-client-link"
+import { fixUrl } from "@lib/util/images"
 import {
     SEARCH_IMAGE_CLIENT_MAX_DIMENSION,
     SEARCH_IMAGE_UPLOAD_QUALITY,
@@ -102,7 +103,7 @@ export default function VisualSearchInterface() {
         setHasInteracted(true)
     }
 
-    const performSearch = async (forceFullImage = false, cropOverride?: PixelCrop) => {
+    const performSearch = useCallback(async (forceFullImage = false, cropOverride?: PixelCrop) => {
         if (!file || !imgRef.current) return
 
         const targetCrop = cropOverride || completedCrop
@@ -173,7 +174,7 @@ export default function VisualSearchInterface() {
                 setLoading(false)
             }
         }
-    }
+    }, [completedCrop, file])
 
     // Auto-search on crop completion ONLY after first interaction
     useEffect(() => {
@@ -181,7 +182,7 @@ export default function VisualSearchInterface() {
             const timer = setTimeout(() => performSearch(false), 500)
             return () => clearTimeout(timer)
         }
-    }, [completedCrop, hasInteracted])
+    }, [completedCrop, hasInteracted, performSearch])
 
     if (!isMounted) return null
 
@@ -202,7 +203,7 @@ export default function VisualSearchInterface() {
                         </div>
                         <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Toy Finder</h2>
                         <p className="text-slate-500 text-lg">
-                            Can't find the right words? Upload a photo to find matching toys instantly.
+                            Can&apos;t find the right words? Upload a photo to find matching toys instantly.
                         </p>
                     </div>
 
@@ -307,21 +308,7 @@ export default function VisualSearchInterface() {
                     {results && results.products.length > 0 && !loading && (
                         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
                             {results.products.map((product) => (
-                                <div key={product.id}>
-                                    <ProductPreview
-                                        product={{
-                                            id: product.id,
-                                            name: product.title,
-                                            title: product.title,
-                                            handle: product.handle,
-                                            thumbnail: product.thumbnail,
-                                            price: product.price.amount,
-                                            currency_code: product.price.currencyCode,
-                                            stock_count: product.stock_count,
-                                            status: "active",
-                                        } as unknown as Product}
-                                    />
-                                </div>
+                                <VisualSearchResultCard key={product.id} product={product} />
                             ))}
                         </div>
                     )}
@@ -347,5 +334,48 @@ export default function VisualSearchInterface() {
                 </div>
             </div>
         </div>
+    )
+}
+
+const VisualSearchResultCard = ({ product }: { product: SearchProduct }) => {
+    const imageUrl = product.thumbnail ? fixUrl(product.thumbnail) : null
+    const inStock = product.stock_count > 0
+
+    return (
+        <LocalizedClientLink
+            href={`/products/${product.handle}`}
+            prefetch={false}
+            className="group block overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+        >
+            <div className="relative aspect-square w-full overflow-hidden bg-slate-100">
+                {imageUrl ? (
+                    <Image
+                        src={imageUrl}
+                        alt={product.title}
+                        fill
+                        quality={95}
+                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                        className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+                    />
+                ) : (
+                    <div className="flex h-full w-full items-center justify-center text-slate-400">
+                        No image
+                    </div>
+                )}
+            </div>
+            <div className="space-y-2 p-4">
+                <h3 className="line-clamp-2 min-h-10 text-sm font-bold leading-tight text-slate-900">
+                    {product.title}
+                </h3>
+                <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-bold text-[#E7353A]">
+                        {product.price.formatted}
+                    </span>
+                    <span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${inStock ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                        {inStock ? "In stock" : "Out of stock"}
+                    </span>
+                </div>
+            </div>
+        </LocalizedClientLink>
     )
 }

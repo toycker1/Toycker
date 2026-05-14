@@ -1,7 +1,5 @@
-"use client"
-
 import Link from "next/link"
-import { Fragment, useMemo, useState, type MouseEvent, type FocusEvent } from "react"
+import { Fragment } from "react"
 
 type CategoryItem = {
   id: string
@@ -104,49 +102,28 @@ const StarSeparator = () => (
 )
 
 const CategoryMarquee = () => {
-  const [isPaused, setIsPaused] = useState(false)
+  const marqueeItems: MarqueeItem[] = []
 
-  const marqueeItems = useMemo<MarqueeItem[]>(() => {
-    const runs: MarqueeItem[] = []
-
-    for (let passIndex = 0; passIndex < 2; passIndex += 1) {
-      CATEGORY_ITEMS.forEach((item) => {
-        runs.push({
-          ...item,
-          isDuplicate: passIndex === 1,
-        })
+  for (let passIndex = 0; passIndex < 2; passIndex += 1) {
+    CATEGORY_ITEMS.forEach((item) => {
+      marqueeItems.push({
+        ...item,
+        isDuplicate: passIndex === 1,
       })
-    }
-
-    return runs
-  }, [])
-
-  const handlePreview = (
-    _event: MouseEvent<HTMLAnchorElement> | FocusEvent<HTMLAnchorElement>,
-  ) => {
-    setIsPaused(true)
-  }
-
-  const clearPreview = () => {
-    setIsPaused(false)
+    })
   }
 
   return (
     <section className="bg-[#cfbfff] md:py-10 py-4" aria-label="Category highlights marquee">
-      <div className="w-full overflow-hidden">
+      <div className="group w-full overflow-hidden">
         <div
-          className="category-marquee-track flex w-max items-center text-lg font-semibold text-white sm:text-xl animate-category-marquee"
-          style={{ animationPlayState: isPaused ? "paused" : "running" }}
+          className="category-marquee-track flex w-max items-center text-lg font-semibold text-white sm:text-xl animate-category-marquee group-hover:[animation-play-state:paused] group-focus-within:[animation-play-state:paused]"
         >
           {marqueeItems.map((item, index) => (
             <Fragment key={`${item.id}-${index}`}>
               <Link
                 href={`/categories/${item.slug}`}
                 className="flex items-center gap-3 whitespace-nowrap px-4 text-black transition-colors hover:text-[#5921ff] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
-                onMouseEnter={handlePreview}
-                onFocus={handlePreview}
-                onMouseLeave={clearPreview}
-                onBlur={clearPreview}
                 aria-hidden={item.isDuplicate}
                 tabIndex={item.isDuplicate ? -1 : undefined}
               >

@@ -1,6 +1,7 @@
 "use client"
 
-import { Stripe, StripeElementsOptions } from "@stripe/stripe-js"
+import { loadStripe } from "@stripe/stripe-js"
+import type { Stripe, StripeElementsOptions } from "@stripe/stripe-js"
 import { Elements } from "@stripe/react-stripe-js"
 import { PaymentSession } from "@/lib/supabase/types"
 import { createContext } from "react"
@@ -8,16 +9,26 @@ import { createContext } from "react"
 type StripeWrapperProps = {
   paymentSession: PaymentSession
   stripeKey?: string
-  stripePromise: Promise<Stripe | null> | null
   children: React.ReactNode
 }
 
 export const StripeContext = createContext(false)
+const stripePromiseCache = new Map<string, Promise<Stripe | null>>()
+
+const getStripePromise = (stripeKey: string) => {
+  const cachedPromise = stripePromiseCache.get(stripeKey)
+  if (cachedPromise) {
+    return cachedPromise
+  }
+
+  const stripePromise = loadStripe(stripeKey)
+  stripePromiseCache.set(stripeKey, stripePromise)
+  return stripePromise
+}
 
 const StripeWrapper: React.FC<StripeWrapperProps> = ({
   paymentSession,
   stripeKey,
-  stripePromise,
   children,
 }) => {
   const options: StripeElementsOptions = {
@@ -30,12 +41,6 @@ const StripeWrapper: React.FC<StripeWrapperProps> = ({
     )
   }
 
-  if (!stripePromise) {
-    throw new Error(
-      "Stripe promise is missing. Make sure you have provided a valid Stripe key."
-    )
-  }
-
   if (!paymentSession?.data?.client_secret) {
     throw new Error(
       "Stripe client secret is missing. Cannot initialize Stripe."
@@ -44,7 +49,7 @@ const StripeWrapper: React.FC<StripeWrapperProps> = ({
 
   return (
     <StripeContext.Provider value={true}>
-      <Elements options={options} stripe={stripePromise}>
+      <Elements options={options} stripe={getStripePromise(stripeKey)}>
         {children}
       </Elements>
     </StripeContext.Provider>

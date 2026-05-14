@@ -1,6 +1,7 @@
 "use client"
 
 import { RadioGroup } from "@headlessui/react"
+import dynamic from "next/dynamic"
 import {
   getPaymentMethodBadgeLabel,
   isStripeLike,
@@ -9,12 +10,15 @@ import {
 } from "@lib/constants"
 import { Text } from "@modules/common/components/text"
 import ErrorMessage from "@modules/checkout/components/error-message"
-import PaymentContainer, {
-  StripeCardContainer,
-} from "@modules/checkout/components/payment-container"
+import PaymentContainer from "@modules/checkout/components/payment-container"
 import { useEffect, useMemo, useState } from "react"
 import { Cart } from "@/lib/supabase/types"
 import { useCheckout } from "../../context/checkout-context"
+
+const StripeCardContainer = dynamic(
+  () => import("@modules/checkout/components/payment-container/stripe-card-container"),
+  { ssr: false }
+)
 
 const Payment = ({
   cart,

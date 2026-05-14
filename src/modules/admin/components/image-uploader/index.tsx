@@ -154,6 +154,7 @@ export default function ImageUploader({
                                 src={value}
                                 className="w-full h-full object-cover"
                                 controls
+                                preload="none"
                             />
                         ) : null}
                     </div>
@@ -203,7 +204,7 @@ export default function ImageUploader({
                                         : "Drag & drop a file here, or click to select"}
                                 </p>
                                 <p className="mt-1 text-xs text-gray-500">
-                                    Max {effectiveMaxSizeMB}MB • {acceptedFormats.map((f) => f.split("/")[1]).join(", ")}
+                                    Max {effectiveMaxSizeMB}MB - use WebP/JPEG when possible
                                 </p>
                             </>
                         )}

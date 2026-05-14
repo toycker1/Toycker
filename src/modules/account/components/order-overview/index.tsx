@@ -4,9 +4,9 @@ import { Button } from "@modules/common/components/button"
 
 import OrderCard from "../order-card"
 import LocalizedClientLink from "@modules/common/components/localized-client-link"
-import { Order } from "@/lib/supabase/types"
+import { AccountOrderSummary } from "@lib/data/orders"
 
-const OrderOverview = ({ orders }: { orders: Order[] }) => {
+const OrderOverview = ({ orders }: { orders: AccountOrderSummary[] }) => {
   if (orders?.length) {
     return (
       <div className="flex flex-col gap-4 w-full">

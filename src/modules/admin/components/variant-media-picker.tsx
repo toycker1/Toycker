@@ -120,7 +120,7 @@ export default function VariantMediaPicker({
 
                             <div className="mt-4 pt-4 border-t border-gray-50">
                                 <p className="text-[9px] text-gray-400 italic font-medium leading-tight">
-                                    Tip: Assigning a unique image helps customers see exactly what they're buying.
+                                    Tip: Assigning a unique image helps customers see exactly what they&apos;re buying.
                                 </p>
                             </div>
                         </div>

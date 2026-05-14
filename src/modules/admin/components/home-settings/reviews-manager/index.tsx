@@ -94,7 +94,7 @@ function SortableReviewItem({ hr, index, onRemove }: SortableReviewItemProps) {
                             <span className="text-xs font-black text-amber-700">{hr.review?.rating.toFixed(1)}</span>
                         </div>
                     </div>
-                    <p className="text-sm text-slate-500 line-clamp-1 italic mt-2 font-medium leading-relaxed">"{hr.review?.content}"</p>
+                    <p className="text-sm text-slate-500 line-clamp-1 italic mt-2 font-medium leading-relaxed">&ldquo;{hr.review?.content}&rdquo;</p>
                     <div className="flex items-center gap-4 mt-3">
                         <span className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.1em] bg-indigo-50 px-3 py-1.5 rounded-full border border-indigo-100 truncate max-w-[150px]">
                             {hr.review?.product_name || hr.review?.product?.name || "Product Info"}
@@ -338,7 +338,7 @@ export default function ReviewsManager({ initialHomeReviews, allApprovedReviews 
                 <div>
                     <h3 className="text-lg font-black text-slate-800 tracking-tight">Featured Homepage Reviews</h3>
                     <p className="text-sm text-slate-500 mt-1 font-medium">
-                        These reviews are prominently displayed on your store's homepage.
+                        These reviews are prominently displayed on your store&apos;s homepage.
                     </p>
                 </div>
                 <div className="flex flex-col items-end gap-2">
@@ -480,7 +480,7 @@ export default function ReviewsManager({ initialHomeReviews, allApprovedReviews 
                                                         <span className="text-[10px] font-black">{review.rating.toFixed(1)}</span>
                                                     </div>
                                                 </div>
-                                                <p className="text-sm text-slate-500 line-clamp-2 italic leading-relaxed">"{review.content}"</p>
+                                                <p className="text-sm text-slate-500 line-clamp-2 italic leading-relaxed">&ldquo;{review.content}&rdquo;</p>
                                                 <div className="mt-3 flex flex-wrap items-center gap-2">
                                                     <span className="text-[10px] text-indigo-600 font-black uppercase tracking-wider bg-indigo-50 px-2 py-1 rounded-md max-w-[120px] truncate">
                                                         {review.product_name || review.product?.name || "Product Info"}

@@ -92,6 +92,7 @@ const ReviewCard = ({ review }: { review: Review }) => {
           ref={videoRef}
           controls={isPlaying}
           playsInline
+          preload="none"
           poster={review.posterSrc ?? undefined}
           className="absolute inset-0 h-full w-full object-cover transition duration-500 ease-out group-hover:scale-105"
           aria-label={`Video review from ${review.author}`}

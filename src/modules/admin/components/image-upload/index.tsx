@@ -4,6 +4,13 @@ import { useState, useRef } from "react"
 import { PhotoIcon, XMarkIcon } from "@heroicons/react/24/outline"
 import { getPresignedUploadUrl } from "@/lib/actions/storage"
 import { buildPublicMediaUrl } from "@/lib/util/media-url"
+import {
+  PRODUCT_MEDIA_ACCEPT_VALUE,
+  PRODUCT_MEDIA_ALLOWED_TYPES_LABEL,
+  PRODUCT_MEDIA_MAX_FILE_SIZE_BYTES,
+  PRODUCT_MEDIA_MAX_FILE_SIZE_MB,
+  isProductMediaImageType,
+} from "@/lib/constants/upload-file-types"
 
 interface ImageUploadProps {
   name: string
@@ -21,15 +28,13 @@ export default function ImageUpload({ name, initialUrl, label = "Image URL" }: I
     const file = e.target.files?.[0]
     if (!file) return
 
-    // Validate file type
-    if (!file.type.startsWith("image/")) {
-      alert("Please select an image file")
+    if (!isProductMediaImageType(file.type)) {
+      alert(`Please select one of these image types: ${PRODUCT_MEDIA_ALLOWED_TYPES_LABEL}`)
       return
     }
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      alert("Image size must be less than 5MB")
+    if (file.size > PRODUCT_MEDIA_MAX_FILE_SIZE_BYTES) {
+      alert(`Image size must be ${PRODUCT_MEDIA_MAX_FILE_SIZE_MB}MB or smaller`)
       return
     }
 
@@ -126,7 +131,7 @@ export default function ImageUpload({ name, initialUrl, label = "Image URL" }: I
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept={PRODUCT_MEDIA_ACCEPT_VALUE}
             onChange={handleFileSelect}
             className="hidden"
             disabled={isUploading}
@@ -144,7 +149,9 @@ export default function ImageUpload({ name, initialUrl, label = "Image URL" }: I
               <p className="text-sm font-bold text-gray-900">
                 {isUploading ? `Uploading... ${uploadProgress}%` : `Upload ${label}`}
               </p>
-              <p className="mt-1 text-xs text-gray-400">JPG, PNG, GIF up to 5MB</p>
+              <p className="mt-1 text-xs text-gray-400">
+                {PRODUCT_MEDIA_ALLOWED_TYPES_LABEL} up to {PRODUCT_MEDIA_MAX_FILE_SIZE_MB}MB
+              </p>
             </div>
           </button>
 

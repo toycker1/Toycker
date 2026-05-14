@@ -3,7 +3,10 @@ import { notFound } from "next/navigation"
 
 import { getCategoryByHandle, listCategories } from "@lib/data/categories"
 import CategoryTemplate from "@modules/categories/templates"
-import { SortOptions } from "@modules/store/components/refinement-list/types"
+import {
+  isViewMode,
+  SortOptions,
+} from "@modules/store/components/refinement-list/types"
 import { getClubSettings } from "@lib/data/club"
 
 type Props = {
@@ -24,11 +27,9 @@ export async function generateStaticParams() {
     return []
   }
 
-  const categoryHandles = categories.map(
-    (category: any) => category.handle
-  )
+  const categoryHandles = categories.map((category) => category.handle)
 
-  return categoryHandles.map((handle: any) => ({
+  return categoryHandles.map((handle) => ({
     category: [handle],
   }))
 }
@@ -76,7 +77,7 @@ export default async function CategoryPage(props: Props) {
       category={productCategory}
       sortBy={sortBy}
       page={page}
-      viewMode={view as any}
+      viewMode={isViewMode(view) ? view : undefined}
       countryCode="in"
       clubDiscountPercentage={clubSettings?.discount_percentage}
     />

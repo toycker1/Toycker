@@ -1,5 +1,6 @@
 "use client"
 
+import dynamic from "next/dynamic"
 import { Text } from "@modules/common/components/text"
 import { cn } from "@lib/util/cn"
 import { Product } from "@/lib/supabase/types"
@@ -11,13 +12,16 @@ import { useOptionalCartSidebar } from "@modules/layout/context/cart-sidebar-con
 import { useCartStore } from "@modules/cart/context/cart-store-context"
 import SafeRichText from "@modules/common/components/safe-rich-text"
 import { Loader2, ShoppingBag } from "lucide-react"
-import ProductQuickViewModal from "./quick-view-modal"
 import { getProductPrice } from "@lib/util/get-product-price"
 
 import Thumbnail from "../thumbnail"
 import PreviewPrice from "./price"
 import type { MouseEvent } from "react"
 import { useState, useTransition, useMemo } from "react"
+
+const ProductQuickViewModal = dynamic(() => import("./quick-view-modal"), {
+  ssr: false,
+})
 
 type ProductPreviewProps = {
   product: Product
@@ -26,6 +30,7 @@ type ProductPreviewProps = {
   clubDiscountPercentage?: number
   showAction?: boolean
   isMinimal?: boolean
+  imagePriority?: boolean
 }
 
 export default function ProductPreview({
@@ -35,6 +40,7 @@ export default function ProductPreview({
   clubDiscountPercentage,
   showAction = true,
   isMinimal = false,
+  imagePriority = false,
 }: ProductPreviewProps) {
   const isListView = viewMode === "list"
   const [isPending, startTransition] = useTransition()
@@ -190,6 +196,7 @@ export default function ProductPreview({
               }
               size="full"
               isFeatured={isFeatured}
+              priority={imagePriority}
               className="h-full w-full rounded-2xl border-none bg-transparent p-0 shadow-none object-cover transition-transform duration-500 group-hover:scale-[1.04]"
             />
             {/* Desktop Hover Actions (Top Right) */}
@@ -285,11 +292,13 @@ export default function ProductPreview({
         </LocalizedClientLink>
       </div>
 
-      <ProductQuickViewModal
-        product={product}
-        isOpen={isQuickViewOpen}
-        onClose={() => setIsQuickViewOpen(false)}
-      />
+      {isQuickViewOpen && (
+        <ProductQuickViewModal
+          product={product}
+          isOpen={isQuickViewOpen}
+          onClose={() => setIsQuickViewOpen(false)}
+        />
+      )}
     </>
   )
 }

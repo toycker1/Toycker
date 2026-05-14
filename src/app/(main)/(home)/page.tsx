@@ -11,9 +11,6 @@ import LazyLoadSection from "@modules/common/components/lazy-load-section"
 const ShopByAge = dynamic(() => import("@modules/home/components/shop-by-age"), {
   loading: () => <div className="h-[400px] animate-pulse bg-ui-bg-subtle" />
 })
-const ReviewMediaHub = dynamic(() => import("@modules/home/components/review-media-hub"), {
-  loading: () => <div className="h-[500px] animate-pulse bg-ui-bg-subtle" />
-})
 const WhyChooseUs = dynamic(() => import("@modules/home/components/why-choose-us"))
 
 export const metadata: Metadata = {
@@ -23,11 +20,9 @@ export const metadata: Metadata = {
 
 import HeroServer from "@modules/home/components/hero/server"
 import ExclusiveCollectionsServer from "@modules/home/components/exclusive-collections/server"
-import { listHomeReviewsStorefront } from "@/lib/actions/home-reviews"
+import ReviewMediaHubServer from "@modules/home/components/review-media-hub/server"
 
 export default async function Home() {
-  const homeReviews = await listHomeReviewsStorefront()
-
   return (
     <>
       {/* Above-the-fold content - streams in immediately */}
@@ -42,9 +37,9 @@ export default async function Home() {
         <PopularToySet />
       </Suspense>
 
-      {/* <LazyLoadSection minHeight="400px"> */}
-      <ShopByAge />
-      {/* </LazyLoadSection> */}
+      <LazyLoadSection minHeight="400px">
+        <ShopByAge />
+      </LazyLoadSection>
 
       <Suspense fallback={<div className="h-[500px] animate-pulse bg-ui-bg-subtle" />}>
         <LazyLoadSection minHeight="500px">
@@ -56,11 +51,11 @@ export default async function Home() {
         <BestSelling />
       </Suspense>
 
-      {homeReviews.length > 0 && (
+      <Suspense fallback={<div className="h-[500px] animate-pulse bg-ui-bg-subtle" />}>
         <LazyLoadSection minHeight="500px">
-          <ReviewMediaHub reviews={homeReviews} />
+          <ReviewMediaHubServer />
         </LazyLoadSection>
-      )}
+      </Suspense>
 
       <LazyLoadSection minHeight="400px">
         <WhyChooseUs />

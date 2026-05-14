@@ -1,14 +1,26 @@
 "use client"
 
-import { useEffect, useMemo } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@lib/supabase/client"
 
 export default function RealtimeOrdersListener() {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
+    const scheduleRefresh = () => {
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current)
+      }
+
+      refreshTimerRef.current = setTimeout(() => {
+        router.refresh()
+        refreshTimerRef.current = null
+      }, 500)
+    }
+
     const channel = supabase
       .channel("admin-orders-list")
       .on(
@@ -18,9 +30,7 @@ export default function RealtimeOrdersListener() {
           schema: "public",
           table: "orders",
         },
-        () => {
-          router.refresh()
-        }
+        scheduleRefresh
       )
       .on(
         "postgres_changes",
@@ -29,13 +39,15 @@ export default function RealtimeOrdersListener() {
           schema: "public",
           table: "orders",
         },
-        () => {
-          router.refresh()
-        }
+        scheduleRefresh
       )
       .subscribe()
 
     return () => {
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current)
+        refreshTimerRef.current = null
+      }
       supabase.removeChannel(channel)
     }
   }, [router, supabase])

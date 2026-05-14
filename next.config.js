@@ -23,8 +23,6 @@ const withSerwist = withSerwistInit({
 /**
  * @type {import('next').NextConfig}
  */
-const IMAGE_QUALITIES = [50, 75, 90]
-
 const nextConfig = {
   reactStrictMode: true,
 
@@ -91,7 +89,9 @@ const nextConfig = {
         ]
         : []),
     ],
-    qualities: IMAGE_QUALITIES,
+    // Serve Cloudflare/R2 media directly instead of routing through Vercel
+    // Image Optimization. This keeps live media available when Vercel image
+    // transformation limits are reached.
     unoptimized: true,
   },
   experimental: {

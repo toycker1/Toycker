@@ -1,11 +1,10 @@
 import LocalizedClientLink from "@modules/common/components/localized-client-link"
-import ProductPreview from "@modules/products/components/product-preview"
-import { getCollectionProductsByHandle } from "@modules/home/lib/get-collection-products"
+import HomeProductCard from "@modules/home/components/home-product-card"
+import { listHomeCollectionProductCards } from "@modules/home/lib/home-product-cards"
 
 const BEST_SELLING_COLLECTION_HANDLE = "best-selling"
 const BEST_SELLING_SECTION_LIMIT = 10
 
-import { getRegion } from "@lib/data/regions"
 import { getClubSettings } from "@lib/data/club"
 
 type BestSellingProps = {
@@ -13,17 +12,14 @@ type BestSellingProps = {
 }
 
 const BestSelling = async ({ collectionId }: BestSellingProps) => {
-  const [region, clubSettings] = await Promise.all([
-    getRegion(),
+  const [products, clubSettings] = await Promise.all([
+    listHomeCollectionProductCards({
+      handle: BEST_SELLING_COLLECTION_HANDLE,
+      limit: BEST_SELLING_SECTION_LIMIT,
+      collectionId,
+    }),
     getClubSettings(),
   ])
-
-  const products = await getCollectionProductsByHandle({
-    handle: BEST_SELLING_COLLECTION_HANDLE,
-    regionId: region.id,
-    limit: BEST_SELLING_SECTION_LIMIT,
-    collectionId,
-  })
 
   const clubDiscountPercentage = clubSettings.discount_percentage
 
@@ -58,9 +54,8 @@ const BestSelling = async ({ collectionId }: BestSellingProps) => {
         <ul className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-5 lg:[&>li:nth-last-child(-n+2)]:hidden xl:[&>li:nth-last-child(-n+2)]:block">
           {products.map((product) => (
             <li key={product.id}>
-              <ProductPreview
+              <HomeProductCard
                 product={product}
-                viewMode="grid-5"
                 clubDiscountPercentage={clubDiscountPercentage}
               />
             </li>

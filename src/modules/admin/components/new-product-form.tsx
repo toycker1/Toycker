@@ -4,7 +4,7 @@ import { Category, Collection, VariantFormData } from "@/lib/supabase/types"
 import { createProduct } from "@/lib/data/admin"
 import AdminCard from "./admin-card"
 import { SubmitButton } from "./submit-button"
-import RichTextEditor from "./rich-text-editor"
+import RichTextEditor from "./rich-text-editor-loader"
 import CollectionCheckboxList from "./collection-checkbox-list"
 import { TrashIcon, PlusIcon, Layers, Package, Tag, Globe, Edit2, Sparkles, ChevronDown, Link2, Link2Off } from "lucide-react"
 import { useActionState, useEffect, useState } from "react"
@@ -23,6 +23,12 @@ type NewProductFormProps = {
   categories: Category[]
 }
 
+type VariantFieldValue = VariantFormData[keyof VariantFormData]
+type OptionDefinition = {
+  title: string
+  values: string[]
+}
+
 export default function NewProductForm({ collections, categories }: NewProductFormProps) {
   const { showToast } = useToast()
   const [productType, setProductType] = useState<"single" | "variant">("single")
@@ -35,7 +41,7 @@ export default function NewProductForm({ collections, categories }: NewProductFo
   const videoId = getYoutubeId(videoUrl)
   const embedUrl = getYoutubeEmbedUrl(videoId)
 
-  const [options, setOptions] = useState<{ title: string; values: string[] }[]>([
+  const [options, setOptions] = useState<OptionDefinition[]>([
     { title: "Color", values: [] }
   ])
   const [openPickerIndex, setOpenPickerIndex] = useState<number | null>(null)
@@ -95,24 +101,27 @@ export default function NewProductForm({ collections, categories }: NewProductFo
     setVariants(newVariants)
   }
 
-  const handleVariantChange = (index: number, field: keyof VariantFormData, value: any) => {
+  const handleVariantChange = (index: number, field: keyof VariantFormData, value: VariantFieldValue) => {
     const newVariants = [...variants]
     newVariants[index] = { ...newVariants[index], [field]: value }
     setVariants(newVariants)
   }
 
-  const handleUpdateOption = (idx: number, field: string, value: any) => {
+  const handleUpdateOption = <TField extends keyof OptionDefinition>(
+    idx: number,
+    field: TField,
+    value: OptionDefinition[TField]
+  ) => {
     const nextOptions = [...options]
     let processedValue = value
 
     // Auto-capitalize values if it's the values field
     if (field === "values" && Array.isArray(value)) {
-      processedValue = value.map(v =>
+      processedValue = value.map((v) =>
         typeof v === "string" ? v.toUpperCase() : v
-      )
+      ) as OptionDefinition[TField]
     }
 
-    // @ts-ignore
     nextOptions[idx] = { ...nextOptions[idx], [field]: processedValue }
     setOptions(nextOptions)
   }
@@ -127,7 +136,14 @@ export default function NewProductForm({ collections, categories }: NewProductFo
     const validOptions = options.filter(o => o.title && o.values.length > 0)
     if (validOptions.length === 0) return
 
-    const cartesian = (...a: any[]) => a.reduce((a, b) => a.flatMap((d: any) => b.map((e: any) => [d, e].flat())))
+    const cartesian = (...sets: string[][]): string[][] =>
+      sets.reduce<string[][]>(
+        (acc, set) =>
+          acc.flatMap((combination) =>
+            set.map((value) => [...combination, value])
+          ),
+        [[]]
+      )
     const combinations = validOptions.length === 1
       ? validOptions[0].values.map(v => [v])
       : cartesian(...validOptions.map(o => o.values))

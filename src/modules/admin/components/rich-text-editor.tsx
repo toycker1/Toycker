@@ -5,7 +5,7 @@ import StarterKit from "@tiptap/starter-kit"
 import { cn } from "@lib/util/cn"
 import React, { useEffect } from "react"
 
-type RichTextEditorProps = {
+export type RichTextEditorProps = {
   name: string
   defaultValue?: string
   placeholder?: string

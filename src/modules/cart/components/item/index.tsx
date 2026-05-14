@@ -23,6 +23,9 @@ type ItemProps = {
   currencyCode: string
 }
 
+const hasGiftWrap = (metadata: CartItem["metadata"]) =>
+  metadata?.gift_wrap === true
+
 const Item = ({ item, type = "full", currencyCode }: ItemProps) => {
   const { optimisticUpdateQuantity, isUpdating, isRemoving } = useCartStore()
   const [error, setError] = useState<string | null>(null)
@@ -34,8 +37,8 @@ const Item = ({ item, type = "full", currencyCode }: ItemProps) => {
   const handleQuantityChange = async (newQuantity: number) => {
     try {
       await optimisticUpdateQuantity(item.id, newQuantity)
-    } catch (err: any) {
-      setError(err.message || "Failed to update quantity")
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to update quantity")
     }
   }
 
@@ -92,14 +95,14 @@ const Item = ({ item, type = "full", currencyCode }: ItemProps) => {
   }
 
   return (
-    <div className="grid grid-cols-[auto_1fr_auto] md:grid-cols-[auto_1fr_auto] lg:grid-cols-[auto_1fr_100px_120px_100px] gap-x-4 gap-y-3 w-full py-5 sm:py-6 border-b border-slate-100 last:border-0" data-testid="product-row">
+    <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr_100px_120px_100px] gap-x-4 gap-y-4 w-full py-5 sm:py-6 border-b border-slate-100 last:border-0" data-testid="product-row">
       {/* Thumbnail Column */}
       <div className="!pl-0 !pr-0">
         {renderThumbnail()}
       </div>
 
       {/* Product Info Column */}
-      <div className="flex flex-col justify-center min-w-0 pr-2">
+      <div className="flex flex-col justify-center min-w-0">
         {canNavigate ? (
           <LocalizedClientLink
             href={`/products/${item.product_handle}`}
@@ -129,9 +132,19 @@ const Item = ({ item, type = "full", currencyCode }: ItemProps) => {
           </div>
         )}
 
-        {(item.metadata as any)?.gift_wrap && (
+        {hasGiftWrap(item.metadata) && (
           <div className="mt-1.5 flex items-center gap-1">
             <span className="text-[10px] font-bold text-pink-500 uppercase tracking-wider">Includes Gift Wrap</span>
+          </div>
+        )}
+
+        {type === "full" && (
+          <div className="lg:hidden mt-2">
+            <LineItemPrice
+              item={item}
+              style="tight"
+              currencyCode={currencyCode}
+            />
           </div>
         )}
 
@@ -142,27 +155,28 @@ const Item = ({ item, type = "full", currencyCode }: ItemProps) => {
           </div>
         )}
 
-        {/* Mobile-only: Quantity and Remove buttons below title */}
-        {type === "full" && (
-          <div className="flex md:hidden items-center gap-2 mt-3">
-            <div className="flex items-center gap-2 flex-1">
-              <span className="text-xs text-slate-500">Qty:</span>
-              <QuantitySelector
-                quantity={item.quantity}
-                onChange={handleQuantityChange}
-                max={maxQuantity}
-                loading={isUpdating(item.id)}
-                disabled={isRemoving(item.id)}
-                size="small"
-                data-testid="product-select-button"
-              />
-            </div>
-            <div className="flex-shrink-0 ml-auto">
-              <DeleteButton id={item.id} data-testid="product-delete-button" />
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* Mobile/tablet: full-width action row */}
+      {type === "full" && (
+        <div className="flex lg:hidden items-center justify-between gap-3 pt-1">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="text-xs text-slate-500 shrink-0">Qty:</span>
+            <QuantitySelector
+              quantity={item.quantity}
+              onChange={handleQuantityChange}
+              max={maxQuantity}
+              loading={isUpdating(item.id)}
+              disabled={isRemoving(item.id)}
+              size="small"
+              data-testid="product-select-button"
+            />
+          </div>
+          <div className="flex shrink-0 justify-end">
+            <DeleteButton id={item.id} data-testid="product-delete-button" />
+          </div>
+        </div>
+      )}
 
       {/* Quantity Column - Desktop only */}
       {type === "full" && (
@@ -190,7 +204,7 @@ const Item = ({ item, type = "full", currencyCode }: ItemProps) => {
       )}
 
       {/* Total Price Column - All views */}
-      <div className="flex items-center justify-end min-w-[90px]">
+      <div className="hidden lg:flex items-center justify-end min-w-[90px]">
         <LineItemPrice
           item={item}
           style="tight"

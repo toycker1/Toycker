@@ -1,6 +1,7 @@
 import React from "react"
 import Nav from "@modules/layout/templates/nav"
 import Footer from "@modules/layout/templates/footer"
+import StorefrontProviders from "../storefront-providers"
 
 export default function CheckoutLayout({
   children,
@@ -8,12 +9,12 @@ export default function CheckoutLayout({
   children: React.ReactNode
 }) {
   return (
-    <>
+    <StorefrontProviders>
       <Nav />
       <main className="relative min-h-[calc(100vh-400px)]">
         {children}
       </main>
       <Footer />
-    </>
+    </StorefrontProviders>
   )
 }

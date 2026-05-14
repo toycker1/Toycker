@@ -11,8 +11,10 @@ export const metadata: Metadata = {
 }
 
 export default async function Orders() {
-    const customer = await retrieveCustomer()
-    const orders = await listOrders()
+    const [customer, orders] = await Promise.all([
+        retrieveCustomer(),
+        listOrders(),
+    ])
 
     if (!customer) {
         notFound()

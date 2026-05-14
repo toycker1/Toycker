@@ -4,7 +4,10 @@ import { notFound } from "next/navigation"
 import { getCollectionByHandle, listCollections } from "@lib/data/collections"
 import { Collection } from "@/lib/supabase/types"
 import CollectionTemplate from "@modules/collections/templates"
-import { SortOptions } from "@modules/store/components/refinement-list/types"
+import {
+  isViewMode,
+  SortOptions,
+} from "@modules/store/components/refinement-list/types"
 import { getClubSettings } from "@lib/data/club"
 
 type Props = {
@@ -63,7 +66,7 @@ export default async function CollectionPage(props: Props) {
       collection={collection}
       page={page}
       sortBy={sortBy}
-      viewMode={view as any}
+      viewMode={isViewMode(view) ? view : undefined}
       countryCode="in"
       clubDiscountPercentage={clubSettings?.discount_percentage}
     />

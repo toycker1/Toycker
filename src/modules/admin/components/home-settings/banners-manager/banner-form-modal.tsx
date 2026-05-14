@@ -184,7 +184,7 @@ export default function BannerFormModal({ isOpen, onClose, onSuccess, banner, de
                                         link_url: (prev.link_url || !banner) ? url : prev.link_url
                                     }))}
                                     acceptedFormats={["image/jpeg", "image/png", "image/webp"]}
-                                    maxSizeMB={5}
+                                    maxSizeMB={2}
                                 />
                             </div>
                         </div>

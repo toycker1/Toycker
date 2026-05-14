@@ -1,5 +1,5 @@
 import { Suspense } from "react"
-import { Product } from "@/lib/supabase/types"
+import { Product, Region } from "@/lib/supabase/types"
 import ProductActions from "@modules/products/components/product-actions"
 
 /**
@@ -15,7 +15,7 @@ export default function ProductActionsWrapper({
   reviewStats,
 }: {
   product: Product
-  region: any
+  region: Region
   clubDiscountPercentage?: number
   reviewStats?: { average: number; count: number }
 }) {

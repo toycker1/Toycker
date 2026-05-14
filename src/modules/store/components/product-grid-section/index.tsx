@@ -73,6 +73,13 @@ const ProductGridSection = ({
   const isTransitioning = derived.isPending && context !== null
 
   const emptyStateHeading = useMemo(() => title || "Products", [title])
+  const priorityImageCount = derived.page === 1
+    ? derived.viewMode === "grid-5"
+      ? 5
+      : derived.viewMode === "list"
+        ? 2
+        : 4
+    : 0
 
   return (
     <section className="space-y-6" data-loading={isLoading ? "true" : undefined} data-pending={isTransitioning ? "true" : undefined}>
@@ -90,23 +97,25 @@ const ProductGridSection = ({
         <div className="relative">
           {derived.viewMode === "list" ? (
             <div className={gridClassName} data-testid="products-list">
-              {derived.products.map((product) => (
+              {derived.products.map((product, index) => (
                 <ProductPreview
                   key={product.id}
                   product={product}
                   viewMode={derived.viewMode}
                   clubDiscountPercentage={clubDiscountPercentage}
+                  imagePriority={index < priorityImageCount}
                 />
               ))}
             </div>
           ) : (
             <ul className={gridClassName} data-testid="products-list">
-              {derived.products.map((product) => (
+              {derived.products.map((product, index) => (
                 <li key={product.id} className={itemClassName}>
                   <ProductPreview
                     product={product}
                     viewMode={derived.viewMode}
                     clubDiscountPercentage={clubDiscountPercentage}
+                    imagePriority={index < priorityImageCount}
                   />
                 </li>
               ))}
