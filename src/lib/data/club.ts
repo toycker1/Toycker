@@ -1,6 +1,7 @@
 "use server"
 
 import { cache } from 'react'
+import { createPublicClient } from "@/lib/supabase/public-server"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { ClubSettings } from "@/lib/supabase/types"
@@ -11,7 +12,7 @@ import {
 import { revalidateTag, unstable_cache } from "next/cache"
 
 const getClubSettingsInternal = async (): Promise<ClubSettings> => {
-    const supabase = await createClient()
+    const supabase = createPublicClient()
 
     const { data, error } = await supabase
         .from("club_settings")

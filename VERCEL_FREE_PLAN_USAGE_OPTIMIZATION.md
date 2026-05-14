@@ -648,6 +648,26 @@ Expected impact: High for Function Invocations and Edge Requests.
 
 ### 4. Make Public Storefront Pages Cacheable With ISR
 
+Status: Implemented and manually verified on May 14, 2026
+Change type: code-only route/data caching cleanup
+Supabase migration required: No
+
+Implementation summary:
+
+- Added a public no-cookie Supabase server client for public read-only storefront data.
+- Public product, category, collection, and club settings reads no longer need the cookie-based Supabase server helper.
+- Removed unnecessary `force-dynamic` from `/collections/[handle]`.
+- Added/standardized `revalidate = 300` for public storefront pages where safe.
+- Made `/policies/[slug]` static with `generateStaticParams()` and `dynamic = "force-static"`.
+- Removed server-side customer lookup from `/club`; private club-member information now loads client-side only for logged-in member context.
+- Manual testing confirmed logged-out `/club` sends no `/api/customer` request, while logged-in club-member data can load client-side.
+- PayU and Easebuzz callback health checks still returned `200 OK`.
+- Quality checks passed: `pnpm.cmd lint`, `pnpm.cmd exec tsc --noEmit`, `pnpm.cmd build`, and `pnpm.cmd test`.
+
+Important caveat:
+
+- `/store` still appears dynamic in the production build because it uses query-string filters and the existing `/api/storefront/products` POST `no-store` flow. That is tracked separately in the later product listing API caching priority.
+
 Relevant files:
 
 - `src/app/(main)/collections/[handle]/page.tsx`

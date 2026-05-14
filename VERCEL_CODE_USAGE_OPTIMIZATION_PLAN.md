@@ -197,6 +197,26 @@ This directly reduces:
 
 ## Priority 3: Make Public Storefront Pages Cache Correctly
 
+Status: Implemented and manually verified on May 14, 2026
+Change type: code-only route/data caching cleanup
+Supabase migration required: No
+
+Implementation summary:
+
+- `src/lib/supabase/public-server.ts` was added for public read-only Supabase queries without request cookies.
+- Public product, category, collection, and club settings reads now use the no-cookie public Supabase client.
+- `/collections/[handle]` no longer uses `force-dynamic`; it now uses ISR with `revalidate = 300`.
+- `/products/[handle]`, `/categories/[...category]`, `/collections/[handle]`, `/store`, and `/club` use `revalidate = 300`.
+- `/policies/[slug]` now uses `generateStaticParams()` and `dynamic = "force-static"`.
+- `/club` no longer calls `retrieveCustomer()` on the server. Private member status loads client-side only when needed.
+- Logged-out `/club` testing confirmed no `/api/customer` request is sent. Logged-in club-member testing confirmed private member data loads client-side.
+- PayU and Easebuzz callback health checks still returned `200 OK`.
+- Quality checks passed: `pnpm.cmd lint`, `pnpm.cmd exec tsc --noEmit`, `pnpm.cmd build`, and `pnpm.cmd test`.
+
+Important caveat:
+
+- `/store` still appears dynamic in the production build because it uses query-string filters and the existing `/api/storefront/products` POST `no-store` flow. That API conversion belongs to the later product listing API caching priority, not this Priority 3 implementation.
+
 ### Evidence
 
 Vercel shows many public routes with `0%` cached:

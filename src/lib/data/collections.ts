@@ -1,7 +1,7 @@
 "use server"
 
 import { unstable_cache } from "next/cache"
-import { createClient } from "@/lib/supabase/server"
+import { createPublicClient } from "@/lib/supabase/public-server"
 import { Collection } from "@/lib/supabase/types"
 
 // Cache TTL: 10 minutes in seconds
@@ -9,7 +9,7 @@ const COLLECTIONS_CACHE_TTL = 86400
 
 // Internal function for listCollections
 const listCollectionsInternal = async (page: number = 1, limit: number = 20) => {
-  const supabase = await createClient()
+  const supabase = createPublicClient()
   const from = (page - 1) * limit
   const to = from + limit - 1
 
@@ -34,7 +34,7 @@ export const listCollections = unstable_cache(
 
 // Internal function for getCollectionByHandle
 const getCollectionByHandleInternal = async (handle: string) => {
-  const supabase = await createClient()
+  const supabase = createPublicClient()
   const { data, error } = await supabase
     .from("collections")
     .select("id, title, handle, created_at, image_url")
