@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   description: "Explore all of our products.",
 }
 
-export const revalidate = 60
+export const revalidate = 300
 
 type Params = {
   searchParams: Promise<{

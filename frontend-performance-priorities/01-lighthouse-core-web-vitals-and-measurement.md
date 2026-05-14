@@ -42,7 +42,7 @@ Verified pages:
 - `/admin`
 - `/admin/products`
 
-For each verified page, DevTools Network showed `/api/cache/telemetry` requests returning `204`.
+At the time of this baseline, DevTools Network showed `/api/cache/telemetry` requests returning `204`. Custom telemetry was later removed for the Vercel usage optimization work, so new checks should confirm that no `/api/cache/telemetry` request is sent.
 
 Homepage local Lighthouse mobile baseline:
 

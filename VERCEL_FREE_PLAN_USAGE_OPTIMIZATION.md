@@ -520,7 +520,7 @@ Relevant files:
 
 - `src/proxy.ts`
 
-Current behavior:
+Original behavior:
 
 - Static assets are excluded, which is good.
 - But the proxy still runs broadly across many public routes.
@@ -570,7 +570,7 @@ Relevant files:
 - `src/app/api/storefront/layout-state/route.ts`
 - `src/app/api/storefront/shipping-options/route.ts`
 
-Current behavior:
+Original behavior:
 
 - `StorefrontProviders` wraps the full storefront.
 - `LayoutDataProvider` runs on public pages.
@@ -595,6 +595,18 @@ Expected impact: Very high for Function Invocations and Fast Origin Transfer.
 
 ### 3. Remove Or Sample Custom Telemetry
 
+Status: Implemented and manually verified on May 14, 2026
+
+Implementation summary:
+
+- Custom Toycker telemetry was removed completely instead of sampled.
+- The custom `WebVitalsReporter` sender and custom `navigator.sendBeacon("/api/cache/telemetry")` logic were removed.
+- `src/app/api/cache/telemetry/route.ts` was deleted, so direct local `POST /api/cache/telemetry` now returns `404 Not Found`.
+- The unused `web-vitals` dependency was removed from package and lock files.
+- Vercel Analytics, Vercel Speed Insights, Sentry, GTM, Meta Pixel, and optional Contentsquare remain available.
+- Local manual checks confirmed `/api/payu/callback` and `/api/easebuzz/callback` still return `200 OK`.
+- No Supabase migration was required or created because this was a code/package cleanup only.
+
 Relevant files:
 
 - `src/components/web-vitals-reporter.tsx`
@@ -602,7 +614,7 @@ Relevant files:
 - `src/app/api/cache/telemetry/route.ts`
 - `src/lib/analytics/site-analytics-inner.tsx`
 
-Current behavior:
+Original behavior:
 
 Toycker uses several analytics/monitoring systems:
 
@@ -635,6 +647,26 @@ Recommended change:
 Expected impact: High for Function Invocations and Edge Requests.
 
 ### 4. Make Public Storefront Pages Cacheable With ISR
+
+Status: Implemented and manually verified on May 14, 2026
+Change type: code-only route/data caching cleanup
+Supabase migration required: No
+
+Implementation summary:
+
+- Added a public no-cookie Supabase server client for public read-only storefront data.
+- Public product, category, collection, and club settings reads no longer need the cookie-based Supabase server helper.
+- Removed unnecessary `force-dynamic` from `/collections/[handle]`.
+- Added/standardized `revalidate = 300` for public storefront pages where safe.
+- Made `/policies/[slug]` static with `generateStaticParams()` and `dynamic = "force-static"`.
+- Removed server-side customer lookup from `/club`; private club-member information now loads client-side only for logged-in member context.
+- Manual testing confirmed logged-out `/club` sends no `/api/customer` request, while logged-in club-member data can load client-side.
+- PayU and Easebuzz callback health checks still returned `200 OK`.
+- Quality checks passed: `pnpm.cmd lint`, `pnpm.cmd exec tsc --noEmit`, `pnpm.cmd build`, and `pnpm.cmd test`.
+
+Important caveat:
+
+- `/store` still appears dynamic in the production build because it uses query-string filters and the existing `/api/storefront/products` POST `no-store` flow. That is tracked separately in the later product listing API caching priority.
 
 Relevant files:
 

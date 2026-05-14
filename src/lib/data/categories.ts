@@ -1,7 +1,7 @@
 "use server"
 
 import { unstable_cache } from "next/cache"
-import { createClient } from "@/lib/supabase/server"
+import { createPublicClient } from "@/lib/supabase/public-server"
 import { Category } from "@/lib/supabase/types"
 
 // Cache TTL: 10 minutes in seconds
@@ -21,7 +21,7 @@ const firstRelation = <T,>(value: T | T[] | null | undefined): T | null => {
 
 // Internal function for listCategories
 const listCategoriesInternal = async (page: number = 1, limit: number = 20) => {
-  const supabase = await createClient()
+  const supabase = createPublicClient()
   const from = (page - 1) * limit
   const to = from + limit - 1
 
@@ -47,7 +47,7 @@ export const listCategories = unstable_cache(
 // Internal function for getCategoryByHandle
 const getCategoryByHandleInternal = async (categoryHandle: string[]): Promise<Category | null> => {
   const handle = categoryHandle[categoryHandle.length - 1]
-  const supabase = await createClient()
+  const supabase = createPublicClient()
 
   // Fetch the current category and its parent information
   const { data, error } = await supabase

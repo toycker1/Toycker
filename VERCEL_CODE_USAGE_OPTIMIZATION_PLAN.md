@@ -107,6 +107,21 @@ After changing `src/proxy.ts`, test:
 
 ## Priority 2: Disable Or Sample Custom Telemetry
 
+Status: Implemented and manually verified on May 14, 2026
+Change type: code/package cleanup
+Supabase migration required: No
+
+Implementation summary:
+
+- Custom browser telemetry was removed completely.
+- `src/components/web-vitals-reporter.tsx` was deleted.
+- `src/app/api/cache/telemetry/route.ts` was deleted, so direct local `POST /api/cache/telemetry` now returns `404 Not Found`.
+- `src/instrumentation-client.ts` no longer sends web-vitals or navigation metrics to Toycker's own API; Sentry setup remains.
+- `src/lib/analytics/site-analytics-inner.tsx` no longer renders `WebVitalsReporter`; Vercel Analytics, Speed Insights, GTM, Meta Pixel, and optional Contentsquare remain.
+- The unused `web-vitals` dependency was removed from `package.json`, `pnpm-lock.yaml`, and `package-lock.json`.
+- Local manual checks confirmed PayU and Easebuzz callback health endpoints still return `200 OK`.
+- No Supabase table, RLS policy, function, RPC, realtime publication, storage setting, or migration file was changed.
+
 ### Evidence
 
 Vercel shows `/api/cache/telemetry` as a top route:
@@ -115,9 +130,9 @@ Vercel shows `/api/cache/telemetry` as a top route:
 /api/cache/telemetry - about 3.2K requests in the visible 12 hour Edge Requests view
 ```
 
-The current code sends custom web-vitals telemetry even though Vercel Analytics and Speed Insights are also enabled.
+The original code sent custom web-vitals telemetry even though Vercel Analytics and Speed Insights were also enabled.
 
-### Current Files
+### Original Files
 
 ```text
 src/components/web-vitals-reporter.tsx
@@ -126,7 +141,7 @@ src/lib/analytics/site-analytics-inner.tsx
 src/app/api/cache/telemetry/route.ts
 ```
 
-### Current Problem
+### Original Problem
 
 There are duplicate telemetry sources:
 
@@ -181,6 +196,26 @@ This directly reduces:
 - noise in logs and observability.
 
 ## Priority 3: Make Public Storefront Pages Cache Correctly
+
+Status: Implemented and manually verified on May 14, 2026
+Change type: code-only route/data caching cleanup
+Supabase migration required: No
+
+Implementation summary:
+
+- `src/lib/supabase/public-server.ts` was added for public read-only Supabase queries without request cookies.
+- Public product, category, collection, and club settings reads now use the no-cookie public Supabase client.
+- `/collections/[handle]` no longer uses `force-dynamic`; it now uses ISR with `revalidate = 300`.
+- `/products/[handle]`, `/categories/[...category]`, `/collections/[handle]`, `/store`, and `/club` use `revalidate = 300`.
+- `/policies/[slug]` now uses `generateStaticParams()` and `dynamic = "force-static"`.
+- `/club` no longer calls `retrieveCustomer()` on the server. Private member status loads client-side only when needed.
+- Logged-out `/club` testing confirmed no `/api/customer` request is sent. Logged-in club-member testing confirmed private member data loads client-side.
+- PayU and Easebuzz callback health checks still returned `200 OK`.
+- Quality checks passed: `pnpm.cmd lint`, `pnpm.cmd exec tsc --noEmit`, `pnpm.cmd build`, and `pnpm.cmd test`.
+
+Important caveat:
+
+- `/store` still appears dynamic in the production build because it uses query-string filters and the existing `/api/storefront/products` POST `no-store` flow. That API conversion belongs to the later product listing API caching priority, not this Priority 3 implementation.
 
 ### Evidence
 
