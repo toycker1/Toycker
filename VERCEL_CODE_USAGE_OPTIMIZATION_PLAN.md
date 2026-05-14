@@ -107,6 +107,21 @@ After changing `src/proxy.ts`, test:
 
 ## Priority 2: Disable Or Sample Custom Telemetry
 
+Status: Implemented and manually verified on May 14, 2026
+Change type: code/package cleanup
+Supabase migration required: No
+
+Implementation summary:
+
+- Custom browser telemetry was removed completely.
+- `src/components/web-vitals-reporter.tsx` was deleted.
+- `src/app/api/cache/telemetry/route.ts` was deleted, so direct local `POST /api/cache/telemetry` now returns `404 Not Found`.
+- `src/instrumentation-client.ts` no longer sends web-vitals or navigation metrics to Toycker's own API; Sentry setup remains.
+- `src/lib/analytics/site-analytics-inner.tsx` no longer renders `WebVitalsReporter`; Vercel Analytics, Speed Insights, GTM, Meta Pixel, and optional Contentsquare remain.
+- The unused `web-vitals` dependency was removed from `package.json`, `pnpm-lock.yaml`, and `package-lock.json`.
+- Local manual checks confirmed PayU and Easebuzz callback health endpoints still return `200 OK`.
+- No Supabase table, RLS policy, function, RPC, realtime publication, storage setting, or migration file was changed.
+
 ### Evidence
 
 Vercel shows `/api/cache/telemetry` as a top route:
@@ -115,9 +130,9 @@ Vercel shows `/api/cache/telemetry` as a top route:
 /api/cache/telemetry - about 3.2K requests in the visible 12 hour Edge Requests view
 ```
 
-The current code sends custom web-vitals telemetry even though Vercel Analytics and Speed Insights are also enabled.
+The original code sent custom web-vitals telemetry even though Vercel Analytics and Speed Insights were also enabled.
 
-### Current Files
+### Original Files
 
 ```text
 src/components/web-vitals-reporter.tsx
@@ -126,7 +141,7 @@ src/lib/analytics/site-analytics-inner.tsx
 src/app/api/cache/telemetry/route.ts
 ```
 
-### Current Problem
+### Original Problem
 
 There are duplicate telemetry sources:
 

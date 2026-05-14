@@ -15,7 +15,7 @@ Supabase migration required: No
 - Logged in state: logged out for homepage, logged in for admin checks
 - Cache setting: browser cache active during Network review
 - Network throttling: No throttling
-- Notes: `/api/cache/telemetry` returned `204` on verified public, checkout, and admin pages.
+- Notes: custom telemetry is removed. New checks should confirm that no `/api/cache/telemetry` request is sent.
 
 ## Page Measurements
 
@@ -39,7 +39,7 @@ Supabase migration required: No
 
 ## Manual Verification
 
-- `/api/cache/telemetry` returns `204` in DevTools Network.
+- No `/api/cache/telemetry` request appears in DevTools Network.
 - Vercel Speed Insights remains enabled.
 - No Supabase migration file was created.
 - No cart, checkout, account, product, or admin behavior changed.
