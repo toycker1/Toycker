@@ -130,18 +130,8 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api/payu/callback (payment callback needs to be clean)
-     * - api/easebuzz/callback (payment callback needs to be clean)
-     * - api/auth/callback (Supabase auth callback)
-     * - auth/confirm (email confirmation)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico, robots.txt, sitemap.xml (SEO files)
-     * - assets (public assets folder)
-     * - All static file extensions (images, fonts, manifests)
-     */
-    '/((?!api/payu/callback|api/easebuzz/callback|api/auth/callback|auth/confirm|_next/static|_next/image|assets|favicon.ico|robots.txt|sitemap.xml|manifest.json|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|avif|woff|woff2|ttf|otf|eot|json)$).*)',
+    '/checkout/:path*',
+    '/account/:path*',
+    '/admin/:path*',
   ],
 }
