@@ -507,6 +507,15 @@ Expected impact: Very high for Fast Data Transfer.
 
 ### 1. Narrow Proxy/Middleware Scope
 
+Status: Implemented and manually verified on May 14, 2026
+
+Implementation summary:
+
+- `src/proxy.ts` was changed from a broad public-route matcher to a narrow matcher for `/checkout/:path*`, `/account/:path*`, and `/admin/:path*`.
+- Public storefront routes such as `/`, `/store`, `/products/*`, `/collections/*`, `/categories/*`, `/club`, and `/policies/*` no longer run proxy.
+- Payment callbacks remain outside proxy. Production and local `GET` checks for `/api/payu/callback` and `/api/easebuzz/callback` returned `200 OK`.
+- No Supabase migration was required or created because this is a code-only route matcher change.
+
 Relevant files:
 
 - `src/proxy.ts`

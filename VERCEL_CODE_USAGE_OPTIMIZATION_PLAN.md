@@ -16,6 +16,17 @@ The goal is to reduce Vercel usage meaningfully, not make tiny changes that do n
 
 ## Priority 1: Narrow The Proxy Middleware Scope
 
+Status: Implemented and manually verified on May 14, 2026
+Change type: code-only
+Supabase migration required: No
+
+Implementation summary:
+
+- `src/proxy.ts` now runs only on `/checkout/:path*`, `/account/:path*`, and `/admin/:path*`.
+- Public storefront pages no longer run proxy during normal browsing.
+- Payment callback routes remain outside proxy and were verified with `200 OK` responses on production and local URLs.
+- No Supabase table, RLS policy, function, RPC, realtime publication, or migration file was changed.
+
 ### Evidence
 
 Vercel shows:
