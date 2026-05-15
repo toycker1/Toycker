@@ -2,14 +2,12 @@
 
 import { useCartStore } from "@modules/cart/context/cart-store-context"
 import { useLayoutData } from "@modules/layout/context/layout-data-context"
+import { resolveHeaderCartCount } from "@modules/layout/utils/cart-count"
 
 export const CartBadge = () => {
     const { cart } = useCartStore()
     const { cart: layoutCart } = useLayoutData()
-    const count =
-        cart?.items?.reduce((sum, item) => sum + item.quantity, 0) ??
-        layoutCart?.item_count ??
-        0
+    const count = resolveHeaderCartCount({ cart, layoutCart })
 
     if (count === 0) return null
 

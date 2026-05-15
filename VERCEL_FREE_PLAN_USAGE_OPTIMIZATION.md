@@ -765,6 +765,10 @@ Expected impact: Very high for storefront browsing traffic.
 
 ### 6. Reduce Image Optimization Usage
 
+Status: Implemented and manually verified on May 15, 2026
+Change type: code-only image prop cleanup
+Supabase migration required: No
+
 Relevant file:
 
 - `next.config.js`
@@ -772,14 +776,14 @@ Relevant file:
 Current config:
 
 ```js
-const IMAGE_QUALITIES = [75, 85, 95, 100]
+images: {
+  unoptimized: true
+}
 ```
 
-Several components use:
+The implementation keeps Vercel Image Optimization disabled and serves uploaded Cloudflare/R2 media directly. The previous storefront `quality={95}` props were removed from product thumbnails, product galleries, homepage product cards, homepage hero banners, exclusive collection images, visual search result cards, and frequently-bought-together thumbnails.
 
-```tsx
-quality={95}
-```
+Existing `next/image` layout behavior was preserved, including `fill`, `sizes`, `priority`, `loading`, `fetchPriority`, GIF handling, product gallery zoom behavior, hover states, and video behavior.
 
 Why this is expensive:
 
@@ -799,8 +803,10 @@ Confirmed Vercel evidence:
 
 Recommended changes:
 
-- Use default quality or `75` for product cards and thumbnails.
-- Reserve `95` only for large hero/detail images where quality is visibly important.
+- Keep `images.unoptimized: true` while staying on the Hobby plan.
+- Keep product cards and thumbnails free of forced `quality={95}` props.
+- If image optimization is re-enabled later, use default quality or `75` for product cards and thumbnails.
+- Reserve higher quality only for large hero/detail images where quality is visibly important.
 - Use `unoptimized` for tiny icons, SVGs, logos, and images under roughly 10 KB.
 - Limit image sizes/device sizes to what the design actually needs.
 - Continue using long `minimumCacheTTL`; Toycker already uses a high value.

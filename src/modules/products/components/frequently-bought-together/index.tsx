@@ -326,7 +326,6 @@ export default function FrequentlyBoughtTogether({
                       alt={p.name}
                       width={80}
                       height={80}
-                      quality={95}
                       sizes="80px"
                       className="h-full w-full object-cover"
                     />

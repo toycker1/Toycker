@@ -413,6 +413,18 @@ This reduces API requests for anonymous page views. It also reduces function inv
 
 ## Priority 5: Keep Image Optimization Disabled Or Reduce Variants
 
+Status: Implemented and manually verified on May 15, 2026
+Change type: code-only image prop cleanup
+Supabase migration required: No
+
+Implementation summary:
+
+- `next.config.js` continues to use `images.unoptimized: true`, so uploaded Cloudflare/R2 media is served directly instead of through Vercel Image Optimization.
+- Removed remaining storefront `quality={95}` props from product thumbnails, product galleries, homepage product cards, homepage hero banners, exclusive collection images, visual search result cards, and frequently-bought-together thumbnails.
+- Existing `next/image` layout behavior was preserved, including `fill`, `sizes`, `priority`, `loading`, `fetchPriority`, GIF handling, product gallery zoom behavior, hover states, and video behavior.
+- No Supabase table, RLS policy, function, RPC, storage setting, or migration file was changed.
+- Quality checks passed: `pnpm.cmd lint`, `pnpm.cmd exec tsc --noEmit`, `pnpm.cmd build`, and `pnpm.cmd test`.
+
 ### Current State
 
 The current `next.config.js` has:
@@ -452,7 +464,7 @@ If image optimization still appears after deployment, verify that the latest dep
 
 ### Optional Cleanup
 
-Many components still contain `quality={95}`. With `unoptimized: true`, that prop does not reduce Vercel image usage because Vercel optimization is bypassed. But it can confuse future maintenance.
+The previous cleanup target was the remaining `quality={95}` props. With `unoptimized: true`, those props did not reduce Vercel image usage because Vercel optimization was bypassed. They were removed to avoid confusion and to reduce the risk of high-quality image variants returning if image optimization is re-enabled later.
 
 If image optimization is ever re-enabled, reduce product-card quality to:
 
