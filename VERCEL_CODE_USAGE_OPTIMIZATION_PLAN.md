@@ -343,6 +343,23 @@ This prevents public pages from becoming dynamic just because a helper touched r
 
 ## Priority 4: Stop Loading Global Layout Data For Every Anonymous Visitor
 
+Status: Implemented and manually verified on May 15, 2026
+Change type: code-only layout/cart loading optimization
+Supabase migration required: No
+
+Implementation summary:
+
+- `LayoutDataProvider` now skips `/api/storefront/layout-state` for anonymous public visitors when there is no readable Supabase auth cookie and no stored cart hint.
+- User-specific routes such as `/cart`, `/checkout`, and `/account` still load layout state.
+- Signed-in users still load customer/cart layout state.
+- Guest cart count after reload is preserved through the lightweight `toycker_cart_state` localStorage hint.
+- Header and mobile cart badges resolve the live cart count first, then fall back to the lightweight layout cart summary.
+- Cart sidebar still reloads the full cart from `/api/cart` when opened and needed.
+- Shipping options stay lazy-loaded and are only requested when a cart exists.
+- The service worker treats `/api/storefront/layout-state`, `/api/cart`, `/cart`, `/checkout`, and `/account` as `NetworkOnly`.
+- No Supabase table, RLS policy, function, RPC, realtime publication, storage setting, or migration file was changed.
+- Quality checks passed: `pnpm.cmd lint`, `pnpm.cmd exec tsc --noEmit`, `pnpm.cmd build`, and `pnpm.cmd test`.
+
 ### Evidence
 
 The app has a global storefront provider:

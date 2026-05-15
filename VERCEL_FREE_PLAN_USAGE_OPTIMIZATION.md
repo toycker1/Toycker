@@ -563,6 +563,22 @@ Expected impact: Very high for Function Invocations and Fast Origin Transfer.
 
 ### 2. Stop Global Layout API Calls For Anonymous Visitors
 
+Status: Implemented and manually verified on May 15, 2026
+Change type: code-only layout/cart loading optimization
+Supabase migration required: No
+
+Implementation summary:
+
+- Anonymous public visitors with no auth cookie and no stored cart hint no longer call `/api/storefront/layout-state`.
+- `/cart`, `/checkout`, `/account`, signed-in users, and visitors with stored cart state still load layout state when needed.
+- Guest cart count after reload is preserved with the lightweight `toycker_cart_state` localStorage hint.
+- Header and mobile cart badges still update from the live cart store and fall back to the layout cart summary when the full cart has not loaded yet.
+- Cart sidebar still reloads the full cart from `/api/cart` when opened and needed.
+- Shipping options stay lazy-loaded and are only requested when a cart exists.
+- The service worker keeps user/cart APIs and pages as `NetworkOnly`, so private cart/layout responses are not cached.
+- No Supabase table, RLS policy, function, RPC, realtime publication, storage setting, or migration file was changed.
+- Quality checks passed: `pnpm.cmd lint`, `pnpm.cmd exec tsc --noEmit`, `pnpm.cmd build`, and `pnpm.cmd test`.
+
 Relevant files:
 
 - `src/app/storefront-providers.tsx`
