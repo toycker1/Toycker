@@ -6,6 +6,7 @@ import LocalizedClientLink from "@modules/common/components/localized-client-lin
 import { Home, User, LayoutGrid, Star, ShoppingBag } from "lucide-react"
 import { useCartStore } from "@modules/cart/context/cart-store-context"
 import { useLayoutData } from "@modules/layout/context/layout-data-context"
+import { resolveHeaderCartCount } from "@modules/layout/utils/cart-count"
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 
@@ -25,10 +26,7 @@ const MobileNav = () => {
         }
     }, [])
 
-    const cartCount =
-        cart?.items?.reduce((acc, item) => acc + item.quantity, 0) ??
-        layoutCart?.item_count ??
-        0
+    const cartCount = resolveHeaderCartCount({ cart, layoutCart })
 
     const navItems = [
         {

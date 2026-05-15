@@ -82,7 +82,6 @@ export default function HomeProductCard({
               alt={product.name}
               fill
               draggable={false}
-              quality={95}
               sizes={imageSizes}
               className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
             />

@@ -102,7 +102,6 @@ const Hero = ({ banners }: HeroProps) => {
                     priority={index === 0}
                     loading={index === 0 ? undefined : "lazy"}
                     fetchPriority={index === 0 ? "high" : "auto"}
-                    quality={95}
                     sizes={IMAGE_SIZES}
                     className="object-cover"
                   />
@@ -154,7 +153,6 @@ const Hero = ({ banners }: HeroProps) => {
                       priority={index === 0}
                       loading={index === 0 ? undefined : "lazy"}
                       fetchPriority={index === 0 ? "high" : "auto"}
-                      quality={95}
                       sizes={IMAGE_SIZES}
                       className="object-cover"
                       onLoad={() => {
