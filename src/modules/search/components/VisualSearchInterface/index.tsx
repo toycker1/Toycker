@@ -353,7 +353,6 @@ const VisualSearchResultCard = ({ product }: { product: SearchProduct }) => {
                         src={imageUrl}
                         alt={product.title}
                         fill
-                        quality={95}
                         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                         className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
                     />

@@ -8,6 +8,11 @@ import type {
   ShippingOptionsState,
 } from "@/lib/types/layout-state"
 import {
+  getStoredLayoutCartSummary,
+  shouldLoadInitialLayoutState,
+} from "@modules/layout/utils/layout-state-load-hints"
+import { usePathname } from "next/navigation"
+import {
   ReactNode,
   createContext,
   useCallback,
@@ -78,6 +83,14 @@ const fetchShippingOptions = async (signal?: AbortSignal) => {
   }
 }
 
+const getBrowserStoredCartSummary = () => {
+  if (typeof window === "undefined") {
+    return null
+  }
+
+  return getStoredLayoutCartSummary(window.localStorage)
+}
+
 export const LayoutDataProvider = ({ children }: { children: ReactNode }) => {
   const [cart, setCart] = useState<LayoutCartSummary | null>(null)
   const [customer, setCustomer] = useState<LayoutCustomer | null>(null)
@@ -86,6 +99,8 @@ export const LayoutDataProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true)
   const abortController = useRef<AbortController | null>(null)
   const shippingAbortController = useRef<AbortController | null>(null)
+  const hasLoadedLayoutState = useRef(false)
+  const pathname = usePathname()
 
   const loadShippingOptions = useCallback(async () => {
     if (!cart?.id) {
@@ -125,19 +140,22 @@ export const LayoutDataProvider = ({ children }: { children: ReactNode }) => {
     const controller = new AbortController()
     abortController.current = controller
     setLoading(true)
+    const storedCartSummary = getBrowserStoredCartSummary()
 
     try {
       const payload = await fetchLayoutState(controller.signal)
-      setCart(payload.cart)
+      setCart(payload.cart ?? storedCartSummary)
       setCustomer(payload.customer)
 
-      if (!payload.cart) {
+      const resolvedCart = payload.cart ?? storedCartSummary
+
+      if (!resolvedCart) {
         setShippingOptions([])
         setShippingOptionsRegion(null)
       } else if (
         shippingOptionsRegion &&
-        payload.cart.region_id &&
-        payload.cart.region_id !== shippingOptionsRegion
+        resolvedCart.region_id &&
+        resolvedCart.region_id !== shippingOptionsRegion
       ) {
         setShippingOptions([])
         setShippingOptionsRegion(null)
@@ -156,13 +174,26 @@ export const LayoutDataProvider = ({ children }: { children: ReactNode }) => {
   }, [shippingOptionsRegion])
 
   useEffect(() => {
+    if (!shouldLoadInitialLayoutState({ pathname })) {
+      if (!hasLoadedLayoutState.current) {
+        setCart(null)
+        setCustomer(null)
+        setShippingOptions([])
+        setShippingOptionsRegion(null)
+        setLoading(false)
+      }
+      return
+    }
+
+    hasLoadedLayoutState.current = true
+    setCart((currentCart) => currentCart ?? getBrowserStoredCartSummary())
     refresh()
 
     return () => {
       abortController.current?.abort()
       shippingAbortController.current?.abort()
     }
-  }, [refresh])
+  }, [pathname, refresh])
 
   const value = useMemo(
     () => ({

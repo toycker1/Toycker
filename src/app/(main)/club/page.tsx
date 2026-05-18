@@ -1,22 +1,20 @@
 import { Metadata } from "next"
 import { getClubSettings } from "@lib/data/club"
-import { retrieveCustomer } from "@lib/data/customer"
 import { Button } from "@modules/common/components/button"
 import Link from "next/link"
-import { Check, Sparkles, ShoppingBag, Trophy } from "lucide-react"
+import { Check, Sparkles, Trophy } from "lucide-react"
+import ClubLoginButton from "@modules/club/components/club-login-button"
+import ClubMemberStatus from "@modules/club/components/club-member-status"
 
 export const metadata: Metadata = {
     title: "Toycker Club | Unlock Exclusive Savings",
     description: "Join the Toycker Club and get exclusive discounts on every purchase.",
 }
 
-export default async function ClubPage() {
-    const [settings, customer] = await Promise.all([
-        getClubSettings(),
-        retrieveCustomer().catch(() => null),
-    ])
+export const revalidate = 300
 
-    const isMember = customer?.is_club_member || false
+export default async function ClubPage() {
+    const settings = await getClubSettings()
     const minPurchaseAmount = settings.min_purchase_amount
     const discountPercentage = settings.discount_percentage
 
@@ -55,13 +53,7 @@ export default async function ClubPage() {
                                 Start Shopping
                             </Button>
                         </Link>
-                        {!customer && (
-                            <Link href="/account">
-                                <Button className="h-14 px-10 rounded-full text-lg" variant="secondary">
-                                    Log In
-                                </Button>
-                            </Link>
-                        )}
+                        <ClubLoginButton />
                     </div>
                 </div>
             </div>
@@ -70,47 +62,10 @@ export default async function ClubPage() {
             <div className="py-16 bg-white border-y border-slate-100">
                 <div className="content-container">
                     <div className="max-w-4xl mx-auto bg-slate-50 rounded-[2rem] p-8 lg:p-12 relative overflow-hidden">
-                        {isMember && customer ? (
-                            <div className="relative z-10 flex flex-col md:flex-row items-center gap-8 text-center md:text-left">
-                                <div className="w-24 h-24 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center shadow-lg transform rotate-[-10deg]">
-                                    <Trophy className="w-12 h-12 text-white" />
-                                </div>
-                                <div className="flex-1">
-                                    <h3 className="text-2xl font-bold text-slate-900 mb-2">You are a Club Member!</h3>
-                                    <p className="text-slate-600 mb-1">
-                                        You&apos;re enjoying <strong>{discountPercentage}% off</strong> on all products.
-                                    </p>
-                                    {(customer.total_club_savings || 0) > 0 && (
-                                        <p className="text-emerald-700 font-medium">
-                                            Total savings so far: {new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(customer.total_club_savings || 0)}
-                                        </p>
-                                    )}
-                                </div>
-                                <Link href="/store">
-                                    <Button className="shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white border-transparent">
-                                        Browse Deals
-                                    </Button>
-                                </Link>
-                            </div>
-                        ) : (
-                            <div className="relative z-10 flex flex-col md:flex-row items-center gap-8 text-center md:text-left">
-                                <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-md border-4 border-[#F6E36C]">
-                                    <ShoppingBag className="w-10 h-10 text-slate-400" />
-                                </div>
-                                <div className="flex-1">
-                                    <h3 className="text-2xl font-bold text-slate-900 mb-2">How to Join?</h3>
-                                    <p className="text-slate-600">
-                                        Simply make a single purchase of <span className="font-bold text-slate-900">{formattedMinPurchase}</span> or more.
-                                        Your membership will be activated automatically!
-                                    </p>
-                                </div>
-                                <Link href="/store">
-                                    <Button variant="secondary" className="shrink-0">
-                                        Shop Now
-                                    </Button>
-                                </Link>
-                            </div>
-                        )}
+                        <ClubMemberStatus
+                            discountPercentage={discountPercentage}
+                            formattedMinPurchase={formattedMinPurchase}
+                        />
                     </div>
                 </div>
             </div>

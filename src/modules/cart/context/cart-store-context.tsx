@@ -3,6 +3,7 @@
 import { addToCart, deleteLineItem, updateLineItem } from "@lib/data/cart"
 import { DEFAULT_COUNTRY_CODE } from "@lib/constants/region"
 import { Cart, Product, ProductVariant, CartItem } from "@/lib/supabase/types"
+import type { LayoutCartSummary } from "@/lib/types/layout-state"
 import isEqual from "lodash/isEqual"
 import {
   createContext,
@@ -15,7 +16,7 @@ import {
 } from "react"
 import { useLayoutData } from "@modules/layout/context/layout-data-context"
 import { useOptionalToast } from "@modules/common/context/toast-context"
-import { useCartPersistence } from "@lib/hooks/use-cart-persistence"
+import { clearStoredCartState, useCartPersistence } from "@lib/hooks/use-cart-persistence"
 
 type OptimisticAddInput = {
   product: Product
@@ -113,8 +114,21 @@ const buildOptimisticLineItem = (
   }
 }
 
+const buildLayoutCartSummary = (cart: Cart): LayoutCartSummary => {
+  const itemCount = cart.items?.reduce((total, item) => total + item.quantity, 0) ?? 0
+
+  return {
+    id: cart.id,
+    user_id: cart.user_id ?? null,
+    region_id: cart.region_id ?? null,
+    currency_code: cart.currency_code ?? "inr",
+    updated_at: cart.updated_at ?? null,
+    item_count: itemCount,
+  }
+}
+
 export const CartStoreProvider = ({ children }: { children: ReactNode }) => {
-  const { cart: layoutCart } = useLayoutData()
+  const { cart: layoutCart, setCart: setLayoutCart } = useLayoutData()
   const toast = useOptionalToast()
   const showToast = toast?.showToast
   const [cart, setCart] = useState<Cart | null>(null)
@@ -143,15 +157,18 @@ export const CartStoreProvider = ({ children }: { children: ReactNode }) => {
 
   const setFromServer = useCallback((nextCart: Cart | null) => {
     setCart(nextCart)
+    setLayoutCart(nextCart ? buildLayoutCartSummary(nextCart) : null)
     previousCartRef.current = nextCart
-  }, [])
+  }, [setLayoutCart])
 
   const clearCart = useCallback(() => {
     setCart(null)
+    setLayoutCart(null)
+    clearStoredCartState()
     previousCartRef.current = null
     setRemovingIds(new Set())
     setUpdatingIds(new Set())
-  }, [])
+  }, [setLayoutCart])
 
   const isRemoving = useCallback(
     (lineId: string) => removingIds.has(lineId),
@@ -408,7 +425,7 @@ export const CartStoreProvider = ({ children }: { children: ReactNode }) => {
     } finally {
       setIsSyncing(false)
     }
-  }, [reloadFromServer, showToast])
+  }, [reloadFromServer])
 
   const removePromotionCode = useCallback(async (_code: string) => {
     setIsSyncing(true)
@@ -439,7 +456,7 @@ export const CartStoreProvider = ({ children }: { children: ReactNode }) => {
     } finally {
       setIsSyncing(false)
     }
-  }, [reloadFromServer, showToast])
+  }, [reloadFromServer])
 
   // Enable localStorage persistence and cross-tab sync
   useCartPersistence(cart, reloadFromServer)
@@ -543,6 +560,7 @@ export const CartStoreProvider = ({ children }: { children: ReactNode }) => {
       isSyncing,
       lastError,
       optimisticAdd,
+      optimisticAddMultiple,
       optimisticRemove,
       optimisticUpdateQuantity,
       reloadFromServer,

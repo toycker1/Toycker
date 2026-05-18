@@ -114,7 +114,6 @@ const ImageGallery = ({ images, variant = "default" }: ImageGalleryProps) => {
               alt="Primary product image"
               fill
               priority
-              quality={95}
               sizes="(min-width: 1024px) 620px, 100vw"
               className="object-cover"
             />
@@ -184,7 +183,6 @@ const ImageGallery = ({ images, variant = "default" }: ImageGalleryProps) => {
                     fill
                     priority={index === 0}
                     loading={index === 0 ? undefined : "lazy"}
-                    quality={95}
                     sizes="(min-width: 1024px) 620px, 100vw"
                     className="object-cover"
                   />
@@ -336,7 +334,6 @@ const ImageThumb = ({
           src={image.url}
           alt={`Thumbnail ${index + 1}`}
           fill
-          quality={95}
           sizes="120px"
           className="object-cover"
         />

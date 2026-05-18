@@ -2,7 +2,9 @@ import { Metadata } from "next"
 import { notFound } from "next/navigation"
 import { PRIMARY_CONTACT_DISPLAY } from "@modules/contact/contact.constants"
 
-type PolicySlug = "returns" | "shipping" | "terms" | "privacy"
+const POLICY_SLUGS = ["returns", "shipping", "terms", "privacy"] as const
+
+type PolicySlug = (typeof POLICY_SLUGS)[number]
 
 type PolicySection = {
   heading: string
@@ -194,6 +196,12 @@ type PolicyRouteProps = {
 export const metadata: Metadata = {
   title: "Toycker Policies",
   description: "Read Toycker’s store policies covering returns, refunds, shipping promises, and terms of service.",
+}
+
+export const dynamic = "force-static"
+
+export function generateStaticParams() {
+  return POLICY_SLUGS.map((slug) => ({ slug }))
 }
 
 export default async function PolicyRoute({ params }: PolicyRouteProps) {

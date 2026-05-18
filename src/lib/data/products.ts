@@ -1,6 +1,7 @@
 "use server"
 
 import { cache } from "react"
+import { createPublicClient } from "@/lib/supabase/public-server"
 import { createClient } from "@/lib/supabase/server"
 import { Product } from "@/lib/supabase/types"
 import { SortOptions } from "@modules/store/components/refinement-list/types"
@@ -337,7 +338,7 @@ export const listProducts = cache(async function listProducts(options: {
     exclude_id?: string
   }
 } = {}): Promise<{ response: { products: Product[]; count: number } }> {
-  const supabase = await createClient()
+  const supabase = createPublicClient()
 
   let selectString = PRODUCT_CARD_SELECT
   const joins: string[] = []
@@ -399,7 +400,7 @@ export const retrieveProduct = cache(async function retrieveProduct(id: string):
 })
 
 export const getProductByHandle = cache(async function getProductByHandle(handle: string): Promise<Product | null> {
-  const supabase = await createClient()
+  const supabase = createPublicClient()
   const { data, error } = await supabase
     .from("products")
     .select(PRODUCT_STOREFRONT_DETAIL_SELECT)
@@ -414,7 +415,7 @@ export const getProductByHandle = cache(async function getProductByHandle(handle
 export const listFrequentlyBoughtTogetherProducts = cache(async function listFrequentlyBoughtTogetherProducts(
   productId: string
 ): Promise<Product[]> {
-  const supabase = await createClient()
+  const supabase = createPublicClient()
   const { data, error } = await supabase
     .from("product_combinations")
     .select(`
@@ -458,7 +459,7 @@ export const listPaginatedProducts = cache(async function listPaginatedProducts(
   ageFilter?: string
   includeDetails?: boolean
 }) {
-  const supabase = await createClient()
+  const supabase = createPublicClient()
   const range = getProductRange(page, limit)
   const productSelect = includeDetails ? PRODUCT_QUICK_VIEW_SELECT : PRODUCT_CARD_SELECT
 

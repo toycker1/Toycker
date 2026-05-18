@@ -1,10 +1,9 @@
 "use client"
 
 import { Cart } from "@/lib/supabase/types"
-import { ReactNode, createContext, useCallback, useContext, useMemo, useState } from "react"
+import { ReactNode, createContext, useCallback, useContext, useMemo, useRef, useState } from "react"
 
 import { useCartStore } from "@modules/cart/context/cart-store-context"
-import { useLayoutData } from "@modules/layout/context/layout-data-context"
 
 type CartSidebarContextValue = {
   isOpen: boolean
@@ -24,7 +23,7 @@ const CartSidebarContext = createContext<CartSidebarContextValue | undefined>(
 export const CartSidebarProvider = ({ children }: { children: ReactNode }) => {
   const [isOpen, setIsOpen] = useState(false)
   const { cart, setFromServer, optimisticRemove, reloadFromServer, isRemoving } = useCartStore()
-  const { cart: layoutCart } = useLayoutData()
+  const hasLoadedCartOnOpen = useRef(false)
 
   const refreshCart = useCallback(async () => {
     try {
@@ -36,10 +35,11 @@ export const CartSidebarProvider = ({ children }: { children: ReactNode }) => {
 
   const openCart = useCallback(() => {
     setIsOpen(true)
-    if (layoutCart?.item_count && !cart?.items?.length) {
+    if (!cart?.items?.length && !hasLoadedCartOnOpen.current) {
+      hasLoadedCartOnOpen.current = true
       void reloadFromServer()
     }
-  }, [cart?.items?.length, layoutCart?.item_count, reloadFromServer])
+  }, [cart?.items?.length, reloadFromServer])
 
   const closeCart = useCallback(() => {
     setIsOpen(false)
