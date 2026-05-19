@@ -4,6 +4,7 @@ import { notFound } from "next/navigation"
 import { listOrders } from "@lib/data/orders"
 import { retrieveCustomer } from "@lib/data/customer"
 import OrderOverview from "@modules/account/components/order-overview"
+import { expireStaleEasebuzzPendingPayments } from "@/lib/actions/cancel-pending-payment"
 
 export const metadata: Metadata = {
     title: "Orders",
@@ -11,6 +12,8 @@ export const metadata: Metadata = {
 }
 
 export default async function Orders() {
+    await expireStaleEasebuzzPendingPayments()
+
     const [customer, orders] = await Promise.all([
         retrieveCustomer(),
         listOrders(),

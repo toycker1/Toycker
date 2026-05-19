@@ -5,6 +5,7 @@ import { retrieveCustomer } from "@lib/data/customer"
 import { retrieveOrder } from "@lib/data/orders"
 import { getCustomerOrderPageMetadata } from "@/lib/util/customer-order-state"
 import OrderCompletedTemplate from "@modules/order/templates/order-completed-template"
+import { expireStaleEasebuzzPendingPayments } from "@/lib/actions/cancel-pending-payment"
 
 type Props = {
   params: Promise<{ id: string }>
@@ -12,6 +13,7 @@ type Props = {
 
 export async function generateMetadata(props: Props): Promise<Metadata> {
   const params = await props.params
+  await expireStaleEasebuzzPendingPayments()
   const order = await retrieveOrder(params.id)
 
   if (!order) {
@@ -23,6 +25,7 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
 
 export default async function OrderConfirmedPage(props: Props) {
   const params = await props.params
+  await expireStaleEasebuzzPendingPayments()
   const [order, customer] = await Promise.all([
     retrieveOrder(params.id),
     retrieveCustomer(),

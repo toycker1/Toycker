@@ -1690,6 +1690,7 @@ export async function initiatePaymentSession(
 
     // Step 2: Format payment data
     const txnid = `txn${Date.now()}`
+    const expiresAt = new Date(Date.now() + 16 * 60 * 1000).toISOString()
     const amount = Number(cart.total || 0).toFixed(2)
     const productinfo = "Store Order"
     const checkoutCustomerAddress =
@@ -1778,6 +1779,8 @@ export async function initiatePaymentSession(
     // Step 5: Store only the redirect URL (no form params needed for Easebuzz)
     sessionData = {
       payment_url: paymentUrl,
+      txnid,
+      expires_at: expiresAt,
     }
   }
 

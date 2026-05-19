@@ -98,6 +98,39 @@ const fetchLatestOrderForCart = async (
   return data ? (data as Order) : null
 }
 
+const fetchLatestOrderForEasebuzzPayment = async (
+  supabase: AdminClient,
+  params: { cartId: string; txnid: string }
+): Promise<Order | null> => {
+  if (params.txnid) {
+    const { data, error } = await supabase
+      .from("orders")
+      .select("*")
+      .contains("payment_collection", {
+        payment_sessions: [
+          {
+            data: {
+              txnid: params.txnid,
+            },
+          },
+        ],
+      })
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    if (data) {
+      return data as Order
+    }
+  }
+
+  return fetchLatestOrderForCart(supabase, params.cartId)
+}
+
 const refreshPendingOrderSnapshot = async (
   supabase: AdminClient,
   cartId: string,
@@ -225,7 +258,10 @@ export async function POST(request: NextRequest) {
       }
 
       const snapshot = buildEasebuzzOrderSnapshot(cart, email)
-      let orderToFinalize = await fetchLatestOrderForCart(supabase, cartId)
+      let orderToFinalize = await fetchLatestOrderForEasebuzzPayment(
+        supabase,
+        { cartId, txnid }
+      )
 
       const shouldRefreshPendingSnapshot =
         !orderToFinalize ||
@@ -403,14 +439,18 @@ export async function POST(request: NextRequest) {
     if (isDefinitiveFailure) {
       try {
         const supabase = await createAdminClient()
-        const existingOrder = await fetchLatestOrderForCart(supabase, cartId)
+        const existingOrder = await fetchLatestOrderForEasebuzzPayment(
+          supabase,
+          { cartId, txnid }
+        )
 
         if (existingOrder && existingOrder.payment_status !== "captured") {
           await supabase
             .from("orders")
             .update({
-              status: "cancelled",
-              payment_status: "cancelled",
+              status: "failed",
+              payment_status: "failed",
+              fulfillment_status: "cancelled",
               updated_at: new Date().toISOString(),
             })
             .eq("id", existingOrder.id)
@@ -418,8 +458,8 @@ export async function POST(request: NextRequest) {
           const { logOrderEvent } = await import("@/lib/data/admin")
           await logOrderEvent(
             existingOrder.id,
-            "cancelled",
-            "Payment Cancelled",
+            "payment_failed",
+            "Payment Incomplete",
             `Payment was not completed via Easebuzz. Reason: ${failureReason}`,
             "system"
           )

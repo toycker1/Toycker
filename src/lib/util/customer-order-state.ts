@@ -84,12 +84,17 @@ export const getCustomerOrderPageContent = (
     FAILED_PAYMENT_STATUSES.has(paymentStatus)
 
   if (isCancelled) {
+    const isIncompleteTransaction = paymentStatus === "failed"
+
     return {
       state: "cancelled",
       tone: "danger",
-      title: "Order Cancelled",
-      description:
-        "This order was not successful. If this was a mistake, you can try placing it again from your cart.",
+      title: isIncompleteTransaction
+        ? "Incomplete Transaction"
+        : "Order Cancelled",
+      description: isIncompleteTransaction
+        ? "Payment was not completed within the payment window. You can place a new order when ready."
+        : "This order was not successful. If this was a mistake, you can try placing it again from your cart.",
       showTracking: false,
     }
   }
@@ -143,8 +148,8 @@ export const getCustomerOrderPageMetadata = (
 
   if (content.state === "cancelled") {
     return {
-      title: `Order Cancelled #${order.display_id} | Toycker`,
-      description: "This order was cancelled or the payment was not completed.",
+      title: `${content.title} #${order.display_id} | Toycker`,
+      description: content.description,
     }
   }
 
