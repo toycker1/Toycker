@@ -11,17 +11,15 @@ import {
   TrivaraSyncSnapshot,
   TrivaraSyncSnapshotKey,
 } from "@/lib/supabase/types"
-import { ensureAdmin, retryTrivaraBookingForOrder } from "./admin"
+import { cancelOrder, ensureAdmin, retryTrivaraBookingForOrder } from "./admin"
 import {
   getTrivaraApiBaseUrl,
   getTrivaraApiKey,
   getTrivaraCrnNo,
   getTrivaraMasterApiKey,
   getTrivaraPrintSlipApiBaseUrl,
-  getTrivaraResponseBusinessError,
   getTrivaraServicesApiBaseUrl,
   getTrivaraTrackingApiKey,
-  sendTrivaraCancelOrder,
   sendTrivaraOrderTracking,
   sendTrivaraPickupLocations,
   sendTrivaraPrintSlip,
@@ -427,36 +425,7 @@ export async function printTrivaraSlip(orderId: string) {
 export async function cancelTrivaraOrder(orderId: string) {
   await ensureAdmin()
   await requirePermission(PERMISSIONS.SHIPPING_UPDATE)
-
-  const booking = await getBooking(orderId)
-  if (!booking.trivara_reference_number) {
-    throw new Error("Trivara reference number is required before cancellation.")
-  }
-
-  const payload = {
-    crn_no: getTrivaraCrnNo(),
-    reference_number: booking.trivara_reference_number,
-  }
-  const response = await sendTrivaraCancelOrder(payload, {
-    apiBaseUrl: getTrivaraApiBaseUrl(),
-    apiKey: getTrivaraApiKey(),
-  })
-  const errorMessage = response.ok
-    ? null
-    : getTrivaraResponseBusinessError(response.responsePayload) ||
-      `Trivara cancellation failed with status ${response.status}`
-
-  await updateBooking(orderId, {
-    status: response.ok ? "cancelled" : booking.status,
-    cancel_payload: response.responsePayload,
-    cancel_error_message: errorMessage,
-    cancelled_at: response.ok ? new Date().toISOString() : null,
-  })
-
-  if (errorMessage) {
-    throw new Error(errorMessage)
-  }
-
+  await cancelOrder(orderId)
   revalidateLogistics(orderId)
 }
 

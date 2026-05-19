@@ -166,6 +166,16 @@ export default async function AdminLogisticsDetail({ params }: Props) {
   const canRetry = record.status === "failed" || record.status === "skipped"
   const hasReference = Boolean(record.trivara_reference_number)
   const trivaraErrorHelp = getTrivaraErrorHelp(record.error_message)
+  const canCancelOrder = Boolean(
+    record.order &&
+      ["pending", "order_placed", "accepted"].includes(record.order.status)
+  )
+  const canSyncTrivaraCancellation = Boolean(
+    record.order &&
+      ["cancelled", "failed"].includes(record.order.status) &&
+      record.status !== "cancelled" &&
+      hasReference
+  )
 
   return (
     <div className="space-y-6">
@@ -218,15 +228,15 @@ export default async function AdminLogisticsDetail({ params }: Props) {
                   Print Slip
                 </button>
               </form>
-              {record.status !== "cancelled" && (
-                <form action={cancelTrivaraOrder.bind(null, record.order_id)}>
-                  <button className="inline-flex items-center gap-2 rounded-lg bg-red-50 px-4 py-2 text-xs font-semibold text-red-700 hover:bg-red-100">
-                    <XCircleIcon className="h-4 w-4" />
-                    Cancel Trivara
-                  </button>
-                </form>
-              )}
             </>
+          )}
+          {(canCancelOrder || canSyncTrivaraCancellation) && (
+            <form action={cancelTrivaraOrder.bind(null, record.order_id)}>
+              <button className="inline-flex items-center gap-2 rounded-lg bg-red-50 px-4 py-2 text-xs font-semibold text-red-700 hover:bg-red-100">
+                <XCircleIcon className="h-4 w-4" />
+                {canCancelOrder ? "Cancel Order" : "Cancel Trivara"}
+              </button>
+            </form>
           )}
         </div>
       </div>

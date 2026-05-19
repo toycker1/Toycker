@@ -2882,6 +2882,20 @@ export async function getActiveShippingPartners() {
   return data as ShippingPartner[]
 }
 
+export async function getTrivaraFulfillmentPartner() {
+  await ensureAdmin()
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("shipping_partners")
+    .select("*")
+    .eq("is_active", true)
+    .ilike("name", "Trivara Logistics")
+    .maybeSingle()
+
+  if (error) throw error
+  return data as ShippingPartner | null
+}
+
 export async function createShippingPartner(formData: FormData) {
   await ensureAdmin()
   await requirePermission(PERMISSIONS.SHIPPING_PARTNERS_CREATE)
@@ -3535,8 +3549,16 @@ export async function cancelOrder(orderId: string) {
     .maybeSingle()
 
   if (!order) throw new Error("Order not found")
-  if (order.status === "cancelled" || order.status === "failed")
+  if (order.status === "cancelled" || order.status === "failed") {
+    await cancelTrivaraBookingForOrder(orderId)
+    revalidatePath(`/admin/orders/${orderId}`)
+    revalidatePath("/admin/orders")
+    revalidatePath("/admin/logistics")
+    revalidatePath(`/admin/logistics/${orderId}`)
+    revalidatePath(`/order/confirmed/${orderId}`)
+    revalidatePath(`/account/orders/details/${orderId}`)
     return { success: true, alreadyCancelled: true }
+  }
   if (order.status === "delivered" || order.status === "shipped")
     throw new Error(
       "Cannot cancel an order that has already shipped or delivered."
@@ -3586,6 +3608,8 @@ export async function cancelOrder(orderId: string) {
   revalidatePath("/admin/orders")
   revalidatePath("/admin/logistics")
   revalidatePath(`/admin/logistics/${orderId}`)
+  revalidatePath(`/order/confirmed/${orderId}`)
+  revalidatePath(`/account/orders/details/${orderId}`)
 
   return { success: true }
 }
@@ -3768,15 +3792,22 @@ export async function fulfillOrder(orderId: string, formData: FormData) {
     throw new Error("Tracking number is required")
   }
 
-  // Get shipping partner name for timeline
-  let partnerName = "Unknown"
-  if (shippingPartnerId) {
-    const { data: partner } = await supabase
-      .from("shipping_partners")
-      .select("name")
-      .eq("id", shippingPartnerId)
-      .single()
-    partnerName = partner?.name || "Unknown"
+  if (!shippingPartnerId) {
+    throw new Error("Trivara Logistics is required for fulfillment")
+  }
+
+  const { data: partner, error: partnerError } = await supabase
+    .from("shipping_partners")
+    .select("name")
+    .eq("id", shippingPartnerId)
+    .eq("is_active", true)
+    .maybeSingle()
+
+  if (partnerError) throw new Error(partnerError.message)
+
+  const partnerName = partner?.name || ""
+  if (partnerName.toLowerCase() !== "trivara logistics") {
+    throw new Error("Only Trivara Logistics can be used for fulfillment")
   }
 
   // Update order

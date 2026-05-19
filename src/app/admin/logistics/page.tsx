@@ -291,6 +291,18 @@ export default async function AdminLogistics({
               const canUseReference = Boolean(record.trivara_reference_number)
               const canRetry =
                 record.status === "failed" || record.status === "skipped"
+              const canCancelOrder = Boolean(
+                record.order &&
+                  ["pending", "order_placed", "accepted"].includes(
+                    record.order.status
+                  )
+              )
+              const canSyncTrivaraCancellation = Boolean(
+                record.order &&
+                  ["cancelled", "failed"].includes(record.order.status) &&
+                  record.status !== "cancelled" &&
+                  canUseReference
+              )
 
               return (
                 <tr key={record.id} className="hover:bg-gray-50">
@@ -368,15 +380,15 @@ export default async function AdminLogistics({
                               Slip
                             </button>
                           </form>
-                          {record.status !== "cancelled" && (
-                            <form action={cancelTrivaraOrder.bind(null, record.order_id)}>
-                              <button className="inline-flex items-center gap-1 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100">
-                                <XCircleIcon className="h-3.5 w-3.5" />
-                                Cancel
-                              </button>
-                            </form>
-                          )}
                         </>
+                      )}
+                      {(canCancelOrder || canSyncTrivaraCancellation) && (
+                        <form action={cancelTrivaraOrder.bind(null, record.order_id)}>
+                          <button className="inline-flex items-center gap-1 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100">
+                            <XCircleIcon className="h-3.5 w-3.5" />
+                            {canCancelOrder ? "Cancel Order" : "Cancel Trivara"}
+                          </button>
+                        </form>
                       )}
                     </div>
                   </td>
