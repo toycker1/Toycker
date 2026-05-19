@@ -18,6 +18,7 @@ import {
   getTrivaraCrnNo,
   getTrivaraMasterApiKey,
   getTrivaraPrintSlipApiBaseUrl,
+  getTrivaraResponseBusinessError,
   getTrivaraServicesApiBaseUrl,
   getTrivaraTrackingApiKey,
   sendTrivaraCancelOrder,
@@ -442,7 +443,8 @@ export async function cancelTrivaraOrder(orderId: string) {
   })
   const errorMessage = response.ok
     ? null
-    : `Trivara cancellation failed with status ${response.status}`
+    : getTrivaraResponseBusinessError(response.responsePayload) ||
+      `Trivara cancellation failed with status ${response.status}`
 
   await updateBooking(orderId, {
     status: response.ok ? "cancelled" : booking.status,

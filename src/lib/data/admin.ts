@@ -38,7 +38,13 @@ import {
 } from "@/lib/util/media-url"
 import {
   buildTrivaraOrderBookingPayload,
+  extractTrivaraReferenceNumber,
+  getTrivaraApiBaseUrl,
+  getTrivaraApiKey,
   getTrivaraConfig,
+  getTrivaraCrnNo,
+  getTrivaraResponseBusinessError,
+  sendTrivaraCancelOrder,
   sendTrivaraOrderBooking,
 } from "@/lib/integrations/trivara"
 
@@ -2998,6 +3004,116 @@ async function upsertTrivaraBookingRecord(
   }
 }
 
+async function cancelTrivaraBookingForOrder(orderId: string) {
+  const adminSupabase = await createAdminClient()
+  const { data: bookingRow, error: bookingError } = await adminSupabase
+    .from("trivara_order_bookings")
+    .select("*")
+    .eq("order_id", orderId)
+    .maybeSingle()
+
+  if (bookingError) {
+    console.error(
+      `[TRIVARA] Failed to read booking before cancellation for order ${orderId}:`,
+      bookingError
+    )
+    return
+  }
+
+  const booking = bookingRow as TrivaraOrderBooking | null
+  if (!booking || booking.status === "cancelled") {
+    return
+  }
+
+  const referenceNumber =
+    booking.trivara_reference_number ||
+    (booking.response_payload
+      ? extractTrivaraReferenceNumber(booking.response_payload)
+      : null)
+
+  if (!referenceNumber) {
+    return
+  }
+
+  try {
+    const payload = {
+      crn_no: getTrivaraCrnNo(),
+      reference_number: referenceNumber,
+    }
+    const response = await sendTrivaraCancelOrder(payload, {
+      apiBaseUrl: getTrivaraApiBaseUrl(),
+      apiKey: getTrivaraApiKey(),
+    })
+    const errorMessage = response.ok
+      ? null
+      : getTrivaraResponseBusinessError(response.responsePayload) ||
+        `Trivara cancellation failed with status ${response.status}`
+
+    const { error: updateError } = await adminSupabase
+      .from("trivara_order_bookings")
+      .update({
+        status: response.ok ? "cancelled" : booking.status,
+        trivara_reference_number: referenceNumber,
+        cancel_payload: response.responsePayload,
+        cancel_error_message: errorMessage,
+        cancelled_at: response.ok ? new Date().toISOString() : null,
+      })
+      .eq("order_id", orderId)
+
+    if (updateError) {
+      console.error(
+        `[TRIVARA] Failed to store cancellation response for order ${orderId}:`,
+        updateError
+      )
+    }
+
+    await logOrderEvent(
+      orderId,
+      "note_added",
+      response.ok ? "Trivara Booking Cancelled" : "Trivara Cancellation Failed",
+      response.ok
+        ? `Trivara booking was cancelled. Reference: ${referenceNumber}.`
+        : `Toycker order was cancelled, but Trivara cancellation failed: ${errorMessage}`,
+      "system",
+      {
+        provider: "trivara",
+        reference_number: referenceNumber,
+        response_status: response.status,
+      }
+    )
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown Trivara cancellation error"
+
+    const { error: updateError } = await adminSupabase
+      .from("trivara_order_bookings")
+      .update({
+        cancel_error_message: errorMessage,
+        cancelled_at: null,
+      })
+      .eq("order_id", orderId)
+
+    if (updateError) {
+      console.error(
+        `[TRIVARA] Failed to store cancellation error for order ${orderId}:`,
+        updateError
+      )
+    }
+
+    await logOrderEvent(
+      orderId,
+      "note_added",
+      "Trivara Cancellation Failed",
+      `Toycker order was cancelled, but Trivara cancellation failed: ${errorMessage}`,
+      "system",
+      {
+        provider: "trivara",
+        error: errorMessage,
+      }
+    )
+  }
+}
+
 async function requestTrivaraBookingForAcceptedOrder(orderId: string) {
   const adminSupabase = await createAdminClient()
   const { data: existingBooking, error: existingBookingError } =
@@ -3016,6 +3132,35 @@ async function requestTrivaraBookingForAcceptedOrder(orderId: string) {
 
   const booking = existingBooking as TrivaraOrderBooking | null
   if (booking?.status === "booked") {
+    return
+  }
+
+  const recoveredReferenceNumber = booking?.response_payload
+    ? extractTrivaraReferenceNumber(booking.response_payload)
+    : null
+
+  if (booking?.status === "failed" && recoveredReferenceNumber) {
+    await upsertTrivaraBookingRecord(orderId, {
+      status: "booked",
+      request_payload: booking.request_payload || {},
+      response_payload: booking.response_payload,
+      error_message: null,
+      trivara_reference_number: recoveredReferenceNumber,
+      booked_at: booking.booked_at || new Date().toISOString(),
+    })
+
+    await logOrderEvent(
+      orderId,
+      "note_added",
+      "Trivara Booking Recovered",
+      `Trivara booking was already created. Reference: ${recoveredReferenceNumber}.`,
+      "system",
+      {
+        provider: "trivara",
+        reference_number: recoveredReferenceNumber,
+      }
+    )
+
     return
   }
 
@@ -3413,6 +3558,8 @@ export async function cancelOrder(orderId: string) {
     throw error
   }
 
+  await cancelTrivaraBookingForOrder(orderId)
+
   // Deduct Club Membership savings when present
   try {
     const { deductClubSavingsFromOrder } = await import("@lib/data/club")
@@ -3437,6 +3584,8 @@ export async function cancelOrder(orderId: string) {
 
   revalidatePath(`/admin/orders/${orderId}`)
   revalidatePath("/admin/orders")
+  revalidatePath("/admin/logistics")
+  revalidatePath(`/admin/logistics/${orderId}`)
 
   return { success: true }
 }

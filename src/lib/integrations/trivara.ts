@@ -513,7 +513,9 @@ async function parseTrivaraResponse(
   }
 }
 
-function extractReferenceNumber(value: Record<string, unknown>): string | null {
+export function extractTrivaraReferenceNumber(
+  value: Record<string, unknown>
+): string | null {
   const queue: unknown[] = [value]
   const candidateKeys = new Set([
     "reference_number",
@@ -528,7 +530,12 @@ function extractReferenceNumber(value: Record<string, unknown>): string | null {
   while (queue.length > 0) {
     const current = queue.shift()
 
-    if (!current || typeof current !== "object" || Array.isArray(current)) {
+    if (!current || typeof current !== "object") {
+      continue
+    }
+
+    if (Array.isArray(current)) {
+      queue.push(...current)
       continue
     }
 
@@ -560,7 +567,9 @@ function getStringValue(value: unknown): string | null {
   return trimmed || null
 }
 
-function getResponseBusinessError(value: Record<string, unknown>): string | null {
+export function getTrivaraResponseBusinessError(
+  value: Record<string, unknown>
+): string | null {
   const queue: unknown[] = [value]
 
   while (queue.length > 0) {
@@ -634,10 +643,10 @@ export async function sendTrivaraOrderBooking(
   const responsePayload = await parseTrivaraResponse(response)
 
   return {
-    ok: response.ok && !getResponseBusinessError(responsePayload),
+    ok: response.ok && !getTrivaraResponseBusinessError(responsePayload),
     status: response.status,
-    referenceNumber: extractReferenceNumber(responsePayload),
-    errorMessage: getResponseBusinessError(responsePayload),
+    referenceNumber: extractTrivaraReferenceNumber(responsePayload),
+    errorMessage: getTrivaraResponseBusinessError(responsePayload),
     responsePayload,
   }
 }
@@ -669,9 +678,10 @@ async function sendTrivaraFormRequest(
   }
 
   const responsePayload = await parseTrivaraResponse(response)
+  const businessError = getTrivaraResponseBusinessError(responsePayload)
 
   return {
-    ok: response.ok,
+    ok: response.ok && !businessError,
     status: response.status,
     responsePayload,
   }

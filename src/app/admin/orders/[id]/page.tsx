@@ -185,7 +185,10 @@ export default async function AdminOrderDetails({ params }: Props) {
       )}
       {order.status === 'accepted' && (
         <ProtectedAction permission={PERMISSIONS.ORDERS_UPDATE} hideWhenDisabled>
-          <FulfillmentModal orderId={order.id} shippingPartners={shippingPartners} />
+          <div className="flex gap-2">
+            <FulfillmentModal orderId={order.id} shippingPartners={shippingPartners} />
+            <CancelOrderButton orderId={order.id} />
+          </div>
         </ProtectedAction>
       )}
       {order.status === 'shipped' && (

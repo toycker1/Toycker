@@ -219,6 +219,44 @@ describe("Trivara order booking integration", () => {
     })
   })
 
+  it("extracts reference numbers from Trivara data array responses", async () => {
+    const fetcher = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          data: [
+            {
+              status: "SUCCESS",
+              message: "Order Created",
+              waybill: "46322610068051",
+              order_id: 6668,
+              reference_number: "260000015315",
+            },
+          ],
+          error: "",
+          result: "Processed",
+        }),
+        { status: 200 }
+      )
+    })
+
+    const payload = buildTrivaraOrderBookingPayload(buildOrder(), config)
+    const result = await sendTrivaraOrderBooking(
+      payload,
+      {
+        apiBaseUrl: "https://app.trivaralogistics.com",
+        apiKey: "secret-key",
+      },
+      fetcher
+    )
+
+    expect(result).toMatchObject({
+      ok: true,
+      status: 200,
+      referenceNumber: "260000015315",
+      errorMessage: null,
+    })
+  })
+
   it("rejects invalid Trivara base URLs before sending requests", () => {
     process.env.TRIVARA_API_BASE_URL = "OY6R-not-a-url"
 
@@ -456,6 +494,31 @@ describe("Trivara remaining endpoint integrations", () => {
       "https://app.trivaralogistics.com/api/users/V2/OrderBooking/cancel_order"
     )
     expect(capturedInit?.headers).toEqual({ Apikey: "cancel-key" })
+  })
+
+  it("treats cancel order business errors as failed responses", async () => {
+    const fetcher = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          data: [{ status: "ERROR", message: "Cancel Failed" }],
+          error: "",
+          result: "Processed",
+        }),
+        { status: 200 }
+      )
+    })
+
+    const result = await sendTrivaraCancelOrder(
+      { crn_no: "857252", reference_number: "857252P0000044" },
+      { apiBaseUrl: "https://app.trivaralogistics.com", apiKey: "cancel-key" },
+      fetcher
+    )
+
+    expect(result.ok).toBe(false)
+    expect(result.status).toBe(200)
+    expect(result.responsePayload).toMatchObject({
+      data: [{ status: "ERROR", message: "Cancel Failed" }],
+    })
   })
 
   it("sends pickup locations, services, and active partners with the Apikey header", async () => {

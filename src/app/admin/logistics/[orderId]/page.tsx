@@ -84,6 +84,12 @@ function getPayloadValue(
 
   while (queue.length > 0) {
     const current = queue.shift()
+
+    if (Array.isArray(current)) {
+      queue.push(...current)
+      continue
+    }
+
     if (!isObjectRecord(current)) {
       continue
     }
