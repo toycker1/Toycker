@@ -11,6 +11,10 @@ import OrderTracking from "@modules/order/components/order-tracking"
 import ShippingDetails from "@modules/order/components/shipping-details"
 import { AlertCircle, Check, XCircle } from "lucide-react"
 
+// Temporarily disabled: customer-side cancellation should stay hidden until the business wants users to cancel orders themselves again.
+// To re-enable it, change this value to true. Admin cancellation remains available from the admin order screens.
+const ENABLE_CUSTOMER_ORDER_CANCELLATION = false
+
 type OrderCompletedTemplateProps = {
   order: Order
   customerPhone?: string | null
@@ -31,7 +35,8 @@ export default function OrderCompletedTemplate({
 
   const heroContent = getCustomerOrderPageContent(order)
   const canUserCancel =
-    order.status === "order_placed" || order.status === "pending"
+    ENABLE_CUSTOMER_ORDER_CANCELLATION &&
+    (order.status === "order_placed" || order.status === "pending")
   const shouldClearCart =
     context === "post_checkout" && heroContent.state === "confirmed"
 

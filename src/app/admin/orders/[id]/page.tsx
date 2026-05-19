@@ -1,4 +1,4 @@
-import { getAdminOrder, getActiveShippingPartners, getOrderTimeline, getCustomerDisplayId } from "@/lib/data/admin"
+import { getAdminOrder, getTrivaraFulfillmentPartner, getOrderTimeline, getCustomerDisplayId } from "@/lib/data/admin"
 import { getRegion } from "@/lib/data/regions"
 import { formatCustomerDisplayId } from "@/lib/util/customer"
 import {
@@ -165,8 +165,8 @@ export default async function AdminOrderDetails({ params }: Props) {
   if (!order) notFound()
 
   // Fetch additional data
-  const [shippingPartners, timeline, customerDisplayId, region] = await Promise.all([
-    getActiveShippingPartners(),
+  const [trivaraFulfillmentPartner, timeline, customerDisplayId, region] = await Promise.all([
+    getTrivaraFulfillmentPartner(),
     getOrderTimeline(id).catch(() => []),
     order.user_id ? getCustomerDisplayId(order.user_id).catch(() => null) : null,
     getRegion(),
@@ -185,7 +185,13 @@ export default async function AdminOrderDetails({ params }: Props) {
       )}
       {order.status === 'accepted' && (
         <ProtectedAction permission={PERMISSIONS.ORDERS_UPDATE} hideWhenDisabled>
-          <FulfillmentModal orderId={order.id} shippingPartners={shippingPartners} />
+          <div className="flex gap-2">
+            <FulfillmentModal
+              orderId={order.id}
+              trivaraPartner={trivaraFulfillmentPartner}
+            />
+            <CancelOrderButton orderId={order.id} />
+          </div>
         </ProtectedAction>
       )}
       {order.status === 'shipped' && (

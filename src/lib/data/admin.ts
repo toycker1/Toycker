@@ -13,6 +13,7 @@ import {
   ShippingOption,
   OrderTimeline,
   ShippingPartner,
+  TrivaraOrderBooking,
   OrderEventType,
   ProductVariant,
   VariantFormData,
@@ -35,6 +36,17 @@ import {
   validateMediaUrlList,
   validateNoSupabaseStorageMediaUrl,
 } from "@/lib/util/media-url"
+import {
+  buildTrivaraOrderBookingPayload,
+  extractTrivaraReferenceNumber,
+  getTrivaraApiBaseUrl,
+  getTrivaraApiKey,
+  getTrivaraConfig,
+  getTrivaraCrnNo,
+  getTrivaraResponseBusinessError,
+  sendTrivaraCancelOrder,
+  sendTrivaraOrderBooking,
+} from "@/lib/integrations/trivara"
 
 type EmailBackedRow = {
   email: string | null
@@ -2870,6 +2882,20 @@ export async function getActiveShippingPartners() {
   return data as ShippingPartner[]
 }
 
+export async function getTrivaraFulfillmentPartner() {
+  await ensureAdmin()
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("shipping_partners")
+    .select("*")
+    .eq("is_active", true)
+    .ilike("name", "Trivara Logistics")
+    .maybeSingle()
+
+  if (error) throw error
+  return data as ShippingPartner | null
+}
+
 export async function createShippingPartner(formData: FormData) {
   await ensureAdmin()
   await requirePermission(PERMISSIONS.SHIPPING_PARTNERS_CREATE)
@@ -2964,6 +2990,389 @@ export async function logOrderEvent(
   }
 }
 
+async function upsertTrivaraBookingRecord(
+  orderId: string,
+  values: Pick<
+    TrivaraOrderBooking,
+    "status" | "request_payload" | "response_payload" | "error_message"
+  > & {
+    trivara_reference_number?: string | null
+    booked_at?: string | null
+  }
+) {
+  const adminSupabase = await createAdminClient()
+
+  const { error } = await adminSupabase.from("trivara_order_bookings").upsert(
+    {
+      order_id: orderId,
+      ...values,
+    },
+    { onConflict: "order_id" }
+  )
+
+  if (error) {
+    console.error(
+      `[TRIVARA] Failed to store booking record for order ${orderId}:`,
+      error
+    )
+  }
+}
+
+async function cancelTrivaraBookingForOrder(orderId: string) {
+  const adminSupabase = await createAdminClient()
+  const { data: bookingRow, error: bookingError } = await adminSupabase
+    .from("trivara_order_bookings")
+    .select("*")
+    .eq("order_id", orderId)
+    .maybeSingle()
+
+  if (bookingError) {
+    console.error(
+      `[TRIVARA] Failed to read booking before cancellation for order ${orderId}:`,
+      bookingError
+    )
+    return
+  }
+
+  const booking = bookingRow as TrivaraOrderBooking | null
+  if (!booking || booking.status === "cancelled") {
+    return
+  }
+
+  const referenceNumber =
+    booking.trivara_reference_number ||
+    (booking.response_payload
+      ? extractTrivaraReferenceNumber(booking.response_payload)
+      : null)
+
+  if (!referenceNumber) {
+    return
+  }
+
+  try {
+    const payload = {
+      crn_no: getTrivaraCrnNo(),
+      reference_number: referenceNumber,
+    }
+    const response = await sendTrivaraCancelOrder(payload, {
+      apiBaseUrl: getTrivaraApiBaseUrl(),
+      apiKey: getTrivaraApiKey(),
+    })
+    const errorMessage = response.ok
+      ? null
+      : getTrivaraResponseBusinessError(response.responsePayload) ||
+        `Trivara cancellation failed with status ${response.status}`
+
+    const { error: updateError } = await adminSupabase
+      .from("trivara_order_bookings")
+      .update({
+        status: response.ok ? "cancelled" : booking.status,
+        trivara_reference_number: referenceNumber,
+        cancel_payload: response.responsePayload,
+        cancel_error_message: errorMessage,
+        cancelled_at: response.ok ? new Date().toISOString() : null,
+      })
+      .eq("order_id", orderId)
+
+    if (updateError) {
+      console.error(
+        `[TRIVARA] Failed to store cancellation response for order ${orderId}:`,
+        updateError
+      )
+    }
+
+    await logOrderEvent(
+      orderId,
+      "note_added",
+      response.ok ? "Trivara Booking Cancelled" : "Trivara Cancellation Failed",
+      response.ok
+        ? `Trivara booking was cancelled. Reference: ${referenceNumber}.`
+        : `Toycker order was cancelled, but Trivara cancellation failed: ${errorMessage}`,
+      "system",
+      {
+        provider: "trivara",
+        reference_number: referenceNumber,
+        response_status: response.status,
+      }
+    )
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown Trivara cancellation error"
+
+    const { error: updateError } = await adminSupabase
+      .from("trivara_order_bookings")
+      .update({
+        cancel_error_message: errorMessage,
+        cancelled_at: null,
+      })
+      .eq("order_id", orderId)
+
+    if (updateError) {
+      console.error(
+        `[TRIVARA] Failed to store cancellation error for order ${orderId}:`,
+        updateError
+      )
+    }
+
+    await logOrderEvent(
+      orderId,
+      "note_added",
+      "Trivara Cancellation Failed",
+      `Toycker order was cancelled, but Trivara cancellation failed: ${errorMessage}`,
+      "system",
+      {
+        provider: "trivara",
+        error: errorMessage,
+      }
+    )
+  }
+}
+
+async function requestTrivaraBookingForAcceptedOrder(orderId: string) {
+  const adminSupabase = await createAdminClient()
+  const { data: existingBooking, error: existingBookingError } =
+    await adminSupabase
+      .from("trivara_order_bookings")
+      .select("*")
+      .eq("order_id", orderId)
+      .maybeSingle()
+
+  if (existingBookingError) {
+    console.error(
+      `[TRIVARA] Failed to read existing booking for order ${orderId}:`,
+      existingBookingError
+    )
+  }
+
+  const booking = existingBooking as TrivaraOrderBooking | null
+  if (booking?.status === "booked") {
+    return
+  }
+
+  const recoveredReferenceNumber = booking?.response_payload
+    ? extractTrivaraReferenceNumber(booking.response_payload)
+    : null
+
+  if (booking?.status === "failed" && recoveredReferenceNumber) {
+    await upsertTrivaraBookingRecord(orderId, {
+      status: "booked",
+      request_payload: booking.request_payload || {},
+      response_payload: booking.response_payload,
+      error_message: null,
+      trivara_reference_number: recoveredReferenceNumber,
+      booked_at: booking.booked_at || new Date().toISOString(),
+    })
+
+    await logOrderEvent(
+      orderId,
+      "note_added",
+      "Trivara Booking Recovered",
+      `Trivara booking was already created. Reference: ${recoveredReferenceNumber}.`,
+      "system",
+      {
+        provider: "trivara",
+        reference_number: recoveredReferenceNumber,
+      }
+    )
+
+    return
+  }
+
+  let config: ReturnType<typeof getTrivaraConfig>
+
+  try {
+    config = getTrivaraConfig()
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Invalid Trivara configuration"
+
+    await upsertTrivaraBookingRecord(orderId, {
+      status: "failed",
+      request_payload: {},
+      response_payload: null,
+      error_message: errorMessage,
+      trivara_reference_number: null,
+      booked_at: null,
+    })
+
+    await logOrderEvent(
+      orderId,
+      "note_added",
+      "Trivara Booking Failed",
+      `Order was accepted, but Trivara booking could not start: ${errorMessage}`,
+      "system",
+      { provider: "trivara", error: errorMessage }
+    )
+
+    return
+  }
+
+  if (!config.bookingEnabled) {
+    if (booking?.status !== "skipped") {
+      await upsertTrivaraBookingRecord(orderId, {
+        status: "skipped",
+        request_payload: {
+          reason: "TRIVARA_BOOKING_ENABLED is not true",
+        },
+        response_payload: null,
+        error_message: null,
+        trivara_reference_number: null,
+        booked_at: null,
+      })
+
+      await logOrderEvent(
+        orderId,
+        "note_added",
+        "Trivara Booking Skipped",
+        "Trivara booking is disabled in environment settings.",
+        "system",
+        { provider: "trivara" }
+      )
+    }
+
+    return
+  }
+
+  let requestPayload: Record<string, unknown> = {}
+
+  try {
+    const { data: orderRow, error: orderError } = await adminSupabase
+      .from("orders")
+      .select("*")
+      .eq("id", orderId)
+      .maybeSingle()
+
+    if (orderError || !orderRow) {
+      throw new Error(orderError?.message || "Order not found")
+    }
+
+    const payload = buildTrivaraOrderBookingPayload(orderRow as Order, config)
+    requestPayload = payload
+
+    await upsertTrivaraBookingRecord(orderId, {
+      status: "pending",
+      request_payload: requestPayload,
+      response_payload: null,
+      error_message: null,
+      trivara_reference_number: null,
+      booked_at: null,
+    })
+
+    const response = await sendTrivaraOrderBooking(payload, config)
+
+    if (!response.ok) {
+      const errorMessage =
+        response.errorMessage ||
+        `Trivara request failed with status ${response.status}`
+
+      await upsertTrivaraBookingRecord(orderId, {
+        status: "failed",
+        request_payload: requestPayload,
+        response_payload: response.responsePayload,
+        error_message: errorMessage,
+        trivara_reference_number: null,
+        booked_at: null,
+      })
+
+      await logOrderEvent(
+        orderId,
+        "note_added",
+        "Trivara Booking Failed",
+        `Order was accepted, but Trivara booking failed: ${errorMessage}`,
+        "system",
+        {
+          provider: "trivara",
+          error: errorMessage,
+          response_status: response.status,
+        }
+      )
+
+      return
+    }
+
+    if (!response.referenceNumber) {
+      const errorMessage =
+        "Trivara booking response did not include a reference number."
+
+      await upsertTrivaraBookingRecord(orderId, {
+        status: "failed",
+        request_payload: requestPayload,
+        response_payload: response.responsePayload,
+        error_message: errorMessage,
+        trivara_reference_number: null,
+        booked_at: null,
+      })
+
+      await logOrderEvent(
+        orderId,
+        "note_added",
+        "Trivara Booking Failed",
+        `Order was accepted, but ${errorMessage}`,
+        "system",
+        {
+          provider: "trivara",
+          error: errorMessage,
+        }
+      )
+
+      return
+    }
+
+    await upsertTrivaraBookingRecord(orderId, {
+      status: "booked",
+      request_payload: requestPayload,
+      response_payload: response.responsePayload,
+      error_message: null,
+      trivara_reference_number: response.referenceNumber,
+      booked_at: new Date().toISOString(),
+    })
+
+    await logOrderEvent(
+      orderId,
+      "note_added",
+      "Trivara Pickup Requested",
+      response.referenceNumber
+        ? `Trivara booking created. Reference: ${response.referenceNumber}.`
+        : "Trivara booking request was sent successfully.",
+      "system",
+      {
+        provider: "trivara",
+        reference_number: response.referenceNumber,
+      }
+    )
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown Trivara booking error"
+
+    await upsertTrivaraBookingRecord(orderId, {
+      status: "failed",
+      request_payload: requestPayload,
+      response_payload: null,
+      error_message: errorMessage,
+      trivara_reference_number: null,
+      booked_at: null,
+    })
+
+    await logOrderEvent(
+      orderId,
+      "note_added",
+      "Trivara Booking Failed",
+      `Order was accepted, but Trivara booking failed: ${errorMessage}`,
+      "system",
+      {
+        provider: "trivara",
+        error: errorMessage,
+      }
+    )
+  }
+}
+
+export async function retryTrivaraBookingForOrder(orderId: string) {
+  await ensureAdmin()
+  await requirePermission(PERMISSIONS.SHIPPING_UPDATE)
+  await requestTrivaraBookingForAcceptedOrder(orderId)
+}
+
 // --- Order Actions ---
 export async function acceptOrder(orderId: string) {
   await ensureAdmin()
@@ -2990,6 +3399,8 @@ export async function acceptOrder(orderId: string) {
     {},
     actorDisplay
   )
+
+  await requestTrivaraBookingForAcceptedOrder(orderId)
 
   revalidatePath(`/admin/orders/${orderId}`)
   revalidatePath("/admin/orders")
@@ -3138,8 +3549,16 @@ export async function cancelOrder(orderId: string) {
     .maybeSingle()
 
   if (!order) throw new Error("Order not found")
-  if (order.status === "cancelled" || order.status === "failed")
+  if (order.status === "cancelled" || order.status === "failed") {
+    await cancelTrivaraBookingForOrder(orderId)
+    revalidatePath(`/admin/orders/${orderId}`)
+    revalidatePath("/admin/orders")
+    revalidatePath("/admin/logistics")
+    revalidatePath(`/admin/logistics/${orderId}`)
+    revalidatePath(`/order/confirmed/${orderId}`)
+    revalidatePath(`/account/orders/details/${orderId}`)
     return { success: true, alreadyCancelled: true }
+  }
   if (order.status === "delivered" || order.status === "shipped")
     throw new Error(
       "Cannot cancel an order that has already shipped or delivered."
@@ -3160,6 +3579,8 @@ export async function cancelOrder(orderId: string) {
     console.error(`[ADMIN] Order update failed for ${orderId}:`, error)
     throw error
   }
+
+  await cancelTrivaraBookingForOrder(orderId)
 
   // Deduct Club Membership savings when present
   try {
@@ -3185,6 +3606,10 @@ export async function cancelOrder(orderId: string) {
 
   revalidatePath(`/admin/orders/${orderId}`)
   revalidatePath("/admin/orders")
+  revalidatePath("/admin/logistics")
+  revalidatePath(`/admin/logistics/${orderId}`)
+  revalidatePath(`/order/confirmed/${orderId}`)
+  revalidatePath(`/account/orders/details/${orderId}`)
 
   return { success: true }
 }
@@ -3367,15 +3792,22 @@ export async function fulfillOrder(orderId: string, formData: FormData) {
     throw new Error("Tracking number is required")
   }
 
-  // Get shipping partner name for timeline
-  let partnerName = "Unknown"
-  if (shippingPartnerId) {
-    const { data: partner } = await supabase
-      .from("shipping_partners")
-      .select("name")
-      .eq("id", shippingPartnerId)
-      .single()
-    partnerName = partner?.name || "Unknown"
+  if (!shippingPartnerId) {
+    throw new Error("Trivara Logistics is required for fulfillment")
+  }
+
+  const { data: partner, error: partnerError } = await supabase
+    .from("shipping_partners")
+    .select("name")
+    .eq("id", shippingPartnerId)
+    .eq("is_active", true)
+    .maybeSingle()
+
+  if (partnerError) throw new Error(partnerError.message)
+
+  const partnerName = partner?.name || ""
+  if (partnerName.toLowerCase() !== "trivara logistics") {
+    throw new Error("Only Trivara Logistics can be used for fulfillment")
   }
 
   // Update order
