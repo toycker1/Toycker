@@ -18,7 +18,17 @@ const OrderCard = ({ order }: OrderCardProps) => {
     const fulfillmentStatus = order.fulfillment_status || "not_fulfilled"
 
     // Explicitly handle Cancelled/Failed first as they take priority
-    if (status.toLowerCase() === "cancelled" || order.payment_status === "failed") {
+    if (order.payment_status === "failed" || status.toLowerCase() === "failed") {
+      return {
+        label: "Incomplete Transaction",
+        icon: Package,
+        bgColor: "bg-red-50",
+        textColor: "text-red-700",
+        iconColor: "text-red-600",
+      }
+    }
+
+    if (status.toLowerCase() === "cancelled") {
       return {
         label: "Cancelled",
         icon: Package,

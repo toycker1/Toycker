@@ -10,6 +10,7 @@ import { formatIST } from "@/lib/util/date"
 import { ClickableTableRow } from "@modules/admin/components/clickable-table-row"
 import RealtimeOrdersListener from "@modules/admin/components/realtime-orders-listener"
 import { AdminTableWrapper } from "@modules/admin/components/admin-table-wrapper"
+import { expireStaleEasebuzzPendingPayments } from "@/lib/actions/cancel-pending-payment"
 
 // Helper to format payment status for display
 function normalizePaymentMethod(method?: string | null, hasPayuTxn?: string | null, hasGatewayTxn?: string | null) {
@@ -35,6 +36,7 @@ function formatPaymentMethodDisplay(method?: string | null, hasPayuTxn?: string 
 function getPaymentBadge(paymentStatus: string, paymentMethod?: string | null, hasPayuTxn?: string | null, orderStatus?: string | null, hasGatewayTxn?: string | null) {
   const normalizedMethod = normalizePaymentMethod(paymentMethod, hasPayuTxn, hasGatewayTxn)
   const isCOD = normalizedMethod === "cod" || normalizedMethod === "manual"
+  const isEasebuzz = normalizedMethod === "easebuzz"
   const isCancelled = orderStatus === "cancelled" || paymentStatus === "cancelled" || paymentStatus === "failed"
 
   if (isCOD) {
@@ -55,6 +57,10 @@ function getPaymentBadge(paymentStatus: string, paymentMethod?: string | null, h
     case "pending":
       return { variant: "warning" as const, label: "Pending" }
     case "failed":
+      if (isEasebuzz) {
+        return { variant: "error" as const, label: "Incomplete Transaction" }
+      }
+      return { variant: "error" as const, label: "Payment Failed" }
     case "cancelled":
       return { variant: "error" as const, label: "Payment Cancelled" }
     case "refunded":
@@ -88,6 +94,8 @@ export default async function AdminOrders({
 }) {
   const { page = "1", search = "" } = await searchParams
   const pageNumber = parseInt(page, 10) || 1
+
+  await expireStaleEasebuzzPendingPayments()
 
   const { orders, count, totalPages, currentPage } = await getAdminOrders({
     page: pageNumber,

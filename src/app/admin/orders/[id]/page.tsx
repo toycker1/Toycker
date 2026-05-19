@@ -21,6 +21,7 @@ import { fixUrl } from "@/lib/util/images"
 import { RealtimeOrderManager } from "@modules/common/components/realtime-order-manager"
 import { ProtectedAction } from "@/lib/permissions/components/protected-action"
 import { PERMISSIONS } from "@/lib/permissions"
+import { expireStaleEasebuzzPendingPayments } from "@/lib/actions/cancel-pending-payment"
 
 const normalizePaymentMethod = (method?: string | null, hasPayuTxn?: string | null, hasGatewayTxn?: string | null) => {
   if (!method && hasGatewayTxn) return "easebuzz"
@@ -160,6 +161,7 @@ const getOrderItemVariantTitle = (item: AdminOrderItem) => {
 
 export default async function AdminOrderDetails({ params }: Props) {
   const { id } = await params
+  await expireStaleEasebuzzPendingPayments()
   const order = await getAdminOrder(id)
 
   if (!order) notFound()
@@ -236,6 +238,7 @@ export default async function AdminOrderDetails({ params }: Props) {
 
   const normalizedMethod = normalizePaymentMethod(order.payment_method, order.payu_txn_id, order.gateway_txn_id)
   const isCodPayment = normalizedMethod === "cod" || normalizedMethod === "manual"
+  const isEasebuzzPayment = normalizedMethod === "easebuzz"
   const paymentStatusPending = ["pending", "awaiting", "unpaid"].includes(normalizedPaymentStatus)
   const canMarkAsPaid = !isCodPayment && paymentStatusPending && order.status === "delivered"
 
@@ -443,8 +446,12 @@ export default async function AdminOrderDetails({ params }: Props) {
                             : 'COD - Pending'
                       : normalizedPaymentStatus === 'paid' || normalizedPaymentStatus === 'captured'
                         ? 'Paid'
-                        : normalizedPaymentStatus === 'cancelled' || normalizedPaymentStatus === 'failed'
-                          ? 'Payment Cancelled'
+                      : normalizedPaymentStatus === 'cancelled' || normalizedPaymentStatus === 'failed'
+                          ? normalizedPaymentStatus === 'failed' && isEasebuzzPayment
+                            ? 'Incomplete Transaction'
+                            : normalizedPaymentStatus === 'failed'
+                              ? 'Payment Failed'
+                              : 'Payment Cancelled'
                           : normalizedPaymentStatus === 'refunded'
                             ? 'Refunded'
                             : (normalizedPaymentStatus?.charAt(0).toUpperCase() + normalizedPaymentStatus?.slice(1) || '—')
