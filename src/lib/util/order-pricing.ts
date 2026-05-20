@@ -20,6 +20,14 @@ export interface OrderPricingMetadata {
   payment_method?: string
   payu_payload?: Partial<PayUCallbackPayload>
   easebuzz_payload?: Partial<EasebuzzCallbackPayload>
+  payment_type?: "full" | "partial"
+  advance_percentage?: number
+  advance_amount?: number
+  balance_amount?: number
+  full_order_amount?: number
+  balance_payment_status?: "pending" | "paid"
+  balance_paid_at?: string
+  balance_payment_method?: string
   club_savings_credited?: boolean
   club_savings_deducted?: boolean
   deducted_amount?: number
@@ -29,6 +37,29 @@ export interface OrderPricingMetadata {
 type PaymentSessionLike = {
   provider_id?: string
   status?: string
+  data?: unknown
+}
+
+export type PartialPaymentSessionData = {
+  payment_type: "partial"
+  advance_percentage: number
+  advance_amount: number
+  balance_amount: number
+  full_order_amount: number
+  txnid?: string
+  expires_at?: string
+}
+
+export type PartialPaymentDisplayData = {
+  isPartialPayment: true
+  advancePercentage: number | null
+  advanceAmount: number
+  balanceAmount: number
+  balancePaymentStatus: "pending" | "paid"
+  balancePaymentMethod: string | null
+  balancePaidAt: string | null
+  balancePaidAmount: number
+  balanceRemainingAmount: number
 }
 
 type OrderLinePricingLike = {
@@ -62,6 +93,51 @@ export const getOrderPricingMetadata = (
   }
 
   return value as OrderPricingMetadata
+}
+
+export const getPartialPaymentDisplayData = (
+  value: unknown
+): PartialPaymentDisplayData | null => {
+  const metadata = getOrderPricingMetadata(value)
+
+  if (metadata.payment_type !== "partial") {
+    return null
+  }
+
+  const advanceAmount = toFiniteNumber(metadata.advance_amount)
+  const balanceAmount = toFiniteNumber(metadata.balance_amount)
+
+  if (advanceAmount === null || balanceAmount === null || advanceAmount <= 0) {
+    return null
+  }
+
+  const balancePaymentStatus =
+    metadata.balance_payment_status === "paid" ? "paid" : "pending"
+  const balancePaidAmount = balancePaymentStatus === "paid" ? balanceAmount : 0
+  const balanceIsPaid = balancePaymentStatus === "paid"
+
+  return {
+    isPartialPayment: true,
+    advancePercentage: toFiniteNumber(metadata.advance_percentage),
+    advanceAmount,
+    balanceAmount,
+    balancePaymentStatus,
+    balancePaymentMethod:
+      balanceIsPaid &&
+      typeof metadata.balance_payment_method === "string" &&
+      metadata.balance_payment_method.trim().length > 0
+        ? metadata.balance_payment_method
+        : null,
+    balancePaidAt:
+      balanceIsPaid &&
+      typeof metadata.balance_paid_at === "string" &&
+      metadata.balance_paid_at.trim().length > 0
+        ? metadata.balance_paid_at
+        : null,
+    balancePaidAmount,
+    balanceRemainingAmount:
+      balancePaymentStatus === "paid" ? 0 : Math.max(0, balanceAmount),
+  }
 }
 
 export const getClubSavingsFromItems = (value: unknown): number | null => {
@@ -150,6 +226,69 @@ export const getPendingPaymentProviderId = (value: unknown): string | null => {
   }
 
   return null
+}
+
+export const getPaymentSessionDataForProvider = (
+  value: unknown,
+  providerId: string
+): Record<string, unknown> | null => {
+  if (!isRecord(value)) {
+    return null
+  }
+
+  const paymentSessions = value.payment_sessions
+  if (!Array.isArray(paymentSessions)) {
+    return null
+  }
+
+  for (const session of paymentSessions) {
+    if (!isRecord(session)) {
+      continue
+    }
+
+    const typedSession = session as PaymentSessionLike
+    if (typedSession.provider_id !== providerId || !isRecord(typedSession.data)) {
+      continue
+    }
+
+    return typedSession.data
+  }
+
+  return null
+}
+
+export const getPartialPaymentSessionData = (
+  value: unknown,
+  providerId: string
+): PartialPaymentSessionData | null => {
+  const data = getPaymentSessionDataForProvider(value, providerId)
+  if (!data || data.payment_type !== "partial") {
+    return null
+  }
+
+  const advancePercentage = toFiniteNumber(data.advance_percentage)
+  const advanceAmount = toFiniteNumber(data.advance_amount)
+  const balanceAmount = toFiniteNumber(data.balance_amount)
+  const fullOrderAmount = toFiniteNumber(data.full_order_amount)
+
+  if (
+    advancePercentage === null ||
+    advanceAmount === null ||
+    balanceAmount === null ||
+    fullOrderAmount === null
+  ) {
+    return null
+  }
+
+  return {
+    payment_type: "partial",
+    advance_percentage: advancePercentage,
+    advance_amount: advanceAmount,
+    balance_amount: balanceAmount,
+    full_order_amount: fullOrderAmount,
+    txnid: typeof data.txnid === "string" ? data.txnid : undefined,
+    expires_at: typeof data.expires_at === "string" ? data.expires_at : undefined,
+  }
 }
 
 const parseCurrencyAmount = (

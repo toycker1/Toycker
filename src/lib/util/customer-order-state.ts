@@ -6,7 +6,7 @@ const CANCELLED_ORDER_STATUSES = new Set<Order["status"]>([
 ])
 
 const FAILED_PAYMENT_STATUSES = new Set(["failed", "cancelled"])
-const SUCCESS_PAYMENT_STATUSES = new Set(["captured", "paid"])
+const SUCCESS_PAYMENT_STATUSES = new Set(["captured", "paid", "partially_paid"])
 const PENDING_PAYMENT_STATUSES = new Set(["pending", "awaiting", "unpaid"])
 
 export type CustomerOrderPageState =

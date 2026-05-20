@@ -3,7 +3,10 @@
 import { createClient } from "@/lib/supabase/server"
 import { PaymentProvider } from "@/lib/supabase/types"
 
-const ONLINE_GATEWAY_IDS = ["pp_payu_payu", "pp_easebuzz_easebuzz"] as const
+const ONLINE_GATEWAY_IDS = [
+  "pp_payu_payu",
+  "pp_easebuzz_easebuzz",
+] as const
 
 export async function getOnlinePaymentGateways(): Promise<{ id: string; name: string; is_active: boolean }[]> {
   const supabase = await createClient()
@@ -29,7 +32,7 @@ export const listCartPaymentMethods = async (_regionId: string) => {
 
   const { data, error } = await supabase
     .from("payment_providers")
-    .select("id, name, description")
+    .select("id, name, description, partial_payment_percentage")
     .eq("is_active", true)
 
   if (error) {
@@ -43,8 +46,13 @@ export const listCartPaymentMethods = async (_regionId: string) => {
     ]
   }
 
-  return data.map((method: Partial<PaymentProvider>) => ({
-    id: method.id!,
-    name: method.name!,
+  return (data as Pick<
+    PaymentProvider,
+    "id" | "name" | "description" | "partial_payment_percentage"
+  >[]).map((method) => ({
+    id: method.id,
+    name: method.name,
+    description: method.description,
+    partial_payment_percentage: method.partial_payment_percentage ?? null,
   }))
 }

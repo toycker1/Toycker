@@ -8,6 +8,7 @@ import { CreditCard, Info, Percent, Settings, ShieldCheck, Activity } from "luci
 
 export default function PaymentProviderForm({ method }: { method: PaymentProvider }) {
     const updateAction = updatePaymentMethod.bind(null, method.id)
+    const isPartialPayment = method.id === "pp_easebuzz_partial_payment"
 
     return (
         <form action={updateAction} className="space-y-6">
@@ -106,6 +107,32 @@ export default function PaymentProviderForm({ method }: { method: PaymentProvide
                             </div>
                             <p className="text-[10px] text-gray-400 font-medium italic">Applied automatically during checkout.</p>
                         </div>
+
+                        {isPartialPayment && (
+                            <div className="space-y-2">
+                                <label htmlFor="partial_payment_percentage" className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                                    Advance Payment Percentage
+                                </label>
+                                <div className="relative">
+                                    <Percent className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+                                    <input
+                                        type="number"
+                                        name="partial_payment_percentage"
+                                        id="partial_payment_percentage"
+                                        defaultValue={method.partial_payment_percentage ?? 20}
+                                        min="0.01"
+                                        max="99.99"
+                                        step="0.01"
+                                        required
+                                        className="block w-full rounded-lg border-gray-200 pl-10 pr-10 py-2.5 text-sm font-black focus:border-black focus:ring-0 transition-all"
+                                    />
+                                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-gray-400 font-bold text-xs">
+                                        %
+                                    </div>
+                                </div>
+                                <p className="text-[10px] text-gray-400 font-medium italic">Used to calculate the advance amount for checkout partial payments.</p>
+                            </div>
+                        )}
 
                         <div className="space-y-2">
                             <label htmlFor="is_active" className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest">

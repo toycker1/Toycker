@@ -35,6 +35,7 @@ export default async function AdminPayments() {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Provider</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Advance</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                 <th className="relative px-6 py-3"><span className="sr-only">Actions</span></th>
               </tr>
@@ -55,6 +56,11 @@ export default async function AdminPayments() {
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
                     {method.description || 'No description provided'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-semibold">
+                    {method.id === "pp_easebuzz_partial_payment"
+                      ? `${method.partial_payment_percentage ?? 20}%`
+                      : "N/A"}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <AdminBadge variant={method.is_active ? "success" : "neutral"}>
@@ -84,7 +90,7 @@ export default async function AdminPayments() {
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan={4} className="px-6 py-12 text-center text-gray-500 text-sm">
+                  <td colSpan={5} className="px-6 py-12 text-center text-gray-500 text-sm">
                     No payment methods configured yet.
                   </td>
                 </tr>

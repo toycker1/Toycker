@@ -3,8 +3,13 @@
 import { createAdminClient } from "@/lib/supabase/admin"
 import { logOrderEvent } from "@/lib/data/admin"
 
-const ONLINE_PAYMENT_METHODS = ["pp_payu_payu", "pp_easebuzz_easebuzz"] as const
+const ONLINE_PAYMENT_METHODS = [
+  "pp_payu_payu",
+  "pp_easebuzz_easebuzz",
+  "pp_easebuzz_partial_payment",
+] as const
 const EASEBUZZ_PROVIDER_ID = "pp_easebuzz_easebuzz"
+const EASEBUZZ_PARTIAL_PROVIDER_ID = "pp_easebuzz_partial_payment"
 const EASEBUZZ_LINK_EXPIRY_SECONDS = 15 * 60
 const EASEBUZZ_PAYMENT_EXPIRY_BUFFER_SECONDS = 60
 const EASEBUZZ_PAYMENT_STALE_SECONDS =
@@ -80,7 +85,7 @@ export async function expireStaleEasebuzzPendingPayments(
   const { data: pendingOrders, error } = await supabase
     .from("orders")
     .select("id, payment_method, status, payment_status, created_at")
-    .eq("payment_method", EASEBUZZ_PROVIDER_ID)
+    .in("payment_method", [EASEBUZZ_PROVIDER_ID, EASEBUZZ_PARTIAL_PROVIDER_ID])
     .eq("status", "pending")
     .eq("payment_status", "pending")
     .lt("created_at", cutoff)
@@ -157,7 +162,10 @@ export async function cancelPendingPaymentOrders(
     const isOnlinePayment = ONLINE_PAYMENT_METHODS.some((m) => method === m)
     if (!isOnlinePayment) continue
 
-    if (method === EASEBUZZ_PROVIDER_ID) {
+    if (
+      method === EASEBUZZ_PROVIDER_ID ||
+      method === EASEBUZZ_PARTIAL_PROVIDER_ID
+    ) {
       const easebuzzCutoff = Date.now() - EASEBUZZ_PAYMENT_STALE_SECONDS * 1000
       const createdAt = Date.parse(order.created_at)
       if (

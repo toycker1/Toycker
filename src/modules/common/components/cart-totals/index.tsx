@@ -5,6 +5,8 @@ import { Cart, Order } from "@/lib/supabase/types"
 import React from "react"
 import { ShippingPriceContext } from "@modules/common/context/shipping-price-context"
 import { CheckoutContext } from "@modules/checkout/context/checkout-context"
+import { isEasebuzzPartialPayment } from "@/lib/constants"
+import { getPartialPaymentDisplayData } from "@/lib/util/order-pricing"
 
 type CartTotalsProps = {
   totals: {
@@ -22,6 +24,7 @@ type CartTotalsProps = {
   cart?: Cart
   order?: Order
   includePaymentDiscount?: boolean
+  checkoutPartialPaymentPercentage?: number | null
 }
 
 const CartTotals: React.FC<CartTotalsProps> = ({
@@ -29,6 +32,7 @@ const CartTotals: React.FC<CartTotalsProps> = ({
   cart,
   order,
   includePaymentDiscount = true,
+  checkoutPartialPaymentPercentage,
 }) => {
   const {
     currency_code,
@@ -76,6 +80,7 @@ const CartTotals: React.FC<CartTotalsProps> = ({
   }
   const displayPaymentDiscount = includePaymentDiscount ? payment_discount : 0
   const displayPaymentDiscountPercentage = includePaymentDiscount ? payment_discount_percentage : 0
+  const partialPaymentData = getPartialPaymentDisplayData(order?.metadata)
 
   const discountSubtotal = promoDiscount + rewards_discount
 
@@ -122,6 +127,31 @@ const CartTotals: React.FC<CartTotalsProps> = ({
 
   // Calculate the base subtotal (before club discount)
   const baseSubtotal = itemSubtotal + club_savings
+  const finalTotal = Math.max(
+    0,
+    itemSubtotal +
+      displayShippingSubtotal +
+      (tax_total || 0) -
+      (order
+        ? order.discount_total || 0
+        : discountSubtotal + displayPaymentDiscount)
+  )
+  const checkoutPartialPercentage =
+    typeof checkoutPartialPaymentPercentage === "number" &&
+    checkoutPartialPaymentPercentage > 0 &&
+    checkoutPartialPaymentPercentage < 100
+      ? checkoutPartialPaymentPercentage
+      : 20
+  const showCheckoutPartialBreakdown =
+    !order &&
+    isEasebuzzPartialPayment(checkoutCtx?.state.paymentMethod || "") &&
+    finalTotal > 0
+  const checkoutAdvanceAmount = showCheckoutPartialBreakdown
+    ? Math.round(finalTotal * (checkoutPartialPercentage / 100))
+    : 0
+  const checkoutBalanceAmount = showCheckoutPartialBreakdown
+    ? Math.max(0, finalTotal - checkoutAdvanceAmount)
+    : 0
 
   return (
     <div className="flex flex-col gap-y-4">
@@ -246,16 +276,122 @@ const CartTotals: React.FC<CartTotalsProps> = ({
             <span
               className="text-4xl font-black text-slate-900 tracking-tighter leading-none"
               data-testid="cart-total"
-              data-value={Math.max(0, itemSubtotal + displayShippingSubtotal + (tax_total || 0) - (order ? (order.discount_total || 0) : (discountSubtotal + displayPaymentDiscount)))}
+              data-value={finalTotal}
             >
               {convertToLocale({
-                amount: Math.max(0, itemSubtotal + displayShippingSubtotal + (tax_total || 0) - (order ? (order.discount_total || 0) : (discountSubtotal + displayPaymentDiscount))),
+                amount: finalTotal,
                 currency_code: normalizedCurrency,
               })}
             </span>
           </div>
         </div>
       </div>
+
+      {showCheckoutPartialBreakdown && (
+        <div className="rounded-lg border border-indigo-100 bg-indigo-50/70 p-4">
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="font-bold uppercase tracking-widest text-indigo-700">
+              Pay Now ({checkoutPartialPercentage}%)
+            </span>
+            <span className="font-black text-indigo-900">
+              {convertToLocale({
+                amount: checkoutAdvanceAmount,
+                currency_code: normalizedCurrency,
+              })}
+            </span>
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-3 text-sm">
+            <span className="font-bold uppercase tracking-widest text-slate-500">
+              Balance Due
+            </span>
+            <span className="font-black text-slate-900">
+              {convertToLocale({
+                amount: checkoutBalanceAmount,
+                currency_code: normalizedCurrency,
+              })}
+            </span>
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-3 text-xs text-slate-500">
+            <span className="font-semibold">Full Order Total</span>
+            <span className="font-bold">
+              {convertToLocale({
+                amount: finalTotal,
+                currency_code: normalizedCurrency,
+              })}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {partialPaymentData && (
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="font-bold uppercase tracking-widest text-blue-600">
+              Advance Paid
+            </span>
+            <span className="font-black text-blue-600">
+              {convertToLocale({
+                amount: partialPaymentData.advanceAmount,
+                currency_code: normalizedCurrency,
+              })}
+            </span>
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-3 text-sm">
+            <span className="font-bold uppercase tracking-widest text-slate-500">
+              Balance Due
+            </span>
+            <span className="font-black text-slate-900">
+              {convertToLocale({
+                amount: partialPaymentData.balanceAmount,
+                currency_code: normalizedCurrency,
+              })}
+            </span>
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-3 text-sm">
+            <span className="font-bold uppercase tracking-widest text-slate-500">
+              Balance Remaining
+            </span>
+            <span
+              className={`font-black ${
+                partialPaymentData.balanceRemainingAmount > 0
+                  ? "text-amber-700"
+                  : "text-emerald-700"
+              }`}
+            >
+              {convertToLocale({
+                amount: partialPaymentData.balanceRemainingAmount,
+                currency_code: normalizedCurrency,
+              })}
+            </span>
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-3 text-sm">
+            <span className="font-bold uppercase tracking-widest text-slate-500">
+              Balance Status
+            </span>
+            <span
+              className={`font-black ${
+                partialPaymentData.balancePaymentStatus === "paid"
+                  ? "text-emerald-700"
+                  : "text-amber-700"
+              }`}
+            >
+              {partialPaymentData.balancePaymentStatus === "paid"
+                ? "Paid"
+                : "Pending"}
+            </span>
+          </div>
+          {partialPaymentData.balancePaymentMethod && (
+            <div className="mt-2 flex items-center justify-between gap-3 text-sm">
+              <span className="font-bold uppercase tracking-widest text-slate-500">
+                Balance Method
+              </span>
+              <span className="font-black text-slate-900 text-right">
+                {partialPaymentData.balancePaymentMethod}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

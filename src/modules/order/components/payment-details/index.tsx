@@ -42,6 +42,12 @@ const PaymentDetails = ({ order }: PaymentDetailsProps) => {
           title: "Cash on Delivery",
           icon: <Wallet className="h-4 w-4" />,
         }
+      } else if (methodKey.includes("partial")) {
+        return {
+          providerId: "partial",
+          title: "Partial Payment",
+          icon: <Smartphone className="h-4 w-4" />,
+        }
       } else if (methodKey.includes("easebuzz") || methodKey.includes("payu") || methodKey.includes("online") || methodKey.includes("upi")) {
         return {
           providerId: "online",

@@ -10,7 +10,12 @@ export default async function CheckoutForm({
 }: {
   cart: Cart | null
   customer: CustomerProfile | null
-  paymentMethods: { id: string; name: string }[]
+  paymentMethods: {
+    id: string
+    name: string
+    description?: string | null
+    partial_payment_percentage?: number | null
+  }[]
 }) {
   if (!cart) {
     return null

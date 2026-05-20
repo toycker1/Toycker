@@ -1,7 +1,12 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { acceptOrder, cancelOrder, markOrderAsDelivered } from "@/lib/data/admin"
+import {
+    acceptOrder,
+    cancelOrder,
+    markOrderAsDelivered,
+    markPartialPaymentBalancePaid,
+} from "@/lib/data/admin"
 import { cn } from "@lib/util/cn"
 import { CheckIcon, HandThumbUpIcon, XMarkIcon } from "@heroicons/react/24/outline"
 import Modal from "@modules/common/components/modal"
@@ -172,6 +177,94 @@ export function CancelOrderButton({ orderId }: { orderId: string }) {
                 confirmLabel="Cancel Order"
                 confirmTone="danger"
             />
+        </ProtectedAction>
+    )
+}
+
+export function MarkBalancePaidButton({ orderId }: { orderId: string }) {
+    const [isPending, startTransition] = useTransition()
+    const [open, setOpen] = useState(false)
+    const [method, setMethod] = useState("manual")
+
+    const methodLabels: Record<string, string> = {
+        payment_link: "Payment Link",
+        cod: "COD",
+        bank_transfer: "Bank Transfer",
+        manual: "Manual",
+    }
+
+    return (
+        <ProtectedAction permission={PERMISSIONS.ORDERS_UPDATE} hideWhenDisabled>
+            <button
+                onClick={() => setOpen(true)}
+                disabled={isPending}
+                className={cn(
+                    "px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 transition-all shadow-sm disabled:opacity-50 flex items-center justify-center gap-2 w-full",
+                    isPending && "cursor-not-allowed"
+                )}
+            >
+                {isPending ? (
+                    <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                    <CheckIcon className="h-4 w-4" strokeWidth={3} />
+                )}
+                {isPending ? "Updating..." : "Mark Balance Paid"}
+            </button>
+
+            <Modal isOpen={open} close={() => setOpen(false)} size="small">
+                <div className="space-y-5">
+                    <Modal.Title>
+                        <span className="text-lg font-black text-slate-900">Mark Balance Paid</span>
+                    </Modal.Title>
+                    <Modal.Description>
+                        <span className="text-center leading-relaxed text-slate-600 text-sm">
+                            Select how the remaining balance was collected.
+                        </span>
+                    </Modal.Description>
+                    <div className="space-y-2">
+                        <label htmlFor="balance-payment-method" className="text-xs font-bold uppercase tracking-widest text-slate-500">
+                            Balance Method
+                        </label>
+                        <select
+                            id="balance-payment-method"
+                            value={method}
+                            onChange={(event) => setMethod(event.target.value)}
+                            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold"
+                            disabled={isPending}
+                        >
+                            {Object.entries(methodLabels).map(([value, label]) => (
+                                <option key={value} value={value}>
+                                    {label}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    <Modal.Footer>
+                        <button
+                            onClick={() => setOpen(false)}
+                            className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                            disabled={isPending}
+                        >
+                            Close
+                        </button>
+                        <button
+                            onClick={() => {
+                                startTransition(async () => {
+                                    await markPartialPaymentBalancePaid(
+                                        orderId,
+                                        methodLabels[method] ?? method
+                                    )
+                                    setOpen(false)
+                                })
+                            }}
+                            disabled={isPending}
+                            className="px-4 py-2 rounded-lg text-sm font-bold text-white shadow-sm bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400"
+                        >
+                            {isPending ? "Updating..." : "Mark Paid"}
+                        </button>
+                    </Modal.Footer>
+                </div>
+            </Modal>
         </ProtectedAction>
     )
 }

@@ -2,10 +2,8 @@
 
 import { cache } from "react"
 import { createClient } from "@/lib/supabase/server"
-import { createAdminClient } from "@/lib/supabase/admin"
 import { Order } from "@/lib/supabase/types"
 import { getAuthUser } from "./auth"
-import { logOrderEvent } from "@/lib/data/admin"
 
 export type AccountOrderSummary = Pick<
   Order,
@@ -76,58 +74,11 @@ export async function cancelUserOrder(orderId: string) {
     throw new Error("Authentication required")
   }
 
-  const supabase = await createClient()
-
-  const { data: order, error } = await supabase
-    .from("orders")
-    .select("id, status, payment_status")
-    .eq("id", orderId)
-    .eq("user_id", user.id)
-    .maybeSingle()
-
-  if (error) throw new Error(error.message)
-  if (!order) throw new Error("Order not found.")
-
-  if (
-    ["accepted", "shipped", "delivered", "cancelled", "failed"].includes(
-      order.status
-    )
-  ) {
-    throw new Error("Order can no longer be cancelled.")
+  if (!orderId.trim()) {
+    throw new Error("Order ID is required.")
   }
 
-  const paymentStatus =
-    order.payment_status === "captured" ? "refunded" : "cancelled"
-  const adminSupabase = await createAdminClient()
-
-  const { error: updateError } = await adminSupabase
-    .from("orders")
-    .update({
-      status: "cancelled",
-      fulfillment_status: "cancelled",
-      payment_status: paymentStatus,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", orderId)
-
-  if (updateError) throw new Error(updateError.message)
-
-  // Deduct Club Membership savings if any
-  try {
-    const { deductClubSavingsFromOrder } = await import("@lib/data/club")
-    await deductClubSavingsFromOrder(orderId)
-  } catch (savingsError) {
-    console.error("Failed to deduct club savings on cancellation:", savingsError)
-    // Non-blocking error for the user, but should be logged
-  }
-
-  await logOrderEvent(
-    orderId,
-    "cancelled",
-    "Order Cancelled",
-    "Customer cancelled the order.",
-    "customer"
+  throw new Error(
+    "Customer cancellation is disabled. Please contact support for order changes."
   )
-
-  return { success: true }
 }

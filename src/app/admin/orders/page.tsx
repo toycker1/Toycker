@@ -18,6 +18,7 @@ function normalizePaymentMethod(method?: string | null, hasPayuTxn?: string | nu
   if (!method && hasPayuTxn) return "payu"
   const m = (method || "").toLowerCase()
   if (m.includes("cod") || m.includes("cash") || m.includes("pp_system_default")) return "cod"
+  if (m.includes("partial")) return "easebuzz_partial"
   if (m.includes("easebuzz")) return "easebuzz"
   if (m.includes("payu")) return "payu"
   if (!method) return "manual"
@@ -27,6 +28,7 @@ function normalizePaymentMethod(method?: string | null, hasPayuTxn?: string | nu
 function formatPaymentMethodDisplay(method?: string | null, hasPayuTxn?: string | null, hasGatewayTxn?: string | null) {
   const normalized = normalizePaymentMethod(method, hasPayuTxn, hasGatewayTxn)
   if (normalized === "easebuzz") return "Easebuzz"
+  if (normalized === "easebuzz_partial") return "Easebuzz Partial"
   if (normalized === "payu") return "PayU"
   if (normalized === "cod" || normalized === "manual") return "Cash on Delivery (COD)"
   const label = (method || "").replace(/_/g, " ").trim()
@@ -36,7 +38,7 @@ function formatPaymentMethodDisplay(method?: string | null, hasPayuTxn?: string 
 function getPaymentBadge(paymentStatus: string, paymentMethod?: string | null, hasPayuTxn?: string | null, orderStatus?: string | null, hasGatewayTxn?: string | null) {
   const normalizedMethod = normalizePaymentMethod(paymentMethod, hasPayuTxn, hasGatewayTxn)
   const isCOD = normalizedMethod === "cod" || normalizedMethod === "manual"
-  const isEasebuzz = normalizedMethod === "easebuzz"
+  const isEasebuzz = normalizedMethod === "easebuzz" || normalizedMethod === "easebuzz_partial"
   const isCancelled = orderStatus === "cancelled" || paymentStatus === "cancelled" || paymentStatus === "failed"
 
   if (isCOD) {
@@ -53,6 +55,8 @@ function getPaymentBadge(paymentStatus: string, paymentMethod?: string | null, h
     case "captured":
     case "paid":
       return { variant: "success" as const, label: "Paid" }
+    case "partially_paid":
+      return { variant: "info" as const, label: "Advance Paid" }
     case "awaiting":
     case "pending":
       return { variant: "warning" as const, label: "Pending" }
