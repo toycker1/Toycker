@@ -5,6 +5,7 @@ import { Address, Cart, Order } from "@/lib/supabase/types"
 import { retrieveCart } from "@/lib/data/cart"
 import {
   currencyAmountsMatch,
+  getPartialPaymentSessionData,
   getOrderPricingMetadata,
   getPendingPaymentProviderId,
   OrderPricingMetadata,
@@ -16,6 +17,7 @@ export const dynamic = "force-dynamic"
 const RECENT_CALLBACKS = new Map<string, number>()
 const THROTTLE_MS = 2000
 const EASEBUZZ_PROVIDER_ID = "pp_easebuzz_easebuzz"
+const EASEBUZZ_PARTIAL_PROVIDER_ID = "pp_easebuzz_partial_payment"
 
 type AdminClient = Awaited<ReturnType<typeof createAdminClient>>
 
@@ -170,12 +172,32 @@ const refreshPendingOrderSnapshot = async (
 const mergeEasebuzzMetadata = (
   metadata: unknown,
   payload: EasebuzzCallbackPayload,
-  paymentMethod: string
-): OrderPricingMetadata => ({
-  ...getOrderPricingMetadata(metadata),
-  easebuzz_payload: payload,
-  payment_method: paymentMethod,
-})
+  paymentMethod: string,
+  partialPaymentData?: ReturnType<typeof getPartialPaymentSessionData>
+): OrderPricingMetadata => {
+  const baseMetadata = {
+    ...getOrderPricingMetadata(metadata),
+    easebuzz_payload: payload,
+    payment_method: paymentMethod,
+  }
+
+  if (!partialPaymentData) {
+    return {
+      ...baseMetadata,
+      payment_type: "full",
+    }
+  }
+
+  return {
+    ...baseMetadata,
+    payment_type: "partial",
+    advance_percentage: partialPaymentData.advance_percentage,
+    advance_amount: partialPaymentData.advance_amount,
+    balance_amount: partialPaymentData.balance_amount,
+    full_order_amount: partialPaymentData.full_order_amount,
+    balance_payment_status: "pending",
+  }
+}
 
 export async function POST(request: NextRequest) {
   const ip = normalizeIp(request.headers.get("x-forwarded-for"))
@@ -303,28 +325,47 @@ export async function POST(request: NextRequest) {
         snapshot?.paymentProviderId ||
         orderToFinalize.payment_method ||
         EASEBUZZ_PROVIDER_ID
+      const isPartialPayment = paymentMethod === EASEBUZZ_PARTIAL_PROVIDER_ID
+      const partialPaymentData = isPartialPayment
+        ? getPartialPaymentSessionData(
+            orderToFinalize.payment_collection,
+            EASEBUZZ_PARTIAL_PROVIDER_ID
+          )
+        : null
+
+      if (isPartialPayment && !partialPaymentData) {
+        console.error("[EASEBUZZ] Missing partial payment session data:", {
+          orderId: orderToFinalize.id,
+          txnid,
+        })
+        return htmlRedirect("/checkout?step=payment&error=partial_payment_data_missing")
+      }
+
       const orderAlreadyCaptured =
-        orderToFinalize.payment_status === "captured"
+        orderToFinalize.payment_status === "captured" ||
+        orderToFinalize.payment_status === "partially_paid"
       const existingMetadata = getOrderPricingMetadata(
         orderToFinalize.metadata
       )
+      const expectedPaymentAmount =
+        partialPaymentData?.advance_amount ?? orderToFinalize.total_amount
 
       if (
         !orderAlreadyCaptured &&
-        !currencyAmountsMatch(orderToFinalize.total_amount, amount)
+        !currencyAmountsMatch(expectedPaymentAmount, amount)
       ) {
         const { logOrderEvent } = await import("@/lib/data/admin")
         await logOrderEvent(
           orderToFinalize.id,
           "note_added",
           "Payment Amount Mismatch",
-          `Easebuzz amount ${amount} did not match stored order total ${orderToFinalize.total_amount}.`,
+          `Easebuzz amount ${amount} did not match expected payment amount ${expectedPaymentAmount}.`,
           "system"
         )
 
         console.error("[EASEBUZZ] Amount mismatch:", {
           orderId: orderToFinalize.id,
-          orderTotal: orderToFinalize.total_amount,
+          expectedPaymentAmount,
           callbackAmount: amount,
         })
 
@@ -343,14 +384,15 @@ export async function POST(request: NextRequest) {
         const metadata = mergeEasebuzzMetadata(
           orderToFinalize.metadata,
           payload,
-          paymentMethod
+          paymentMethod,
+          partialPaymentData
         )
 
         const { data: updatedOrder, error: updateError } = await supabase
           .from("orders")
           .update({
             status: "order_placed",
-            payment_status: "captured",
+            payment_status: isPartialPayment ? "partially_paid" : "captured",
             payment_method: paymentMethod,
             gateway_txn_id: orderAlreadyCaptured
               ? orderToFinalize.gateway_txn_id || easepayid
@@ -391,8 +433,10 @@ export async function POST(request: NextRequest) {
           await logOrderEvent(
             finalizedOrderData.id,
             "order_placed",
-            "Order Placed",
-            "Order confirmed via Easebuzz payment gateway callback.",
+            isPartialPayment ? "Advance Payment Received" : "Order Placed",
+            isPartialPayment
+              ? "Order confirmed after Easebuzz advance payment. Balance remains due."
+              : "Order confirmed via Easebuzz payment gateway callback.",
             "system"
           )
         } catch (postOrderError) {

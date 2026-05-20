@@ -20,6 +20,11 @@ export const paymentInfoMap: Record<
     icon: <Wallet className="text-blue-600" />,
     description: "Pay securely using cards, UPI, net banking, or wallets.",
   },
+  pp_easebuzz_partial_payment: {
+    title: "Partial Payment",
+    icon: <Wallet className="text-indigo-600" />,
+    description: "Pay an advance amount now. Balance will be handled by admin.",
+  },
   pp_system_default: {
     title: "Cash on Delivery",
     icon: <Package className="text-green-600" />,
@@ -68,6 +73,10 @@ export const isPayU = (providerId?: string) => {
 
 export const isEasebuzz = (providerId?: string) => {
   return providerId?.startsWith("pp_easebuzz")
+}
+
+export const isEasebuzzPartialPayment = (providerId?: string | null) => {
+  return providerId === "pp_easebuzz_partial_payment"
 }
 
 export const isManual = (providerId?: string) => {

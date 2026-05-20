@@ -14,7 +14,12 @@ import { convertToLocale } from "@lib/util/money"
 import Image from "next/image"
 import FulfillmentModal from "./fulfillment-modal"
 import { MarkAsPaidButton } from "./mark-as-paid-button"
-import { AcceptOrderButton, CancelOrderButton, MarkAsDeliveredButton } from "./order-action-buttons"
+import {
+  AcceptOrderButton,
+  CancelOrderButton,
+  MarkAsDeliveredButton,
+  MarkBalancePaidButton,
+} from "./order-action-buttons"
 import EditOrderShippingAddressModal from "./edit-order-shipping-address-modal"
 import { formatIST } from "@/lib/util/date"
 import { fixUrl } from "@/lib/util/images"
@@ -28,6 +33,7 @@ const normalizePaymentMethod = (method?: string | null, hasPayuTxn?: string | nu
   if (!method && hasPayuTxn) return "payu"
   const m = (method || "").toLowerCase()
   if (m.includes("cod") || m.includes("cash") || m.includes("pp_system_default")) return "cod"
+  if (m.includes("partial")) return "easebuzz_partial"
   if (m.includes("easebuzz")) return "easebuzz"
   if (m.includes("payu")) return "payu"
   if (!method) return "manual"
@@ -37,6 +43,7 @@ const normalizePaymentMethod = (method?: string | null, hasPayuTxn?: string | nu
 const formatPaymentMethodDisplay = (method?: string | null, hasPayuTxn?: string | null, hasGatewayTxn?: string | null) => {
   const normalized = normalizePaymentMethod(method, hasPayuTxn, hasGatewayTxn)
   if (normalized === "easebuzz") return "Easebuzz"
+  if (normalized === "easebuzz_partial") return "Easebuzz Partial Payment"
   if (normalized === "payu") return "PayU"
   if (normalized === "cod" || normalized === "manual") return "Cash on Delivery (COD)"
   const label = (method || "").replace(/_/g, " ").trim()
@@ -174,13 +181,17 @@ export default async function AdminOrderDetails({ params }: Props) {
     getRegion(),
   ])
   const canEditShippingAddress = canEditOrderShippingAddress(order.status)
+  const canAcceptOrder =
+    (order.status === "order_placed" || order.status === "pending") &&
+    (order.payment_method !== "pp_easebuzz_partial_payment" ||
+      ["partially_paid", "paid", "captured"].includes(order.payment_status))
 
   const actions = (
     <div className="flex gap-2">
       {(order.status === 'order_placed' || order.status === 'pending') && (
         <ProtectedAction permission={PERMISSIONS.ORDERS_UPDATE} hideWhenDisabled>
           <div className="flex gap-2">
-            <AcceptOrderButton orderId={order.id} />
+            {canAcceptOrder && <AcceptOrderButton orderId={order.id} />}
             <CancelOrderButton orderId={order.id} />
           </div>
         </ProtectedAction>
@@ -238,9 +249,13 @@ export default async function AdminOrderDetails({ params }: Props) {
 
   const normalizedMethod = normalizePaymentMethod(order.payment_method, order.payu_txn_id, order.gateway_txn_id)
   const isCodPayment = normalizedMethod === "cod" || normalizedMethod === "manual"
-  const isEasebuzzPayment = normalizedMethod === "easebuzz"
+  const isEasebuzzPayment =
+    normalizedMethod === "easebuzz" || normalizedMethod === "easebuzz_partial"
   const paymentStatusPending = ["pending", "awaiting", "unpaid"].includes(normalizedPaymentStatus)
   const canMarkAsPaid = !isCodPayment && paymentStatusPending && order.status === "delivered"
+  const isPartialPayment = normalizedMethod === "easebuzz_partial"
+  const canMarkBalancePaid =
+    isPartialPayment && normalizedPaymentStatus === "partially_paid"
 
   const rewardsUsed = Number(order.metadata?.rewards_used || 0)
   const orderMetadata = (order.metadata || {}) as Record<string, unknown>
@@ -254,6 +269,13 @@ export default async function AdminOrderDetails({ params }: Props) {
   const paymentDiscountPercentage = toNumber(
     orderMetadata.payment_discount_percentage
   )
+  const advanceAmount = toNumber(orderMetadata.advance_amount)
+  const balanceAmount = toNumber(orderMetadata.balance_amount)
+  const advancePercentage = toNumber(orderMetadata.advance_percentage)
+  const balancePaymentStatus =
+    typeof orderMetadata.balance_payment_status === "string"
+      ? orderMetadata.balance_payment_status
+      : null
 
   return (
     <div className="space-y-6">
@@ -446,6 +468,8 @@ export default async function AdminOrderDetails({ params }: Props) {
                             : 'COD - Pending'
                       : normalizedPaymentStatus === 'paid' || normalizedPaymentStatus === 'captured'
                         ? 'Paid'
+                      : normalizedPaymentStatus === 'partially_paid'
+                        ? 'Advance Paid - Balance Due'
                       : normalizedPaymentStatus === 'cancelled' || normalizedPaymentStatus === 'failed'
                           ? normalizedPaymentStatus === 'failed' && isEasebuzzPayment
                             ? 'Incomplete Transaction'
@@ -463,6 +487,40 @@ export default async function AdminOrderDetails({ params }: Props) {
                 <div className="pt-3 border-t border-gray-100">
                   <p className="text-xs text-gray-500">Transaction ID</p>
                   <p className="text-sm font-mono text-gray-700 mt-1">{order.gateway_txn_id}</p>
+                </div>
+              )}
+              {isPartialPayment && advanceAmount > 0 && (
+                <div className="pt-3 border-t border-gray-100 space-y-2">
+                  <div className="flex justify-between gap-3 text-sm">
+                    <span className="text-gray-500">Advance Paid</span>
+                    <span className="font-bold text-gray-900">
+                      {convertToLocale({
+                        amount: advanceAmount,
+                        currency_code: order.currency_code,
+                      })}
+                      {advancePercentage > 0 ? ` (${advancePercentage}%)` : ""}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3 text-sm">
+                    <span className="text-gray-500">Balance Due</span>
+                    <span className="font-bold text-gray-900">
+                      {convertToLocale({
+                        amount: balanceAmount,
+                        currency_code: order.currency_code,
+                      })}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3 text-sm">
+                    <span className="text-gray-500">Balance Status</span>
+                    <span className="font-bold text-gray-900">
+                      {balancePaymentStatus === "paid" ? "Paid" : "Pending"}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {canMarkBalancePaid && (
+                <div className="pt-4 border-t border-gray-100">
+                  <MarkBalancePaidButton orderId={order.id} />
                 </div>
               )}
               {!order.gateway_txn_id && order.payu_txn_id && (

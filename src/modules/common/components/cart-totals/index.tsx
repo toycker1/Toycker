@@ -76,6 +76,16 @@ const CartTotals: React.FC<CartTotalsProps> = ({
   }
   const displayPaymentDiscount = includePaymentDiscount ? payment_discount : 0
   const displayPaymentDiscountPercentage = includePaymentDiscount ? payment_discount_percentage : 0
+  const orderMetadata = order?.metadata as Record<string, unknown> | null | undefined
+  const advanceAmount =
+    typeof orderMetadata?.advance_amount === "number"
+      ? orderMetadata.advance_amount
+      : 0
+  const balanceAmount =
+    typeof orderMetadata?.balance_amount === "number"
+      ? orderMetadata.balance_amount
+      : 0
+  const isPartialPayment = orderMetadata?.payment_type === "partial"
 
   const discountSubtotal = promoDiscount + rewards_discount
 
@@ -205,6 +215,29 @@ const CartTotals: React.FC<CartTotalsProps> = ({
               })}
             </span>
           </div>
+        )}
+
+        {isPartialPayment && advanceAmount > 0 && (
+          <>
+            <div className="flex items-center justify-between py-1">
+              <span className="font-medium text-blue-600 uppercase tracking-widest text-sm">Advance Paid</span>
+              <span className="font-bold text-blue-600">
+                {convertToLocale({
+                  amount: advanceAmount,
+                  currency_code: normalizedCurrency,
+                })}
+              </span>
+            </div>
+            <div className="flex items-center justify-between py-1">
+              <span className="font-medium text-slate-500 uppercase tracking-widest text-sm">Balance Due</span>
+              <span className="font-bold text-slate-900">
+                {convertToLocale({
+                  amount: balanceAmount,
+                  currency_code: normalizedCurrency,
+                })}
+              </span>
+            </div>
+          </>
         )}
 
         <div className="flex items-center justify-between text-sm">

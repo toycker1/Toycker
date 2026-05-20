@@ -36,6 +36,7 @@ import {
   validateMediaUrlList,
   validateNoSupabaseStorageMediaUrl,
 } from "@/lib/util/media-url"
+import { getOrderPricingMetadata } from "@/lib/util/order-pricing"
 import {
   buildTrivaraOrderBookingPayload,
   extractTrivaraReferenceNumber,
@@ -2671,12 +2672,32 @@ export async function createPaymentMethod(formData: FormData) {
   await ensureAdmin()
   await requirePermission(PERMISSIONS.PAYMENTS_CREATE)
   const supabase = await createClient()
+  const id = formData.get("id") as string
+  const partialPaymentPercentageRaw = parseFloat(
+    formData.get("partial_payment_percentage") as string
+  )
+  const isPartialPaymentMethod = id === "pp_easebuzz_partial_payment"
+
+  if (
+    isPartialPaymentMethod &&
+    (!Number.isFinite(partialPaymentPercentageRaw) ||
+      partialPaymentPercentageRaw <= 0 ||
+      partialPaymentPercentageRaw >= 100)
+  ) {
+    throw new Error(
+      "Advance payment percentage must be greater than 0 and less than 100."
+    )
+  }
+
   const method = {
-    id: formData.get("id") as string,
+    id,
     name: formData.get("name") as string,
     description: (formData.get("description") as string) || null,
     discount_percentage: Number(formData.get("discount_percentage") || 0),
     is_active: formData.get("is_active") === "true",
+    ...(isPartialPaymentMethod
+      ? { partial_payment_percentage: partialPaymentPercentageRaw }
+      : {}),
   }
 
   const { error } = await supabase.from("payment_providers").insert(method)
@@ -2693,12 +2714,31 @@ export async function updatePaymentMethod(id: string, formData: FormData) {
   await ensureAdmin()
   await requirePermission(PERMISSIONS.PAYMENTS_UPDATE)
   const supabase = await createClient()
+  const partialPaymentPercentageRaw = parseFloat(
+    formData.get("partial_payment_percentage") as string
+  )
+  const isPartialPaymentMethod = id === "pp_easebuzz_partial_payment"
+
+  if (
+    isPartialPaymentMethod &&
+    (!Number.isFinite(partialPaymentPercentageRaw) ||
+      partialPaymentPercentageRaw <= 0 ||
+      partialPaymentPercentageRaw >= 100)
+  ) {
+    throw new Error(
+      "Advance payment percentage must be greater than 0 and less than 100."
+    )
+  }
+
   const method = {
     name: formData.get("name") as string,
     description: (formData.get("description") as string) || null,
     discount_percentage:
       parseFloat(formData.get("discount_percentage") as string) || 0,
     is_active: formData.get("is_active") === "true",
+    ...(isPartialPaymentMethod
+      ? { partial_payment_percentage: partialPaymentPercentageRaw }
+      : {}),
   }
 
   const { error } = await supabase
@@ -3380,6 +3420,22 @@ export async function acceptOrder(orderId: string) {
   const supabase = await createClient()
   const actorDisplay = await getAdminActorDisplay()
 
+  const { data: order, error: fetchError } = await supabase
+    .from("orders")
+    .select("payment_method, payment_status")
+    .eq("id", orderId)
+    .maybeSingle()
+
+  if (fetchError) throw fetchError
+  if (!order) throw new Error("Order not found")
+
+  if (
+    order.payment_method === "pp_easebuzz_partial_payment" &&
+    !["partially_paid", "paid", "captured"].includes(order.payment_status)
+  ) {
+    throw new Error("Partial payment order can be accepted only after advance payment is received.")
+  }
+
   const { error } = await supabase
     .from("orders")
     .update({
@@ -3404,6 +3460,79 @@ export async function acceptOrder(orderId: string) {
 
   revalidatePath(`/admin/orders/${orderId}`)
   revalidatePath("/admin/orders")
+}
+
+export async function markPartialPaymentBalancePaid(
+  orderId: string,
+  balancePaymentMethod: string
+) {
+  await ensureAdmin()
+  await requirePermission(PERMISSIONS.ORDERS_UPDATE)
+
+  const normalizedMethod = balancePaymentMethod.trim()
+  if (!normalizedMethod) {
+    throw new Error("Balance payment method is required.")
+  }
+
+  const supabase = await createClient()
+  const actorDisplay = await getAdminActorDisplay()
+
+  const { data: order, error: fetchError } = await supabase
+    .from("orders")
+    .select("payment_method, payment_status, metadata")
+    .eq("id", orderId)
+    .maybeSingle()
+
+  if (fetchError) throw fetchError
+  if (!order) throw new Error("Order not found")
+  if (order.payment_method !== "pp_easebuzz_partial_payment") {
+    throw new Error("This action is only available for partial payment orders.")
+  }
+  if (order.payment_status === "paid" || order.payment_status === "captured") {
+    return { success: true, alreadyPaid: true }
+  }
+  if (order.payment_status !== "partially_paid") {
+    throw new Error("Advance payment must be received before marking balance paid.")
+  }
+
+  const metadata = getOrderPricingMetadata(order.metadata)
+  const paidAt = new Date().toISOString()
+
+  const { error: updateError } = await supabase
+    .from("orders")
+    .update({
+      payment_status: "paid",
+      metadata: {
+        ...metadata,
+        balance_payment_status: "paid",
+        balance_paid_at: paidAt,
+        balance_payment_method: normalizedMethod,
+      },
+      updated_at: paidAt,
+    })
+    .eq("id", orderId)
+
+  if (updateError) throw updateError
+
+  await logOrderEvent(
+    orderId,
+    "payment_captured",
+    "Balance Payment Marked as Paid",
+    `Admin marked remaining balance as paid via ${normalizedMethod}.`,
+    "admin",
+    {
+      balance_payment_method: normalizedMethod,
+      balance_paid_at: paidAt,
+    },
+    actorDisplay
+  )
+
+  revalidatePath(`/admin/orders/${orderId}`)
+  revalidatePath("/admin/orders")
+  revalidatePath(`/order/confirmed/${orderId}`)
+  revalidatePath(`/account/orders/details/${orderId}`)
+
+  return { success: true }
 }
 
 /**

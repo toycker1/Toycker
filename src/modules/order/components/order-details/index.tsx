@@ -44,6 +44,8 @@ const OrderDetails = ({ order, customerPhone }: OrderDetailsProps) => {
           : "COD Pending"
     : normalizedPaymentStatus === "paid" || normalizedPaymentStatus === "captured"
       ? "Paid"
+    : normalizedPaymentStatus === "partially_paid"
+      ? "Advance Paid - Balance Due"
     : normalizedPaymentStatus === "cancelled" || normalizedPaymentStatus === "failed"
         ? normalizedPaymentStatus === "failed"
           ? "Incomplete Transaction"

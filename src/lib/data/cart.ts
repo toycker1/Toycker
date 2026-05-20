@@ -75,6 +75,10 @@ type CartMergeItemRow = {
   metadata: Record<string, unknown> | null
 }
 
+type PartialPaymentProviderConfig = {
+  partial_payment_percentage: number | null
+}
+
 type OrderCartMetadataRow = {
   metadata: Record<string, unknown> | null
 }
@@ -1675,7 +1679,10 @@ export async function initiatePaymentSession(
         // Note: service_provider: "payu_paisa" removed - deprecated since 2016
       },
     }
-  } else if (data.provider_id === "pp_easebuzz_easebuzz") {
+  } else if (
+    data.provider_id === "pp_easebuzz_easebuzz" ||
+    data.provider_id === "pp_easebuzz_partial_payment"
+  ) {
     // Easebuzz payment gateway integration
     // Step 1: Read credentials from environment
     const key = process.env.EASEBUZZ_MERCHANT_KEY
@@ -1691,7 +1698,41 @@ export async function initiatePaymentSession(
     // Step 2: Format payment data
     const txnid = `txn${Date.now()}`
     const expiresAt = new Date(Date.now() + 16 * 60 * 1000).toISOString()
-    const amount = Number(cart.total || 0).toFixed(2)
+    const fullOrderAmount = Number(cart.total || 0)
+    let advancePercentage: number | null = null
+    let payableAmount = fullOrderAmount
+
+    if (data.provider_id === "pp_easebuzz_partial_payment") {
+      const { data: providerConfig, error: providerError } = await supabase
+        .from("payment_providers")
+        .select("partial_payment_percentage")
+        .eq("id", data.provider_id)
+        .maybeSingle<PartialPaymentProviderConfig>()
+
+      if (providerError) {
+        throw new Error(providerError.message)
+      }
+
+      const configuredPercentage = Number(
+        providerConfig?.partial_payment_percentage ?? 0
+      )
+
+      if (
+        !Number.isFinite(configuredPercentage) ||
+        configuredPercentage <= 0 ||
+        configuredPercentage >= 100
+      ) {
+        throw new Error(
+          "Partial payment percentage must be greater than 0 and less than 100."
+        )
+      }
+
+      advancePercentage = configuredPercentage
+      payableAmount = Math.round(fullOrderAmount * (configuredPercentage / 100))
+    }
+
+    const balanceAmount = Math.max(0, fullOrderAmount - payableAmount)
+    const amount = payableAmount.toFixed(2)
     const productinfo = "Store Order"
     const checkoutCustomerAddress =
       data.customerAddress ?? cart.billing_address ?? cart.shipping_address
@@ -1781,6 +1822,16 @@ export async function initiatePaymentSession(
       payment_url: paymentUrl,
       txnid,
       expires_at: expiresAt,
+      payment_type:
+        data.provider_id === "pp_easebuzz_partial_payment" ? "partial" : "full",
+      advance_percentage: advancePercentage,
+      advance_amount:
+        data.provider_id === "pp_easebuzz_partial_payment"
+          ? payableAmount
+          : fullOrderAmount,
+      balance_amount:
+        data.provider_id === "pp_easebuzz_partial_payment" ? balanceAmount : 0,
+      full_order_amount: fullOrderAmount,
     }
   }
 

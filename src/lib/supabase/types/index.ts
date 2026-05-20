@@ -381,6 +381,7 @@ export interface PaymentProvider {
   description: string | null
   is_active: boolean
   discount_percentage?: number
+  partial_payment_percentage?: number | null
   created_at: string
 }
 
