@@ -50,6 +50,18 @@ export type PartialPaymentSessionData = {
   expires_at?: string
 }
 
+export type PartialPaymentDisplayData = {
+  isPartialPayment: true
+  advancePercentage: number | null
+  advanceAmount: number
+  balanceAmount: number
+  balancePaymentStatus: "pending" | "paid"
+  balancePaymentMethod: string | null
+  balancePaidAt: string | null
+  balancePaidAmount: number
+  balanceRemainingAmount: number
+}
+
 type OrderLinePricingLike = {
   total?: unknown
   original_total?: unknown
@@ -81,6 +93,51 @@ export const getOrderPricingMetadata = (
   }
 
   return value as OrderPricingMetadata
+}
+
+export const getPartialPaymentDisplayData = (
+  value: unknown
+): PartialPaymentDisplayData | null => {
+  const metadata = getOrderPricingMetadata(value)
+
+  if (metadata.payment_type !== "partial") {
+    return null
+  }
+
+  const advanceAmount = toFiniteNumber(metadata.advance_amount)
+  const balanceAmount = toFiniteNumber(metadata.balance_amount)
+
+  if (advanceAmount === null || balanceAmount === null || advanceAmount <= 0) {
+    return null
+  }
+
+  const balancePaymentStatus =
+    metadata.balance_payment_status === "paid" ? "paid" : "pending"
+  const balancePaidAmount = balancePaymentStatus === "paid" ? balanceAmount : 0
+  const balanceIsPaid = balancePaymentStatus === "paid"
+
+  return {
+    isPartialPayment: true,
+    advancePercentage: toFiniteNumber(metadata.advance_percentage),
+    advanceAmount,
+    balanceAmount,
+    balancePaymentStatus,
+    balancePaymentMethod:
+      balanceIsPaid &&
+      typeof metadata.balance_payment_method === "string" &&
+      metadata.balance_payment_method.trim().length > 0
+        ? metadata.balance_payment_method
+        : null,
+    balancePaidAt:
+      balanceIsPaid &&
+      typeof metadata.balance_paid_at === "string" &&
+      metadata.balance_paid_at.trim().length > 0
+        ? metadata.balance_paid_at
+        : null,
+    balancePaidAmount,
+    balanceRemainingAmount:
+      balancePaymentStatus === "paid" ? 0 : Math.max(0, balanceAmount),
+  }
 }
 
 export const getClubSavingsFromItems = (value: unknown): number | null => {

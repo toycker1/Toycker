@@ -108,7 +108,10 @@ export default async function Checkout({ searchParams }: CheckoutProps) {
           {/* Right Column: Order Summary + Complete Order */}
           <div className="w-full">
             <PaymentWrapper cart={cart}>
-              <CheckoutSummary cart={cart} />
+              <CheckoutSummary
+                cart={cart}
+                paymentMethods={paymentMethods ?? []}
+              />
             </PaymentWrapper>
           </div>
         </div>

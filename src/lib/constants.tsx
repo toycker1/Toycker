@@ -13,17 +13,17 @@ export const paymentInfoMap: Record<
   pp_payu_payu: {
     title: "Online Payment",
     icon: <Wallet className="text-blue-600" />,
-    description: "Pay securely using cards, UPI, net banking, or wallets.",
+    description: "Pay the full amount now using cards, UPI, net banking, or wallets.",
   },
   pp_easebuzz_easebuzz: {
     title: "Online Payment",
     icon: <Wallet className="text-blue-600" />,
-    description: "Pay securely using cards, UPI, net banking, or wallets.",
+    description: "Pay the full amount now using cards, UPI, net banking, or wallets.",
   },
   pp_easebuzz_partial_payment: {
     title: "Partial Payment",
     icon: <Wallet className="text-indigo-600" />,
-    description: "Pay an advance amount now. Balance will be handled by admin.",
+    description: "Pay an advance amount now to confirm your order. Remaining balance is payable later as instructed.",
   },
   pp_system_default: {
     title: "Cash on Delivery",

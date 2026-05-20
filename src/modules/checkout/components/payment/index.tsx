@@ -95,7 +95,7 @@ const Payment = ({
           </span>
         </div>
         <div className="mt-1 flex items-center justify-between gap-3 text-xs text-indigo-700">
-          <span>Balance handled by admin</span>
+          <span>Remaining balance</span>
           <span className="font-bold">
             {convertToLocale({
               amount: balanceAmount,

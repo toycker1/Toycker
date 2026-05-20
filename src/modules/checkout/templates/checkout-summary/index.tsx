@@ -12,14 +12,22 @@ import RewardsRedemption from "@modules/checkout/components/rewards-redemption"
 
 const CheckoutSummary = ({
   cart: serverCart,
+  paymentMethods,
 }: {
   cart: Cart
+  paymentMethods: {
+    id: string
+    partial_payment_percentage?: number | null
+  }[]
 }) => {
   const { cart: clientCart } = useCartStore()
 
   // Prioritize serverCart during initial render to avoid "delay" when arriving from "Buy It Now"
   // If absolute consistency is needed, we prefer clientCart ONLY if it has items and matches basic ID
   const cart = (clientCart?.items && clientCart.items.length > 0) ? clientCart : serverCart
+  const partialPaymentMethod = paymentMethods.find(
+    (method) => method.id === "pp_easebuzz_partial_payment"
+  )
 
   return (
     <div className="sticky top-4 flex flex-col gap-3 sm:gap-4">
@@ -48,7 +56,13 @@ const CheckoutSummary = ({
 
         {/* Pricing Section */}
         <div className="px-5 sm:px-6 py-4 sm:py-4 bg-gray-50/50 border-t border-gray-100">
-          <CartTotals totals={cart} cart={cart} />
+          <CartTotals
+            totals={cart}
+            cart={cart}
+            checkoutPartialPaymentPercentage={
+              partialPaymentMethod?.partial_payment_percentage
+            }
+          />
         </div>
 
         {/* Discount Section */}

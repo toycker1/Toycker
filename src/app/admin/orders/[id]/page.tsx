@@ -11,6 +11,7 @@ import { ChevronLeftIcon, EnvelopeIcon, PhoneIcon, MapPinIcon, CheckIcon, TruckI
 import AdminCard from "@modules/admin/components/admin-card"
 import AdminBadge from "@modules/admin/components/admin-badge"
 import { convertToLocale } from "@lib/util/money"
+import { getPartialPaymentDisplayData } from "@/lib/util/order-pricing"
 import Image from "next/image"
 import FulfillmentModal from "./fulfillment-modal"
 import { MarkAsPaidButton } from "./mark-as-paid-button"
@@ -269,13 +270,7 @@ export default async function AdminOrderDetails({ params }: Props) {
   const paymentDiscountPercentage = toNumber(
     orderMetadata.payment_discount_percentage
   )
-  const advanceAmount = toNumber(orderMetadata.advance_amount)
-  const balanceAmount = toNumber(orderMetadata.balance_amount)
-  const advancePercentage = toNumber(orderMetadata.advance_percentage)
-  const balancePaymentStatus =
-    typeof orderMetadata.balance_payment_status === "string"
-      ? orderMetadata.balance_payment_status
-      : null
+  const partialPaymentData = getPartialPaymentDisplayData(order.metadata)
 
   return (
     <div className="space-y-6">
@@ -489,33 +484,83 @@ export default async function AdminOrderDetails({ params }: Props) {
                   <p className="text-sm font-mono text-gray-700 mt-1">{order.gateway_txn_id}</p>
                 </div>
               )}
-              {isPartialPayment && advanceAmount > 0 && (
+              {isPartialPayment && partialPaymentData && (
                 <div className="pt-3 border-t border-gray-100 space-y-2">
                   <div className="flex justify-between gap-3 text-sm">
-                    <span className="text-gray-500">Advance Paid</span>
+                    <span className="text-gray-500">Order Total</span>
                     <span className="font-bold text-gray-900">
                       {convertToLocale({
-                        amount: advanceAmount,
+                        amount: Number(order.total_amount || order.total || 0),
                         currency_code: order.currency_code,
                       })}
-                      {advancePercentage > 0 ? ` (${advancePercentage}%)` : ""}
                     </span>
                   </div>
                   <div className="flex justify-between gap-3 text-sm">
-                    <span className="text-gray-500">Balance Due</span>
+                    <span className="text-gray-500">Advance Paid</span>
+                    <span className="font-bold text-emerald-700">
+                      {convertToLocale({
+                        amount: partialPaymentData.advanceAmount,
+                        currency_code: order.currency_code,
+                      })}
+                      {partialPaymentData.advancePercentage
+                        ? ` (${partialPaymentData.advancePercentage}%)`
+                        : ""}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3 text-sm">
+                    <span className="text-gray-500">Balance Paid</span>
                     <span className="font-bold text-gray-900">
                       {convertToLocale({
-                        amount: balanceAmount,
+                        amount: partialPaymentData.balancePaidAmount,
+                        currency_code: order.currency_code,
+                      })}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3 text-sm">
+                    <span className="text-gray-500">Balance Remaining</span>
+                    <span
+                      className={`font-bold ${
+                        partialPaymentData.balanceRemainingAmount > 0
+                          ? "text-amber-700"
+                          : "text-emerald-700"
+                      }`}
+                    >
+                      {convertToLocale({
+                        amount: partialPaymentData.balanceRemainingAmount,
                         currency_code: order.currency_code,
                       })}
                     </span>
                   </div>
                   <div className="flex justify-between gap-3 text-sm">
                     <span className="text-gray-500">Balance Status</span>
-                    <span className="font-bold text-gray-900">
-                      {balancePaymentStatus === "paid" ? "Paid" : "Pending"}
+                    <span
+                      className={`font-bold ${
+                        partialPaymentData.balancePaymentStatus === "paid"
+                          ? "text-emerald-700"
+                          : "text-amber-700"
+                      }`}
+                    >
+                      {partialPaymentData.balancePaymentStatus === "paid"
+                        ? "Paid"
+                        : "Pending"}
                     </span>
                   </div>
+                  {partialPaymentData.balancePaymentMethod && (
+                    <div className="flex justify-between gap-3 text-sm">
+                      <span className="text-gray-500">Balance Method</span>
+                      <span className="font-bold text-gray-900 text-right">
+                        {partialPaymentData.balancePaymentMethod}
+                      </span>
+                    </div>
+                  )}
+                  {partialPaymentData.balancePaidAt && (
+                    <div className="flex justify-between gap-3 text-sm">
+                      <span className="text-gray-500">Balance Paid At</span>
+                      <span className="font-bold text-gray-900 text-right">
+                        {formatIST(partialPaymentData.balancePaidAt)}
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
               {canMarkBalancePaid && (
