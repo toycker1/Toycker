@@ -1,4 +1,4 @@
-import { getAdminOrders } from "@/lib/data/admin"
+import { getAdminOrders, type AdminOrderListItem } from "@/lib/data/admin"
 import { convertToLocale } from "@lib/util/money"
 import AdminBadge from "@modules/admin/components/admin-badge"
 import AdminPageHeader from "@modules/admin/components/admin-page-header"
@@ -87,6 +87,23 @@ function getFulfillmentBadge(fulfillmentStatus: string) {
   }
 }
 
+function getAcceptanceBadge(status: AdminOrderListItem["status"]) {
+  switch (status) {
+    case "accepted":
+    case "shipped":
+    case "delivered":
+      return { variant: "success" as const, label: "Accepted" }
+    case "pending":
+    case "order_placed":
+      return { variant: "warning" as const, label: "Not Accepted" }
+    case "cancelled":
+    case "failed":
+      return { variant: "neutral" as const, label: "Not Applicable" }
+    default:
+      return { variant: "neutral" as const, label: "—" }
+  }
+}
+
 export default async function AdminOrders({
   searchParams
 }: {
@@ -137,6 +154,7 @@ export default async function AdminOrders({
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[100px]">Order</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Accepted</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Method</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fulfillment</th>
@@ -149,6 +167,7 @@ export default async function AdminOrders({
                 const _isCOD = normalizedMethod === "cod" || normalizedMethod === "manual"
 
                 const paymentBadge = getPaymentBadge(order.payment_status, order.payment_method, order.payu_txn_id, order.status, order.gateway_txn_id)
+                const acceptanceBadge = getAcceptanceBadge(order.status)
                 const fulfillmentBadge = getFulfillmentBadge(order.fulfillment_status)
                 const paymentMethodDisplay = formatPaymentMethodDisplay(order.payment_method, order.payu_txn_id, order.gateway_txn_id)
 
@@ -166,6 +185,11 @@ export default async function AdminOrders({
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-600">{order.customer_email}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <AdminBadge variant={acceptanceBadge.variant}>
+                        {acceptanceBadge.label}
+                      </AdminBadge>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <AdminBadge variant={paymentBadge.variant}>
@@ -187,7 +211,7 @@ export default async function AdminOrders({
                 )
               }) : (
                 <tr>
-                  <td colSpan={7} className="px-6 py-20 text-center text-gray-500 text-sm">
+                  <td colSpan={8} className="px-6 py-20 text-center text-gray-500 text-sm">
                     <div className="flex flex-col items-center">
                       <ShoppingBagIcon className="w-12 h-12 text-gray-200 mb-3" />
                       <p className="text-sm font-bold text-gray-900">No orders found</p>
