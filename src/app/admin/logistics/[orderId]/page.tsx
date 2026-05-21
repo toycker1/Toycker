@@ -882,6 +882,18 @@ export default async function AdminLogisticsDetail({ params }: Props) {
             ])}
           />
           <DiagnosticCell
+            label="Bill amount sent"
+            value={getPayloadNumberOrString(record.request_payload, [
+              "total_amount",
+            ])}
+          />
+          <DiagnosticCell
+            label="COD collection amount"
+            value={getPayloadNumberOrString(record.request_payload, [
+              "total_cod_amount",
+            ])}
+          />
+          <DiagnosticCell
             label="Delivery pincode"
             value={getPayloadNumberOrString(record.request_payload, ["pincode"])}
           />
@@ -892,12 +904,6 @@ export default async function AdminLogisticsDetail({ params }: Props) {
           <DiagnosticCell
             label="Dimensions"
             value={getDimensions(record.request_payload)}
-          />
-          <DiagnosticCell
-            label="COD amount"
-            value={getPayloadNumberOrString(record.request_payload, [
-              "total_cod_amount",
-            ])}
           />
         </div>
       </AdminCard>
