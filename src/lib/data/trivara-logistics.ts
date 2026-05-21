@@ -6,6 +6,7 @@ import { requirePermission } from "@/lib/permissions/server"
 import { PERMISSIONS } from "@/lib/permissions"
 import {
   Order,
+  OrderTimeline,
   TrivaraOrderBooking,
   TrivaraOrderBookingStatus,
   TrivaraSyncSnapshot,
@@ -13,6 +14,8 @@ import {
 } from "@/lib/supabase/types"
 import { cancelOrder, ensureAdmin, retryTrivaraBookingForOrder } from "./admin"
 import {
+  extractTrivaraTrackingStatus,
+  extractTrivaraWaybillNumber,
   getTrivaraApiBaseUrl,
   getTrivaraApiKey,
   getTrivaraCrnNo,
@@ -43,6 +46,10 @@ type LogisticsOrderSummary = Pick<
 
 export type TrivaraLogisticsRecord = TrivaraOrderBooking & {
   order: LogisticsOrderSummary | null
+  cancellation_event: Pick<
+    OrderTimeline,
+    "actor" | "created_at" | "description" | "title"
+  > | null
 }
 
 export type TrivaraLogisticsListParams = {
@@ -70,40 +77,16 @@ export type TrivaraSyncActionResult = {
   errorMessage?: string | null
 }
 
+export type TrivaraDetailActionResult = {
+  success: boolean
+  message: string
+}
+
 function revalidateLogistics(orderId?: string) {
   revalidatePath("/admin/logistics")
   if (orderId) {
     revalidatePath(`/admin/logistics/${orderId}`)
   }
-}
-
-function getResponseStatus(payload: Record<string, unknown>): string | null {
-  const queue: unknown[] = [payload]
-  const statusKeys = new Set([
-    "status",
-    "current_status",
-    "shipment_status",
-    "tracking_status",
-  ])
-
-  while (queue.length > 0) {
-    const current = queue.shift()
-    if (!current || typeof current !== "object" || Array.isArray(current)) {
-      continue
-    }
-
-    for (const [key, value] of Object.entries(current)) {
-      if (statusKeys.has(key) && typeof value === "string" && value.trim()) {
-        return value.trim()
-      }
-
-      if (value && typeof value === "object") {
-        queue.push(value)
-      }
-    }
-  }
-
-  return null
 }
 
 function getErrorMessage(error: unknown): string {
@@ -674,6 +657,7 @@ export async function getTrivaraLogisticsRecords(
   const records = bookings.map((booking) => ({
     ...booking,
     order: ordersById.get(booking.order_id) || null,
+    cancellation_event: null,
   }))
   const totalCount = count || 0
   const totalPages = Math.ceil(totalCount / limit) || 1
@@ -710,9 +694,29 @@ export async function getTrivaraLogisticsRecord(
     throw new Error(error.message)
   }
 
+  const { data: cancellationEvent, error: cancellationEventError } =
+    await supabase
+      .from("order_timeline")
+      .select("actor, created_at, description, title")
+      .eq("order_id", orderId)
+      .eq("event_type", "cancelled")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+  if (cancellationEventError) {
+    throw new Error(cancellationEventError.message)
+  }
+
   return {
     ...booking,
     order: order ? (order as LogisticsOrderSummary) : null,
+    cancellation_event: cancellationEvent
+      ? (cancellationEvent as Pick<
+          OrderTimeline,
+          "actor" | "created_at" | "description" | "title"
+        >)
+      : null,
   }
 }
 
@@ -745,31 +749,59 @@ export async function trackTrivaraOrder(orderId: string) {
   await requirePermission(PERMISSIONS.SHIPPING_UPDATE)
 
   const booking = await getBooking(orderId)
-  if (!booking.trivara_reference_number) {
-    throw new Error("Trivara reference number is required before tracking.")
+  const waybill =
+    extractTrivaraWaybillNumber(booking.response_payload) ||
+    booking.trivara_reference_number
+
+  if (!waybill) {
+    return {
+      success: false,
+      message: "Trivara waybill is required before tracking.",
+    }
   }
 
   const payload = {
     crn_no: getTrivaraCrnNo(),
     action: "track" as const,
-    waybill: booking.trivara_reference_number,
+    waybill,
   }
-  const response = await sendTrivaraOrderTracking(payload, {
-    apiBaseUrl: getTrivaraApiBaseUrl(),
-    apiKey: getTrivaraTrackingApiKey(),
-  })
+  try {
+    const response = await sendTrivaraOrderTracking(payload, {
+      apiBaseUrl: getTrivaraApiBaseUrl(),
+      apiKey: getTrivaraTrackingApiKey(),
+    })
+    const trackingStatus = extractTrivaraTrackingStatus(response.responsePayload)
 
-  await updateBooking(orderId, {
-    tracking_payload: response.responsePayload,
-    tracking_status: getResponseStatus(response.responsePayload),
-    tracking_synced_at: new Date().toISOString(),
-  })
+    await updateBooking(orderId, {
+      tracking_payload: response.responsePayload,
+      tracking_status: trackingStatus,
+      tracking_synced_at: new Date().toISOString(),
+    })
 
-  if (!response.ok) {
-    throw new Error(`Trivara tracking failed with status ${response.status}`)
+    revalidateLogistics(orderId)
+
+    if (!response.ok) {
+      return {
+        success: false,
+        message: getTrivaraResponseError(
+          response,
+          "Trivara tracking failed"
+        ),
+      }
+    }
+
+    return {
+      success: true,
+      message: trackingStatus
+        ? `Tracking synced. Current status: ${trackingStatus}.`
+        : "Tracking synced successfully.",
+    }
+  } catch (error) {
+    return {
+      success: false,
+      message: getErrorMessage(error),
+    }
   }
-
-  revalidateLogistics(orderId)
 }
 
 export async function printTrivaraSlip(orderId: string) {
@@ -777,30 +809,63 @@ export async function printTrivaraSlip(orderId: string) {
   await requirePermission(PERMISSIONS.SHIPPING_UPDATE)
 
   const booking = await getBooking(orderId)
-  if (!booking.trivara_reference_number) {
-    throw new Error("Trivara reference number is required before printing.")
+  const referenceNumber = booking.trivara_reference_number
+  const waybill =
+    extractTrivaraWaybillNumber(booking.response_payload) || referenceNumber
+
+  if (!referenceNumber || !waybill) {
+    return {
+      success: false,
+      message: "Trivara reference number and waybill are required before printing.",
+    }
   }
 
   const payload = {
     crn_no: getTrivaraCrnNo(),
-    reference_number: booking.trivara_reference_number,
-    awb_number: booking.trivara_reference_number,
+    reference_number: referenceNumber,
+    awb_number: waybill,
   }
-  const response = await sendTrivaraPrintSlip(payload, {
-    apiBaseUrl: getTrivaraPrintSlipApiBaseUrl(),
-    apiKey: getTrivaraApiKey(),
-  })
+  try {
+    const response = await sendTrivaraPrintSlip(payload, {
+      apiBaseUrl: getTrivaraPrintSlipApiBaseUrl(),
+      apiKey: getTrivaraApiKey(),
+    })
 
-  await updateBooking(orderId, {
-    print_slip_payload: response.responsePayload,
-    print_slip_synced_at: new Date().toISOString(),
-  })
+    await updateBooking(orderId, {
+      print_slip_payload: response.responsePayload,
+      print_slip_synced_at: new Date().toISOString(),
+    })
 
-  if (!response.ok) {
-    throw new Error(`Trivara print slip failed with status ${response.status}`)
+    revalidateLogistics(orderId)
+
+    if (!response.ok) {
+      return {
+        success: false,
+        message: getTrivaraResponseError(
+          response,
+          "Trivara print slip failed"
+        ),
+      }
+    }
+
+    return {
+      success: true,
+      message: "Print slip synced successfully.",
+    }
+  } catch (error) {
+    return {
+      success: false,
+      message: getErrorMessage(error),
+    }
   }
+}
 
-  revalidateLogistics(orderId)
+export async function trackTrivaraOrderForForm(orderId: string): Promise<void> {
+  await trackTrivaraOrder(orderId)
+}
+
+export async function printTrivaraSlipForForm(orderId: string): Promise<void> {
+  await printTrivaraSlip(orderId)
 }
 
 export async function cancelTrivaraOrder(orderId: string) {

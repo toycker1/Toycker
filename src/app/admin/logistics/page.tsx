@@ -11,9 +11,9 @@ import {
   cancelTrivaraOrder,
   getTrivaraLogisticsRecords,
   getTrivaraSyncSnapshots,
-  printTrivaraSlip,
+  printTrivaraSlipForForm,
   retryTrivaraBooking,
-  trackTrivaraOrder,
+  trackTrivaraOrderForForm,
 } from "@/lib/data/trivara-logistics"
 import {
   TrivaraOrderBookingStatus,
@@ -239,12 +239,12 @@ export default async function AdminLogistics({
                       )}
                       {canUseReference && (
                         <>
-                          <form action={trackTrivaraOrder.bind(null, record.order_id)}>
+                          <form action={trackTrivaraOrderForForm.bind(null, record.order_id)}>
                             <button className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-200">
                               Track
                             </button>
                           </form>
-                          <form action={printTrivaraSlip.bind(null, record.order_id)}>
+                          <form action={printTrivaraSlipForForm.bind(null, record.order_id)}>
                             <button className="inline-flex items-center gap-1 rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-200">
                               <DocumentTextIcon className="h-3.5 w-3.5" />
                               Slip

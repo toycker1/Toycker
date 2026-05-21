@@ -516,16 +516,52 @@ async function parseTrivaraResponse(
 export function extractTrivaraReferenceNumber(
   value: Record<string, unknown>
 ): string | null {
-  const queue: unknown[] = [value]
-  const candidateKeys = new Set([
+  return extractTrivaraPayloadString(value, [
     "reference_number",
     "referenceNumber",
     "ref_no",
     "refNo",
+  ])
+}
+
+export function extractTrivaraWaybillNumber(
+  value: Record<string, unknown> | null
+): string | null {
+  if (!value) {
+    return null
+  }
+
+  return extractTrivaraPayloadString(value, [
+    "waybill",
+    "waybill_no",
     "awb",
     "awb_number",
     "tracking_number",
   ])
+}
+
+export function extractTrivaraTrackingStatus(
+  value: Record<string, unknown> | null
+): string | null {
+  if (!value) {
+    return null
+  }
+
+  return (
+    extractTrivaraPayloadString(value, [
+      "current_state",
+      "current_status",
+      "shipment_status",
+      "tracking_status",
+    ]) || extractTrivaraPayloadString(value, ["status", "message"])
+  )
+}
+
+function extractTrivaraPayloadString(
+  value: Record<string, unknown>,
+  candidateKeys: string[]
+): string | null {
+  const queue: unknown[] = [value]
 
   while (queue.length > 0) {
     const current = queue.shift()
@@ -539,20 +575,25 @@ export function extractTrivaraReferenceNumber(
       continue
     }
 
-    Object.entries(current).forEach(([key, nestedValue]) => {
-      if (typeof nestedValue === "string" && candidateKeys.has(key)) {
-        queue.unshift({ __match: nestedValue })
-      } else if (nestedValue && typeof nestedValue === "object") {
+    const record = current as Record<string, unknown>
+
+    for (const key of candidateKeys) {
+      const nestedValue = record[key]
+
+      if (typeof nestedValue === "string" && nestedValue.trim()) {
+        return nestedValue.trim()
+      }
+
+      if (typeof nestedValue === "number") {
+        return String(nestedValue)
+      }
+    }
+
+    Object.values(record).forEach((nestedValue) => {
+      if (nestedValue && typeof nestedValue === "object") {
         queue.push(nestedValue)
       }
     })
-
-    if (
-      "__match" in current &&
-      typeof (current as Record<string, unknown>).__match === "string"
-    ) {
-      return (current as Record<string, string>).__match
-    }
   }
 
   return null

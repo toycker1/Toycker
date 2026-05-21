@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
   buildTrivaraOrderBookingPayload,
+  extractTrivaraReferenceNumber,
+  extractTrivaraTrackingStatus,
+  extractTrivaraWaybillNumber,
   getTrivaraApiBaseUrl,
   getTrivaraConfig,
   sendTrivaraCancelOrder,
@@ -255,6 +258,51 @@ describe("Trivara order booking integration", () => {
       referenceNumber: "260000015315",
       errorMessage: null,
     })
+  })
+
+  it("keeps Trivara reference and waybill extraction separate", () => {
+    const payload = {
+      data: [
+        {
+          status: "SUCCESS",
+          message: "Order Created",
+          waybill: "46322610068051",
+          order_id: 6668,
+          reference_number: "260000015315",
+        },
+      ],
+      result: "Processed",
+    }
+
+    expect(extractTrivaraReferenceNumber(payload)).toBe("260000015315")
+    expect(extractTrivaraWaybillNumber(payload)).toBe("46322610068051")
+  })
+
+  it("extracts current Trivara tracking status from nested payloads", () => {
+    const payload = {
+      status: "success",
+      data: [
+        {
+          status: "SUCCESS",
+          waybill: "46322610068051",
+          current_status: "Manifested",
+        },
+      ],
+    }
+
+    expect(extractTrivaraTrackingStatus(payload)).toBe("Manifested")
+  })
+
+  it("prefers Trivara current_state over generic success status", () => {
+    const payload = {
+      status: "success",
+      order_details: {
+        awb: "26000015677",
+        current_state: "CANCELLED",
+      },
+    }
+
+    expect(extractTrivaraTrackingStatus(payload)).toBe("CANCELLED")
   })
 
   it("rejects invalid Trivara base URLs before sending requests", () => {
