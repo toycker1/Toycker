@@ -6,6 +6,7 @@ import { requirePermission } from "@/lib/permissions/server"
 import { PERMISSIONS } from "@/lib/permissions"
 import {
   Order,
+  OrderTimeline,
   TrivaraOrderBooking,
   TrivaraOrderBookingStatus,
   TrivaraSyncSnapshot,
@@ -13,6 +14,8 @@ import {
 } from "@/lib/supabase/types"
 import { cancelOrder, ensureAdmin, retryTrivaraBookingForOrder } from "./admin"
 import {
+  extractTrivaraTrackingStatus,
+  extractTrivaraWaybillNumber,
   getTrivaraApiBaseUrl,
   getTrivaraApiKey,
   getTrivaraCrnNo,
@@ -43,6 +46,10 @@ type LogisticsOrderSummary = Pick<
 
 export type TrivaraLogisticsRecord = TrivaraOrderBooking & {
   order: LogisticsOrderSummary | null
+  cancellation_event: Pick<
+    OrderTimeline,
+    "actor" | "created_at" | "description" | "title"
+  > | null
 }
 
 export type TrivaraLogisticsListParams = {
@@ -62,6 +69,12 @@ export type TrivaraLogisticsListResponse = {
 export type TrivaraSyncActionResult = {
   success: boolean
   message: string
+  syncKey?: TrivaraSyncSnapshotKey
+  summary?: string
+  value?: string
+  detail?: string
+  syncedAt?: string | null
+  errorMessage?: string | null
 }
 
 function revalidateLogistics(orderId?: string) {
@@ -69,35 +82,6 @@ function revalidateLogistics(orderId?: string) {
   if (orderId) {
     revalidatePath(`/admin/logistics/${orderId}`)
   }
-}
-
-function getResponseStatus(payload: Record<string, unknown>): string | null {
-  const queue: unknown[] = [payload]
-  const statusKeys = new Set([
-    "status",
-    "current_status",
-    "shipment_status",
-    "tracking_status",
-  ])
-
-  while (queue.length > 0) {
-    const current = queue.shift()
-    if (!current || typeof current !== "object" || Array.isArray(current)) {
-      continue
-    }
-
-    for (const [key, value] of Object.entries(current)) {
-      if (statusKeys.has(key) && typeof value === "string" && value.trim()) {
-        return value.trim()
-      }
-
-      if (value && typeof value === "object") {
-        queue.push(value)
-      }
-    }
-  }
-
-  return null
 }
 
 function getErrorMessage(error: unknown): string {
@@ -134,6 +118,304 @@ function getPayloadString(
   return null
 }
 
+function getPayloadValue(
+  payload: Record<string, unknown>,
+  keys: string[]
+): unknown {
+  const queue: unknown[] = [payload]
+
+  while (queue.length > 0) {
+    const current = queue.shift()
+    if (!isObjectRecord(current)) {
+      continue
+    }
+
+    for (const [key, value] of Object.entries(current)) {
+      if (keys.includes(key)) {
+        return value
+      }
+
+      if (isObjectRecord(value) || Array.isArray(value)) {
+        queue.push(value)
+      }
+    }
+  }
+
+  return null
+}
+
+function getArrayCount(value: unknown): number | null {
+  if (Array.isArray(value)) {
+    return value.length
+  }
+
+  if (isObjectRecord(value)) {
+    const nestedArray = Object.values(value).find(Array.isArray)
+    return Array.isArray(nestedArray) ? nestedArray.length : null
+  }
+
+  return null
+}
+
+function getPayloadArray(
+  payload: Record<string, unknown>,
+  keys: string[]
+): unknown[] | null {
+  const value = getPayloadValue(payload, keys)
+
+  if (Array.isArray(value)) {
+    return value
+  }
+
+  if (isObjectRecord(value)) {
+    const nestedArray = Object.values(value).find(Array.isArray)
+    return Array.isArray(nestedArray) ? nestedArray : null
+  }
+
+  return null
+}
+
+function getRecordString(
+  record: Record<string, unknown>,
+  keys: string[]
+): string | null {
+  for (const key of keys) {
+    const value = record[key]
+    if (typeof value === "string" && value.trim()) {
+      return value.trim()
+    }
+    if (typeof value === "number") {
+      return String(value)
+    }
+  }
+
+  return null
+}
+
+function getNumericValue(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+
+  return null
+}
+
+function formatTitle(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+function getTotalOrdersDisplay(payload: Record<string, unknown>) {
+  const data = getPayloadArray(payload, ["data", "orders"])
+
+  if (data) {
+    let total = 0
+    const breakdown: string[] = []
+
+    data.forEach((item) => {
+      if (!isObjectRecord(item)) {
+        return
+      }
+
+      const count = getNumericValue(item.counts ?? item.count ?? item.total)
+      if (count === null) {
+        return
+      }
+
+      total += count
+
+      const title = getRecordString(item, ["title", "status", "name"])
+      if (count > 0 && title) {
+        breakdown.push(`${formatTitle(title)} ${count}`)
+      }
+    })
+
+    return {
+      value: String(total),
+      detail: breakdown.length > 0 ? breakdown.join(", ") : "No orders in this range",
+    }
+  }
+
+  const total = getPayloadValue(payload, ["total", "total_orders", "count"])
+  if (typeof total === "number" || typeof total === "string") {
+    return {
+      value: String(total),
+      detail: "Total orders",
+    }
+  }
+
+  return null
+}
+
+function getPickupLocationDisplay(payload: Record<string, unknown>) {
+  const locations = getPayloadArray(payload, ["data", "pickup_locations"])
+  const firstLocation = locations?.find(isObjectRecord)
+
+  if (!firstLocation) {
+    return null
+  }
+
+  return {
+    value:
+      getRecordString(firstLocation, [
+        "warehouse_name",
+        "pickup_location_code",
+        "location_code",
+      ]) || "Pickup location synced",
+    detail:
+      getRecordString(firstLocation, ["address", "pincode"]) ||
+      "Pickup location available",
+  }
+}
+
+function getServicesDisplay(payload: Record<string, unknown>) {
+  const services = getPayloadArray(payload, ["services"])
+  const shipmentTypes = getPayloadArray(payload, ["shipment_type"])
+  const serviceNames =
+    services
+      ?.filter(isObjectRecord)
+      .map((item) => getRecordString(item, ["service_name", "name", "title"]))
+      .filter((value): value is string => Boolean(value)) || []
+  const shipmentTypeNames =
+    shipmentTypes
+      ?.filter(isObjectRecord)
+      .map((item) =>
+        getRecordString(item, ["shipment_type_name", "name", "title"])
+      )
+      .filter((value): value is string => Boolean(value)) || []
+
+  if (serviceNames.length === 0 && shipmentTypeNames.length === 0) {
+    return null
+  }
+
+  return {
+    value: serviceNames.join(", ") || "Services synced",
+    detail:
+      shipmentTypeNames.length > 0
+        ? `Shipment type: ${shipmentTypeNames.join(", ")}`
+        : "Service options available",
+  }
+}
+
+function getSnapshotDisplay(
+  syncKey: TrivaraSyncSnapshotKey,
+  payload: Record<string, unknown> | null
+) {
+  if (!payload) {
+    return {
+      value: "No data",
+      detail: "No response stored",
+    }
+  }
+
+  const display =
+    syncKey === "total_orders"
+      ? getTotalOrdersDisplay(payload)
+      : syncKey === "pickup_locations"
+        ? getPickupLocationDisplay(payload)
+        : getServicesDisplay(payload)
+
+  if (display) {
+    return display
+  }
+
+  return {
+    value: "Synced",
+    detail: getSnapshotSummary(syncKey, payload),
+  }
+}
+
+function getSnapshotSummary(
+  syncKey: TrivaraSyncSnapshotKey,
+  payload: Record<string, unknown> | null
+) {
+  if (!payload) {
+    return "No response stored"
+  }
+
+  if (Object.keys(payload).length === 0) {
+    return "Empty response"
+  }
+
+  const error = getPayloadString(payload, ["error", "message"])
+  const result = getPayloadString(payload, ["result"])
+  const success = getPayloadValue(payload, ["success"])
+  const data = getPayloadValue(payload, ["data", "orders", "services"])
+  const count = getArrayCount(data)
+
+  if (error) {
+    return error
+  }
+
+  if (syncKey === "total_orders") {
+    if (count !== null) {
+      return `${count} orders returned`
+    }
+
+    const total = getPayloadValue(payload, ["total", "total_orders", "count"])
+    if (typeof total === "number" || typeof total === "string") {
+      return `${total} total orders`
+    }
+  }
+
+  if (syncKey === "pickup_locations" && count !== null) {
+    return `${count} pickup locations returned`
+  }
+
+  if (syncKey === "services" && count !== null) {
+    return `${count} services returned`
+  }
+
+  if (result) {
+    return result
+  }
+
+  if (typeof success === "boolean") {
+    return success ? "Synced successfully" : "Sync failed"
+  }
+
+  return "Response stored"
+}
+
+function buildSyncActionResult({
+  syncKey,
+  success,
+  successMessage,
+  failureMessage,
+  responsePayload,
+  errorMessage,
+  syncedAt,
+}: {
+  syncKey: TrivaraSyncSnapshotKey
+  success: boolean
+  successMessage: string
+  failureMessage: string
+  responsePayload: Record<string, unknown> | null
+  errorMessage: string | null
+  syncedAt: string
+}): TrivaraSyncActionResult {
+  const display = getSnapshotDisplay(syncKey, responsePayload)
+
+  return {
+    success,
+    message: success ? successMessage : failureMessage,
+    syncKey,
+    summary: errorMessage || display.detail,
+    value: errorMessage ? "Failed" : display.value,
+    detail: errorMessage || display.detail,
+    syncedAt,
+    errorMessage,
+  }
+}
+
 function isTrivaraResponseSuccessful(response: {
   ok: boolean
   responsePayload: Record<string, unknown>
@@ -144,6 +426,10 @@ function isTrivaraResponseSuccessful(response: {
 
   const error = getPayloadString(response.responsePayload, ["error"])
   if (error) {
+    return false
+  }
+
+  if (hasNestedErrorStatus(response.responsePayload)) {
     return false
   }
 
@@ -163,6 +449,33 @@ function isTrivaraResponseSuccessful(response: {
   }
 
   return true
+}
+
+function hasNestedErrorStatus(payload: Record<string, unknown>): boolean {
+  const queue: unknown[] = [payload]
+
+  while (queue.length > 0) {
+    const current = queue.shift()
+    if (!isObjectRecord(current)) {
+      continue
+    }
+
+    for (const [key, value] of Object.entries(current)) {
+      if (
+        key === "status" &&
+        typeof value === "string" &&
+        value.trim().toLowerCase() === "error"
+      ) {
+        return true
+      }
+
+      if (isObjectRecord(value) || Array.isArray(value)) {
+        queue.push(value)
+      }
+    }
+  }
+
+  return false
 }
 
 function getTrivaraResponseError(
@@ -238,13 +551,76 @@ export async function getTrivaraLogisticsRecords(
 
   const { page = 1, limit = 20, status = "all", search = "" } = params
   const supabase = await createAdminClient()
+  const currentPage = Math.max(1, page)
+  const offset = (currentPage - 1) * limit
+  const from = offset
+  const to = offset + limit - 1
+  const normalizedSearch = search.trim()
+  const matchingOrderIds: string[] = []
+
+  if (normalizedSearch) {
+    let orderSearchQuery = supabase
+      .from("orders")
+      .select("id")
+      .ilike("customer_email", `%${normalizedSearch}%`)
+
+    const numericSearch = Number(normalizedSearch)
+    if (Number.isInteger(numericSearch) && numericSearch > 0) {
+      orderSearchQuery = supabase
+        .from("orders")
+        .select("id")
+        .or(
+          `customer_email.ilike.%${normalizedSearch}%,display_id.eq.${numericSearch}`
+        )
+    }
+
+    const { data: matchingOrders, error: matchingOrdersError } =
+      await orderSearchQuery
+
+    if (matchingOrdersError) {
+      throw new Error(matchingOrdersError.message)
+    }
+
+    matchingOrderIds.push(
+      ...((matchingOrders || []) as Array<{ id: string }>).map((order) => order.id)
+    )
+  }
+
+  const searchFilter = normalizedSearch
+    ? matchingOrderIds.length > 0
+      ? `trivara_reference_number.ilike.%${normalizedSearch}%,order_id.in.(${matchingOrderIds.join(",")})`
+      : `trivara_reference_number.ilike.%${normalizedSearch}%`
+    : ""
+
+  let countQuery = supabase
+    .from("trivara_order_bookings")
+    .select("*", { count: "exact", head: true })
+
+  if (status !== "all") {
+    countQuery = countQuery.eq("status", status)
+  }
+
+  if (searchFilter) {
+    countQuery = countQuery.or(searchFilter)
+  }
+
+  const { count, error: countError } = await countQuery
+  if (countError) {
+    throw new Error(countError.message)
+  }
+
   let query = supabase
     .from("trivara_order_bookings")
     .select("*")
     .order("updated_at", { ascending: false })
+    .range(from, to)
 
   if (status !== "all") {
     query = query.eq("status", status)
+  }
+
+  if (searchFilter) {
+    query = query.or(searchFilter)
   }
 
   const { data, error } = await query
@@ -273,35 +649,19 @@ export async function getTrivaraLogisticsRecords(
     })
   }
 
-  const normalizedSearch = search.trim().toLowerCase()
-  const records = bookings
-    .map((booking) => ({
-      ...booking,
-      order: ordersById.get(booking.order_id) || null,
-    }))
-    .filter((record) => {
-      if (!normalizedSearch) {
-        return true
-      }
-
-      return [
-        record.trivara_reference_number,
-        record.order?.customer_email,
-        record.order?.display_id?.toString(),
-      ]
-        .filter((value): value is string => Boolean(value))
-        .some((value) => value.toLowerCase().includes(normalizedSearch))
-    })
-
-  const count = records.length
-  const totalPages = Math.ceil(count / limit) || 1
-  const offset = (page - 1) * limit
+  const records = bookings.map((booking) => ({
+    ...booking,
+    order: ordersById.get(booking.order_id) || null,
+    cancellation_event: null,
+  }))
+  const totalCount = count || 0
+  const totalPages = Math.ceil(totalCount / limit) || 1
 
   return {
-    records: records.slice(offset, offset + limit),
-    count,
+    records,
+    count: totalCount,
     totalPages,
-    currentPage: page,
+    currentPage,
   }
 }
 
@@ -329,9 +689,29 @@ export async function getTrivaraLogisticsRecord(
     throw new Error(error.message)
   }
 
+  const { data: cancellationEvent, error: cancellationEventError } =
+    await supabase
+      .from("order_timeline")
+      .select("actor, created_at, description, title")
+      .eq("order_id", orderId)
+      .eq("event_type", "cancelled")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+  if (cancellationEventError) {
+    throw new Error(cancellationEventError.message)
+  }
+
   return {
     ...booking,
     order: order ? (order as LogisticsOrderSummary) : null,
+    cancellation_event: cancellationEvent
+      ? (cancellationEvent as Pick<
+          OrderTimeline,
+          "actor" | "created_at" | "description" | "title"
+        >)
+      : null,
   }
 }
 
@@ -364,31 +744,59 @@ export async function trackTrivaraOrder(orderId: string) {
   await requirePermission(PERMISSIONS.SHIPPING_UPDATE)
 
   const booking = await getBooking(orderId)
-  if (!booking.trivara_reference_number) {
-    throw new Error("Trivara reference number is required before tracking.")
+  const waybill =
+    extractTrivaraWaybillNumber(booking.response_payload) ||
+    booking.trivara_reference_number
+
+  if (!waybill) {
+    return {
+      success: false,
+      message: "Trivara waybill is required before tracking.",
+    }
   }
 
   const payload = {
     crn_no: getTrivaraCrnNo(),
     action: "track" as const,
-    waybill: booking.trivara_reference_number,
+    waybill,
   }
-  const response = await sendTrivaraOrderTracking(payload, {
-    apiBaseUrl: getTrivaraApiBaseUrl(),
-    apiKey: getTrivaraTrackingApiKey(),
-  })
+  try {
+    const response = await sendTrivaraOrderTracking(payload, {
+      apiBaseUrl: getTrivaraApiBaseUrl(),
+      apiKey: getTrivaraTrackingApiKey(),
+    })
+    const trackingStatus = extractTrivaraTrackingStatus(response.responsePayload)
 
-  await updateBooking(orderId, {
-    tracking_payload: response.responsePayload,
-    tracking_status: getResponseStatus(response.responsePayload),
-    tracking_synced_at: new Date().toISOString(),
-  })
+    await updateBooking(orderId, {
+      tracking_payload: response.responsePayload,
+      tracking_status: trackingStatus,
+      tracking_synced_at: new Date().toISOString(),
+    })
 
-  if (!response.ok) {
-    throw new Error(`Trivara tracking failed with status ${response.status}`)
+    revalidateLogistics(orderId)
+
+    if (!response.ok) {
+      return {
+        success: false,
+        message: getTrivaraResponseError(
+          response,
+          "Trivara tracking failed"
+        ),
+      }
+    }
+
+    return {
+      success: true,
+      message: trackingStatus
+        ? `Tracking synced. Current status: ${trackingStatus}.`
+        : "Tracking synced successfully.",
+    }
+  } catch (error) {
+    return {
+      success: false,
+      message: getErrorMessage(error),
+    }
   }
-
-  revalidateLogistics(orderId)
 }
 
 export async function printTrivaraSlip(orderId: string) {
@@ -396,30 +804,63 @@ export async function printTrivaraSlip(orderId: string) {
   await requirePermission(PERMISSIONS.SHIPPING_UPDATE)
 
   const booking = await getBooking(orderId)
-  if (!booking.trivara_reference_number) {
-    throw new Error("Trivara reference number is required before printing.")
+  const referenceNumber = booking.trivara_reference_number
+  const waybill =
+    extractTrivaraWaybillNumber(booking.response_payload) || referenceNumber
+
+  if (!referenceNumber || !waybill) {
+    return {
+      success: false,
+      message: "Trivara reference number and waybill are required before printing.",
+    }
   }
 
   const payload = {
     crn_no: getTrivaraCrnNo(),
-    reference_number: booking.trivara_reference_number,
-    awb_number: booking.trivara_reference_number,
+    reference_number: referenceNumber,
+    awb_number: waybill,
   }
-  const response = await sendTrivaraPrintSlip(payload, {
-    apiBaseUrl: getTrivaraPrintSlipApiBaseUrl(),
-    apiKey: getTrivaraApiKey(),
-  })
+  try {
+    const response = await sendTrivaraPrintSlip(payload, {
+      apiBaseUrl: getTrivaraPrintSlipApiBaseUrl(),
+      apiKey: getTrivaraApiKey(),
+    })
 
-  await updateBooking(orderId, {
-    print_slip_payload: response.responsePayload,
-    print_slip_synced_at: new Date().toISOString(),
-  })
+    await updateBooking(orderId, {
+      print_slip_payload: response.responsePayload,
+      print_slip_synced_at: new Date().toISOString(),
+    })
 
-  if (!response.ok) {
-    throw new Error(`Trivara print slip failed with status ${response.status}`)
+    revalidateLogistics(orderId)
+
+    if (!response.ok) {
+      return {
+        success: false,
+        message: getTrivaraResponseError(
+          response,
+          "Trivara print slip failed"
+        ),
+      }
+    }
+
+    return {
+      success: true,
+      message: "Print slip synced successfully.",
+    }
+  } catch (error) {
+    return {
+      success: false,
+      message: getErrorMessage(error),
+    }
   }
+}
 
-  revalidateLogistics(orderId)
+export async function trackTrivaraOrderForForm(orderId: string): Promise<void> {
+  await trackTrivaraOrder(orderId)
+}
+
+export async function printTrivaraSlipForForm(orderId: string): Promise<void> {
+  await printTrivaraSlip(orderId)
 }
 
 export async function cancelTrivaraOrder(orderId: string) {
@@ -450,35 +891,48 @@ export async function syncTrivaraPickupLocations(): Promise<TrivaraSyncActionRes
       ? null
       : getTrivaraResponseError(response, "Trivara pickup locations failed")
 
+    const syncedAt = new Date().toISOString()
+
     await upsertSnapshot("pickup_locations", {
       request_payload: requestPayload,
       response_payload: response.responsePayload,
       error_message: errorMessage,
-      synced_at: new Date().toISOString(),
+      synced_at: syncedAt,
     })
 
     revalidateLogistics()
 
-    return {
+    return buildSyncActionResult({
+      syncKey: "pickup_locations",
       success: isSuccessful,
-      message: isSuccessful
-        ? "Pickup locations synced successfully."
-        : "Pickup locations sync failed. Check Trivara credentials.",
-    }
+      successMessage: "Pickup locations synced successfully.",
+      failureMessage: "Pickup locations sync failed. Check Trivara credentials.",
+      responsePayload: response.responsePayload,
+      errorMessage,
+      syncedAt,
+    })
   } catch (error) {
+    const syncedAt = new Date().toISOString()
+    const errorMessage = getErrorMessage(error)
+
     await upsertSnapshot("pickup_locations", {
       request_payload: requestPayload,
       response_payload: null,
-      error_message: getErrorMessage(error),
-      synced_at: new Date().toISOString(),
+      error_message: errorMessage,
+      synced_at: syncedAt,
     })
 
     revalidateLogistics()
 
-    return {
+    return buildSyncActionResult({
+      syncKey: "pickup_locations",
       success: false,
-      message: "Pickup locations sync failed. Check Trivara credentials.",
-    }
+      successMessage: "Pickup locations synced successfully.",
+      failureMessage: "Pickup locations sync failed. Check Trivara credentials.",
+      responsePayload: null,
+      errorMessage,
+      syncedAt,
+    })
   }
 }
 
@@ -503,35 +957,48 @@ export async function syncTrivaraServices(): Promise<TrivaraSyncActionResult> {
       ? null
       : getTrivaraResponseError(response, "Trivara services failed")
 
+    const syncedAt = new Date().toISOString()
+
     await upsertSnapshot("services", {
       request_payload: requestPayload,
       response_payload: response.responsePayload,
       error_message: errorMessage,
-      synced_at: new Date().toISOString(),
+      synced_at: syncedAt,
     })
 
     revalidateLogistics()
 
-    return {
+    return buildSyncActionResult({
+      syncKey: "services",
       success: isSuccessful,
-      message: isSuccessful
-        ? "Services synced successfully."
-        : "Services sync failed. Check Trivara credentials.",
-    }
+      successMessage: "Services synced successfully.",
+      failureMessage: "Services sync failed. Check Trivara credentials.",
+      responsePayload: response.responsePayload,
+      errorMessage,
+      syncedAt,
+    })
   } catch (error) {
+    const syncedAt = new Date().toISOString()
+    const errorMessage = getErrorMessage(error)
+
     await upsertSnapshot("services", {
       request_payload: requestPayload,
       response_payload: null,
-      error_message: getErrorMessage(error),
-      synced_at: new Date().toISOString(),
+      error_message: errorMessage,
+      synced_at: syncedAt,
     })
 
     revalidateLogistics()
 
-    return {
+    return buildSyncActionResult({
+      syncKey: "services",
       success: false,
-      message: "Services sync failed. Check Trivara credentials.",
-    }
+      successMessage: "Services synced successfully.",
+      failureMessage: "Services sync failed. Check Trivara credentials.",
+      responsePayload: null,
+      errorMessage,
+      syncedAt,
+    })
   }
 }
 
@@ -578,34 +1045,47 @@ export async function syncTrivaraTotalOrders(
       ? null
       : getTrivaraResponseError(response, "Trivara total orders failed")
 
+    const syncedAt = new Date().toISOString()
+
     await upsertSnapshot("total_orders", {
       request_payload: requestPayload,
       response_payload: response.responsePayload,
       error_message: errorMessage,
-      synced_at: new Date().toISOString(),
+      synced_at: syncedAt,
     })
 
     revalidateLogistics()
 
-    return {
+    return buildSyncActionResult({
+      syncKey: "total_orders",
       success: isSuccessful,
-      message: isSuccessful
-        ? "Total orders synced successfully."
-        : "Total orders sync failed. Check Trivara credentials.",
-    }
+      successMessage: "Total orders synced successfully.",
+      failureMessage: "Total orders sync failed. Check Trivara credentials.",
+      responsePayload: response.responsePayload,
+      errorMessage,
+      syncedAt,
+    })
   } catch (error) {
+    const syncedAt = new Date().toISOString()
+    const errorMessage = getErrorMessage(error)
+
     await upsertSnapshot("total_orders", {
       request_payload: requestPayload,
       response_payload: null,
-      error_message: getErrorMessage(error),
-      synced_at: new Date().toISOString(),
+      error_message: errorMessage,
+      synced_at: syncedAt,
     })
 
     revalidateLogistics()
 
-    return {
+    return buildSyncActionResult({
+      syncKey: "total_orders",
       success: false,
-      message: "Total orders sync failed. Check Trivara credentials.",
-    }
+      successMessage: "Total orders synced successfully.",
+      failureMessage: "Total orders sync failed. Check Trivara credentials.",
+      responsePayload: null,
+      errorMessage,
+      syncedAt,
+    })
   }
 }

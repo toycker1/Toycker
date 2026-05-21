@@ -1,7 +1,6 @@
 import Link from "next/link"
 import { DocumentTextIcon, XCircleIcon } from "@heroicons/react/24/outline"
 import AdminBadge from "@modules/admin/components/admin-badge"
-import AdminCard from "@modules/admin/components/admin-card"
 import AdminPageHeader from "@modules/admin/components/admin-page-header"
 import { AdminPagination } from "@modules/admin/components/admin-pagination"
 import { AdminSearchInput } from "@modules/admin/components/admin-search-input"
@@ -12,13 +11,12 @@ import {
   cancelTrivaraOrder,
   getTrivaraLogisticsRecords,
   getTrivaraSyncSnapshots,
-  printTrivaraSlip,
+  printTrivaraSlipForForm,
   retryTrivaraBooking,
-  trackTrivaraOrder,
+  trackTrivaraOrderForForm,
 } from "@/lib/data/trivara-logistics"
 import {
   TrivaraOrderBookingStatus,
-  TrivaraSyncSnapshotKey,
 } from "@/lib/supabase/types"
 import { LogisticsSyncActions } from "./logistics-sync-actions"
 
@@ -63,105 +61,6 @@ function normalizePaymentMethod(method?: string | null) {
   return method || "Manual"
 }
 
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
-}
-
-function getPayloadValue(
-  payload: Record<string, unknown>,
-  keys: string[]
-): unknown {
-  const queue: unknown[] = [payload]
-
-  while (queue.length > 0) {
-    const current = queue.shift()
-    if (!isObjectRecord(current)) {
-      continue
-    }
-
-    for (const [key, value] of Object.entries(current)) {
-      if (keys.includes(key)) {
-        return value
-      }
-
-      if (isObjectRecord(value) || Array.isArray(value)) {
-        queue.push(value)
-      }
-    }
-  }
-
-  return null
-}
-
-function getArrayCount(value: unknown): number | null {
-  if (Array.isArray(value)) {
-    return value.length
-  }
-
-  if (isObjectRecord(value)) {
-    const nestedArray = Object.values(value).find(Array.isArray)
-    return Array.isArray(nestedArray) ? nestedArray.length : null
-  }
-
-  return null
-}
-
-function getStringValue(value: unknown): string | null {
-  return typeof value === "string" && value.trim() ? value.trim() : null
-}
-
-function getSnapshotSummary(
-  syncKey: TrivaraSyncSnapshotKey,
-  payload: Record<string, unknown> | null
-) {
-  if (!payload) {
-    return "No response stored"
-  }
-
-  if (Object.keys(payload).length === 0) {
-    return "Empty response"
-  }
-
-  const error = getStringValue(getPayloadValue(payload, ["error", "message"]))
-  const result = getStringValue(getPayloadValue(payload, ["result"]))
-  const success = getPayloadValue(payload, ["success"])
-  const data = getPayloadValue(payload, ["data", "orders", "services"])
-  const count = getArrayCount(data)
-
-  if (error) {
-    return error
-  }
-
-  if (syncKey === "total_orders") {
-    if (count !== null) {
-      return `${count} orders returned`
-    }
-
-    const total = getPayloadValue(payload, ["total", "total_orders", "count"])
-    if (typeof total === "number" || typeof total === "string") {
-      return `${total} total orders`
-    }
-  }
-
-  if (syncKey === "pickup_locations" && count !== null) {
-    return `${count} pickup locations returned`
-  }
-
-  if (syncKey === "services" && count !== null) {
-    return `${count} services returned`
-  }
-
-  if (result) {
-    return result
-  }
-
-  if (typeof success === "boolean") {
-    return success ? "Synced successfully" : "Sync failed"
-  }
-
-  return "Response stored"
-}
-
 export default async function AdminLogistics({
   searchParams,
 }: {
@@ -195,36 +94,7 @@ export default async function AdminLogistics({
         subtitle="Manage Trivara bookings, tracking, slips, cancellation, and master syncs."
       />
 
-      <LogisticsSyncActions />
-
-      {snapshots.length > 0 && (
-        <AdminCard title="Latest Trivara Syncs" className="p-0">
-          <div className="divide-y divide-gray-100">
-            {snapshots.map((snapshot) => (
-              <div
-                key={snapshot.sync_key}
-                className="flex flex-col gap-2 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div>
-                  <p className="text-sm font-semibold capitalize text-gray-900">
-                    {snapshot.sync_key.replace(/_/g, " ")}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {snapshot.error_message ||
-                      getSnapshotSummary(
-                        snapshot.sync_key,
-                        snapshot.response_payload
-                      )}
-                  </p>
-                </div>
-                <span className="text-xs text-gray-400">
-                  {snapshot.synced_at ? formatIST(snapshot.synced_at) : "Not synced"}
-                </span>
-              </div>
-            ))}
-          </div>
-        </AdminCard>
-      )}
+      <LogisticsSyncActions initialSnapshots={snapshots} />
 
       <AdminSearchInput
         defaultValue={search}
@@ -369,12 +239,12 @@ export default async function AdminLogistics({
                       )}
                       {canUseReference && (
                         <>
-                          <form action={trackTrivaraOrder.bind(null, record.order_id)}>
+                          <form action={trackTrivaraOrderForForm.bind(null, record.order_id)}>
                             <button className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-200">
                               Track
                             </button>
                           </form>
-                          <form action={printTrivaraSlip.bind(null, record.order_id)}>
+                          <form action={printTrivaraSlipForForm.bind(null, record.order_id)}>
                             <button className="inline-flex items-center gap-1 rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-200">
                               <DocumentTextIcon className="h-3.5 w-3.5" />
                               Slip

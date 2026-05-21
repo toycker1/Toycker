@@ -2,10 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
   buildTrivaraOrderBookingPayload,
+  extractTrivaraReferenceNumber,
+  extractTrivaraTrackingStatus,
+  extractTrivaraWaybillNumber,
   getTrivaraApiBaseUrl,
   getTrivaraConfig,
   sendTrivaraCancelOrder,
-  sendTrivaraActivePartners,
   sendTrivaraOrderTracking,
   sendTrivaraPickupLocations,
   sendTrivaraPrintSlip,
@@ -162,6 +164,53 @@ describe("Trivara order booking integration", () => {
     expect(payload.orders[0]?.payment_mode).toBe("PREPAID")
   })
 
+  it("builds COD payload for Easebuzz partial payment orders with pending balance", () => {
+    const payload = buildTrivaraOrderBookingPayload(
+      buildOrder({
+        payment_method: "pp_easebuzz_partial_payment",
+        payment_status: "partially_paid",
+        total_amount: 2500,
+        metadata: {
+          payment_type: "partial",
+          advance_percentage: 20,
+          advance_amount: 500,
+          balance_amount: 2000,
+          full_order_amount: 2500,
+          balance_payment_status: "pending",
+        },
+      }),
+      config
+    )
+
+    expect(payload.orders[0]?.payment_mode).toBe("COD")
+    expect(payload.orders[0]?.total_amount).toBe(2500)
+    expect(payload.orders[0]?.total_cod_amount).toBe(2000)
+  })
+
+  it("builds prepaid payload for Easebuzz partial payment orders after balance is paid", () => {
+    const payload = buildTrivaraOrderBookingPayload(
+      buildOrder({
+        payment_method: "pp_easebuzz_partial_payment",
+        payment_status: "paid",
+        total_amount: 2500,
+        metadata: {
+          payment_type: "partial",
+          advance_percentage: 20,
+          advance_amount: 500,
+          balance_amount: 2000,
+          full_order_amount: 2500,
+          balance_payment_status: "paid",
+          balance_paid_at: "2026-05-21T09:00:00.000Z",
+          balance_payment_method: "Cash",
+        },
+      }),
+      config
+    )
+
+    expect(payload.orders[0]?.payment_mode).toBe("PREPAID")
+    expect(payload.orders[0]?.total_cod_amount).toBe(0)
+  })
+
   it("rejects missing required shipping fields", () => {
     const order = buildOrder({
       shipping_address: {
@@ -255,6 +304,51 @@ describe("Trivara order booking integration", () => {
       referenceNumber: "260000015315",
       errorMessage: null,
     })
+  })
+
+  it("keeps Trivara reference and waybill extraction separate", () => {
+    const payload = {
+      data: [
+        {
+          status: "SUCCESS",
+          message: "Order Created",
+          waybill: "46322610068051",
+          order_id: 6668,
+          reference_number: "260000015315",
+        },
+      ],
+      result: "Processed",
+    }
+
+    expect(extractTrivaraReferenceNumber(payload)).toBe("260000015315")
+    expect(extractTrivaraWaybillNumber(payload)).toBe("46322610068051")
+  })
+
+  it("extracts current Trivara tracking status from nested payloads", () => {
+    const payload = {
+      status: "success",
+      data: [
+        {
+          status: "SUCCESS",
+          waybill: "46322610068051",
+          current_status: "Manifested",
+        },
+      ],
+    }
+
+    expect(extractTrivaraTrackingStatus(payload)).toBe("Manifested")
+  })
+
+  it("prefers Trivara current_state over generic success status", () => {
+    const payload = {
+      status: "success",
+      order_details: {
+        awb: "26000015677",
+        current_state: "CANCELLED",
+      },
+    }
+
+    expect(extractTrivaraTrackingStatus(payload)).toBe("CANCELLED")
   })
 
   it("rejects invalid Trivara base URLs before sending requests", () => {
@@ -521,7 +615,7 @@ describe("Trivara remaining endpoint integrations", () => {
     })
   })
 
-  it("sends pickup locations, services, and active partners with the Apikey header", async () => {
+  it("sends pickup locations and services with the Apikey header", async () => {
     const pickup = await captureRequest((fetcher) =>
       sendTrivaraPickupLocations(
         { crn_no: "857252" },
@@ -536,13 +630,6 @@ describe("Trivara remaining endpoint integrations", () => {
         fetcher
       )
     )
-    const partners = await captureRequest((fetcher) =>
-      sendTrivaraActivePartners(
-        { crn_no: "857252" },
-        { apiBaseUrl: "https://app.trivaralogistics.com", apiKey: "master-key" },
-        fetcher
-      )
-    )
 
     expect(String(pickup.capturedUrl)).toBe(
       "https://app.trivaralogistics.com/api/users/V2/OrderBooking/get_pickup_location"
@@ -552,9 +639,5 @@ describe("Trivara remaining endpoint integrations", () => {
       "https://app.trivaralogistics.com/api/users/V2/Activity/get_services"
     )
     expect(services.capturedInit?.headers).toEqual({ Apikey: "master-key" })
-    expect(String(partners.capturedUrl)).toBe(
-      "https://app.trivaralogistics.com/api/users/V2/Activity/get_active_partners"
-    )
-    expect(partners.capturedInit?.headers).toEqual({ Apikey: "master-key" })
   })
 })

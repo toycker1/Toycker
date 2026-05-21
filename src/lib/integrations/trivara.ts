@@ -1,5 +1,6 @@
 import { Order } from "@/lib/supabase/types"
 import { isCashOnDeliveryLikeOrder } from "@/lib/util/customer-order-state"
+import { getPartialPaymentDisplayData } from "@/lib/util/order-pricing"
 
 export type TrivaraPaymentMode = "PREPAID" | "COD"
 export type TrivaraShipmentType = "PARCEL" | "DOCUMENT"
@@ -131,7 +132,6 @@ const TOTAL_ORDERS_PATH = "/api/users/V2/OrderBooking/get_total_orders"
 const CANCEL_ORDER_PATH = "/api/users/V2/OrderBooking/cancel_order"
 const PICKUP_LOCATIONS_PATH = "/api/users/V2/OrderBooking/get_pickup_location"
 const SERVICES_PATH = "/api/users/V2/Activity/get_services"
-const ACTIVE_PARTNERS_PATH = "/api/users/V2/Activity/get_active_partners"
 
 function getTrimmedEnv(key: string): string {
   return process.env[key]?.trim() || ""
@@ -416,10 +416,21 @@ export function buildTrivaraOrderBookingPayload(
     | "defaultHeightCm"
   >
 ): TrivaraOrderBookingPayload {
-  const paymentMode: TrivaraPaymentMode = isCashOnDeliveryLikeOrder(order)
+  const partialPaymentData = getPartialPaymentDisplayData(order.metadata)
+  const pendingPartialBalance =
+    order.payment_method === "pp_easebuzz_partial_payment" &&
+    partialPaymentData?.balancePaymentStatus === "pending" &&
+    partialPaymentData.balanceRemainingAmount > 0
+  const paymentMode: TrivaraPaymentMode =
+    pendingPartialBalance || isCashOnDeliveryLikeOrder(order)
     ? "COD"
     : "PREPAID"
   const packageAmount = formatAmountNumber(order.total_amount || order.total)
+  const codAmount = pendingPartialBalance
+    ? formatAmountNumber(partialPaymentData.balanceRemainingAmount)
+    : paymentMode === "COD"
+      ? packageAmount
+      : 0
   const orderItems = order.items || []
 
   return {
@@ -449,7 +460,7 @@ export function buildTrivaraOrderBookingPayload(
         weight: config.defaultWeightGrams,
         email: requireField(order.customer_email || order.email, "Customer email"),
         total_amount: packageAmount,
-        total_cod_amount: paymentMode === "COD" ? packageAmount : 0,
+        total_cod_amount: codAmount,
         items:
           orderItems.length > 0
             ? orderItems.map((item, index) => ({
@@ -516,16 +527,52 @@ async function parseTrivaraResponse(
 export function extractTrivaraReferenceNumber(
   value: Record<string, unknown>
 ): string | null {
-  const queue: unknown[] = [value]
-  const candidateKeys = new Set([
+  return extractTrivaraPayloadString(value, [
     "reference_number",
     "referenceNumber",
     "ref_no",
     "refNo",
+  ])
+}
+
+export function extractTrivaraWaybillNumber(
+  value: Record<string, unknown> | null
+): string | null {
+  if (!value) {
+    return null
+  }
+
+  return extractTrivaraPayloadString(value, [
+    "waybill",
+    "waybill_no",
     "awb",
     "awb_number",
     "tracking_number",
   ])
+}
+
+export function extractTrivaraTrackingStatus(
+  value: Record<string, unknown> | null
+): string | null {
+  if (!value) {
+    return null
+  }
+
+  return (
+    extractTrivaraPayloadString(value, [
+      "current_state",
+      "current_status",
+      "shipment_status",
+      "tracking_status",
+    ]) || extractTrivaraPayloadString(value, ["status", "message"])
+  )
+}
+
+function extractTrivaraPayloadString(
+  value: Record<string, unknown>,
+  candidateKeys: string[]
+): string | null {
+  const queue: unknown[] = [value]
 
   while (queue.length > 0) {
     const current = queue.shift()
@@ -539,20 +586,25 @@ export function extractTrivaraReferenceNumber(
       continue
     }
 
-    Object.entries(current).forEach(([key, nestedValue]) => {
-      if (typeof nestedValue === "string" && candidateKeys.has(key)) {
-        queue.unshift({ __match: nestedValue })
-      } else if (nestedValue && typeof nestedValue === "object") {
+    const record = current as Record<string, unknown>
+
+    for (const key of candidateKeys) {
+      const nestedValue = record[key]
+
+      if (typeof nestedValue === "string" && nestedValue.trim()) {
+        return nestedValue.trim()
+      }
+
+      if (typeof nestedValue === "number") {
+        return String(nestedValue)
+      }
+    }
+
+    Object.values(record).forEach((nestedValue) => {
+      if (nestedValue && typeof nestedValue === "object") {
         queue.push(nestedValue)
       }
     })
-
-    if (
-      "__match" in current &&
-      typeof (current as Record<string, unknown>).__match === "string"
-    ) {
-      return (current as Record<string, string>).__match
-    }
   }
 
   return null
@@ -774,22 +826,6 @@ export async function sendTrivaraServices(
 ): Promise<TrivaraApiResponse> {
   return sendTrivaraFormRequest(
     SERVICES_PATH,
-    payload,
-    {
-      ...config,
-      apiKeyHeader: "Apikey",
-    },
-    fetcher
-  )
-}
-
-export async function sendTrivaraActivePartners(
-  payload: TrivaraCrnPayload,
-  config: { apiBaseUrl: string; apiKey: string },
-  fetcher: FetchLike = fetch
-): Promise<TrivaraApiResponse> {
-  return sendTrivaraFormRequest(
-    ACTIVE_PARTNERS_PATH,
     payload,
     {
       ...config,
