@@ -312,7 +312,6 @@ function getPrintSlipUrl(payload: Record<string, unknown> | null): string | null
 function getPrintSlipResult(payload: Record<string, unknown> | null) {
   return {
     result: getRecordValue(payload, ["result"]),
-    success: getRecordValue(payload, ["success"]),
     url: getPrintSlipUrl(payload),
   }
 }

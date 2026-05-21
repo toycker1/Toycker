@@ -77,11 +77,6 @@ export type TrivaraSyncActionResult = {
   errorMessage?: string | null
 }
 
-export type TrivaraDetailActionResult = {
-  success: boolean
-  message: string
-}
-
 function revalidateLogistics(orderId?: string) {
   revalidatePath("/admin/logistics")
   if (orderId) {
