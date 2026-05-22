@@ -464,7 +464,7 @@ export default async function AdminOrderDetails({ params }: Props) {
                       : normalizedPaymentStatus === 'paid' || normalizedPaymentStatus === 'captured'
                         ? 'Paid'
                       : normalizedPaymentStatus === 'partially_paid'
-                        ? 'Advance Paid - Balance Due'
+                        ? 'Partial Paid - Balance Due'
                       : normalizedPaymentStatus === 'cancelled' || normalizedPaymentStatus === 'failed'
                           ? normalizedPaymentStatus === 'failed' && isEasebuzzPayment
                             ? 'Incomplete Transaction'
@@ -496,7 +496,7 @@ export default async function AdminOrderDetails({ params }: Props) {
                     </span>
                   </div>
                   <div className="flex justify-between gap-3 text-sm">
-                    <span className="text-gray-500">Advance Paid</span>
+                    <span className="text-gray-500">Partial Paid</span>
                     <span className="font-bold text-emerald-700">
                       {convertToLocale({
                         amount: partialPaymentData.advanceAmount,

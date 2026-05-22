@@ -132,6 +132,7 @@ export type AdminProductOption = Pick<Product, "id" | "name" | "thumbnail">
 export type AdminOrderListItem = Pick<
   Order,
   | "id"
+  | "user_id"
   | "display_id"
   | "created_at"
   | "customer_email"
@@ -143,7 +144,14 @@ export type AdminOrderListItem = Pick<
   | "total_amount"
   | "currency_code"
   | "status"
->
+> & {
+  is_repeat_customer: boolean
+}
+
+type AdminOrderListRow = Omit<AdminOrderListItem, "is_repeat_customer">
+
+const ADMIN_ORDER_LIST_SELECT =
+  "id, user_id, display_id, created_at, customer_email, payment_status, payment_method, payu_txn_id, gateway_txn_id, fulfillment_status, total_amount, currency_code, status"
 
 type OrderAddressActionState = {
   success: boolean
@@ -2114,6 +2122,99 @@ interface PaginatedOrdersResponse {
   currentPage: number
 }
 
+type RepeatCustomerLookupRow = Pick<
+  Order,
+  "id" | "user_id" | "customer_email" | "created_at"
+>
+
+function normalizeOrderCustomerEmail(email: string | null | undefined) {
+  return email?.trim().toLowerCase() || null
+}
+
+async function attachRepeatCustomerFlags(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  rows: AdminOrderListRow[]
+): Promise<AdminOrderListItem[]> {
+  if (rows.length === 0) {
+    return []
+  }
+
+  const userIds = Array.from(
+    new Set(rows.map((row) => row.user_id).filter((id): id is string => Boolean(id)))
+  )
+  const customerEmails = Array.from(
+    new Set(
+      rows
+        .filter((row) => !row.user_id)
+        .map((row) => normalizeOrderCustomerEmail(row.customer_email))
+        .filter((email): email is string => Boolean(email))
+    )
+  )
+
+  const [userOrderResult, emailOrderResult] = await Promise.all([
+    userIds.length > 0
+      ? supabase
+          .from("orders")
+          .select("id, user_id, customer_email, created_at")
+          .in("user_id", userIds)
+      : Promise.resolve({ data: [] as RepeatCustomerLookupRow[], error: null }),
+    customerEmails.length > 0
+      ? supabase
+          .from("orders")
+          .select("id, user_id, customer_email, created_at")
+          .in("customer_email", customerEmails)
+          .is("user_id", null)
+      : Promise.resolve({ data: [] as RepeatCustomerLookupRow[], error: null }),
+  ])
+
+  if (userOrderResult.error) {
+    throw userOrderResult.error
+  }
+  if (emailOrderResult.error) {
+    throw emailOrderResult.error
+  }
+
+  const rowsByUserId = new Map<string, RepeatCustomerLookupRow[]>()
+  const rowsByEmail = new Map<string, RepeatCustomerLookupRow[]>()
+
+  for (const lookupRow of [
+    ...((userOrderResult.data || []) as RepeatCustomerLookupRow[]),
+    ...((emailOrderResult.data || []) as RepeatCustomerLookupRow[]),
+  ]) {
+    if (lookupRow.user_id) {
+      const existingRows = rowsByUserId.get(lookupRow.user_id) || []
+      existingRows.push(lookupRow)
+      rowsByUserId.set(lookupRow.user_id, existingRows)
+      continue
+    }
+
+    const normalizedEmail = normalizeOrderCustomerEmail(lookupRow.customer_email)
+    if (!normalizedEmail) {
+      continue
+    }
+
+    const existingRows = rowsByEmail.get(normalizedEmail) || []
+    existingRows.push(lookupRow)
+    rowsByEmail.set(normalizedEmail, existingRows)
+  }
+
+  return rows.map((row) => {
+    const customerRows = row.user_id
+      ? rowsByUserId.get(row.user_id) || []
+      : rowsByEmail.get(normalizeOrderCustomerEmail(row.customer_email) || "") || []
+
+    return {
+      ...row,
+      is_repeat_customer: customerRows.some(
+        (customerRow) =>
+          customerRow.id !== row.id &&
+          new Date(customerRow.created_at).getTime() <
+            new Date(row.created_at).getTime()
+      ),
+    }
+  })
+}
+
 export async function getAdminOrders(
   params: GetAdminOrdersParams = {}
 ): Promise<PaginatedOrdersResponse> {
@@ -2128,9 +2229,7 @@ export async function getAdminOrders(
   if (!isNaN(searchNum)) {
     const { data, error } = await supabase
       .from("orders")
-      .select(
-        "id, display_id, created_at, customer_email, payment_status, payment_method, payu_txn_id, gateway_txn_id, fulfillment_status, total_amount, currency_code, status"
-      )
+      .select(ADMIN_ORDER_LIST_SELECT)
       .eq("display_id", searchNum)
       .order("created_at", { ascending: false })
       .range((page - 1) * limit, page * limit - 1)
@@ -2141,7 +2240,10 @@ export async function getAdminOrders(
     const totalPages = Math.ceil(count / limit) || 1
 
     return {
-      orders: (data || []) as AdminOrderListItem[],
+      orders: await attachRepeatCustomerFlags(
+        supabase,
+        (data || []) as AdminOrderListRow[]
+      ),
       count,
       totalPages,
       currentPage: page,
@@ -2170,9 +2272,7 @@ export async function getAdminOrders(
   // Fetch paginated data
   let query = supabase
     .from("orders")
-    .select(
-      "id, display_id, created_at, customer_email, payment_status, payment_method, payu_txn_id, gateway_txn_id, fulfillment_status, total_amount, currency_code, status"
-    )
+    .select(ADMIN_ORDER_LIST_SELECT)
     .order("created_at", { ascending: false })
     .range(from, to)
 
@@ -2185,7 +2285,10 @@ export async function getAdminOrders(
   if (error) throw error
 
   return {
-    orders: (data || []) as AdminOrderListItem[],
+    orders: await attachRepeatCustomerFlags(
+      supabase,
+      (data || []) as AdminOrderListRow[]
+    ),
     count: count || 0,
     totalPages,
     currentPage: page,
@@ -2200,15 +2303,16 @@ export async function getRecentAdminOrders(
   const supabase = await createClient()
   const { data, error } = await supabase
     .from("orders")
-    .select(
-      "id, display_id, created_at, customer_email, payment_status, payment_method, payu_txn_id, gateway_txn_id, fulfillment_status, total_amount, currency_code, status"
-    )
+    .select(ADMIN_ORDER_LIST_SELECT)
     .order("created_at", { ascending: false })
     .limit(limit)
 
   if (error) throw error
 
-  return (data || []) as AdminOrderListItem[]
+  return ((data || []) as AdminOrderListRow[]).map((order) => ({
+    ...order,
+    is_repeat_customer: false,
+  }))
 }
 
 export async function getAdminOrder(id: string): Promise<AdminOrder | null> {

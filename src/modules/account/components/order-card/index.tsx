@@ -40,7 +40,7 @@ const OrderCard = ({ order }: OrderCardProps) => {
 
     if (order.payment_status === "partially_paid") {
       return {
-        label: "Advance Paid",
+        label: "Partial Paid",
         icon: CheckCircle2,
         bgColor: "bg-blue-50",
         textColor: "text-blue-700",

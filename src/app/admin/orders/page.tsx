@@ -56,7 +56,7 @@ function getPaymentBadge(paymentStatus: string, paymentMethod?: string | null, h
     case "paid":
       return { variant: "success" as const, label: "Paid" }
     case "partially_paid":
-      return { variant: "info" as const, label: "Advance Paid" }
+      return { variant: "info" as const, label: "Partial Paid" }
     case "awaiting":
     case "pending":
       return { variant: "warning" as const, label: "Pending" }
@@ -188,7 +188,12 @@ export default async function AdminOrders({
                       {formatIST(order.created_at)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-600">{order.customer_email}</div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600">{order.customer_email}</span>
+                        {order.is_repeat_customer ? (
+                          <AdminBadge variant="info">Repeat</AdminBadge>
+                        ) : null}
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <AdminBadge variant={acceptanceBadge.variant}>
