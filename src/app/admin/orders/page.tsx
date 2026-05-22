@@ -136,6 +136,8 @@ export default async function AdminOrders({
     const queryString = params.toString()
     return queryString ? `/admin/orders?${queryString}` : "/admin/orders"
   }
+  const currentBackUrl = buildUrl(currentPage)
+  const encodedBackUrl = encodeURIComponent(currentBackUrl)
 
   return (
     <div className="space-y-8">
@@ -158,6 +160,7 @@ export default async function AdminOrders({
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[100px]">Order</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Club</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Accepted</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Method</th>
@@ -178,7 +181,7 @@ export default async function AdminOrders({
                 return (
                   <ClickableTableRow
                     key={order.id}
-                    href={`/admin/orders/${order.id}`}
+                    href={`/admin/orders/${order.id}?from=${encodedBackUrl}`}
                     className="hover:bg-gray-50 transition-colors cursor-pointer group"
                   >
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -194,6 +197,13 @@ export default async function AdminOrders({
                           <AdminBadge variant="info">Repeat</AdminBadge>
                         ) : null}
                       </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {order.is_club_member ? (
+                        <AdminBadge variant="success">Club Member</AdminBadge>
+                      ) : (
+                        <span className="text-sm text-gray-400">-</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <AdminBadge variant={acceptanceBadge.variant}>
@@ -220,7 +230,7 @@ export default async function AdminOrders({
                 )
               }) : (
                 <tr>
-                  <td colSpan={8} className="px-6 py-20 text-center text-gray-500 text-sm">
+                  <td colSpan={9} className="px-6 py-20 text-center text-gray-500 text-sm">
                     <div className="flex flex-col items-center">
                       <ShoppingBagIcon className="w-12 h-12 text-gray-200 mb-3" />
                       <p className="text-sm font-bold text-gray-900">No orders found</p>

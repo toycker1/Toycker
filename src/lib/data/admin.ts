@@ -151,9 +151,13 @@ export type AdminOrderListItem = Pick<
   | "status"
 > & {
   is_repeat_customer: boolean
+  is_club_member: boolean
 }
 
-type AdminOrderListRow = Omit<AdminOrderListItem, "is_repeat_customer">
+type AdminOrderListRow = Omit<
+  AdminOrderListItem,
+  "is_repeat_customer" | "is_club_member"
+>
 
 const ADMIN_ORDER_LIST_SELECT =
   "id, user_id, display_id, created_at, customer_email, payment_status, payment_method, payu_txn_id, gateway_txn_id, fulfillment_status, total_amount, currency_code, status"
@@ -2132,11 +2136,18 @@ type RepeatCustomerLookupRow = Pick<
   "id" | "user_id" | "customer_email" | "created_at"
 >
 
+type ClubMemberLookupRow = {
+  id: string
+  email: string | null
+  contact_email: string | null
+  is_club_member: boolean | null
+}
+
 function normalizeOrderCustomerEmail(email: string | null | undefined) {
   return email?.trim().toLowerCase() || null
 }
 
-async function attachRepeatCustomerFlags(
+async function attachOrderCustomerFlags(
   supabase: Awaited<ReturnType<typeof createClient>>,
   rows: AdminOrderListRow[]
 ): Promise<AdminOrderListItem[]> {
@@ -2156,7 +2167,13 @@ async function attachRepeatCustomerFlags(
     )
   )
 
-  const [userOrderResult, emailOrderResult] = await Promise.all([
+  const [
+    userOrderResult,
+    emailOrderResult,
+    userProfileResult,
+    emailProfileByEmailResult,
+    emailProfileByContactEmailResult,
+  ] = await Promise.all([
     userIds.length > 0
       ? supabase
           .from("orders")
@@ -2170,6 +2187,24 @@ async function attachRepeatCustomerFlags(
           .in("customer_email", customerEmails)
           .is("user_id", null)
       : Promise.resolve({ data: [] as RepeatCustomerLookupRow[], error: null }),
+    userIds.length > 0
+      ? supabase
+          .from("profiles")
+          .select("id, email, contact_email, is_club_member")
+          .in("id", userIds)
+      : Promise.resolve({ data: [] as ClubMemberLookupRow[], error: null }),
+    customerEmails.length > 0
+      ? supabase
+          .from("profiles")
+          .select("id, email, contact_email, is_club_member")
+          .in("email", customerEmails)
+      : Promise.resolve({ data: [] as ClubMemberLookupRow[], error: null }),
+    customerEmails.length > 0
+      ? supabase
+          .from("profiles")
+          .select("id, email, contact_email, is_club_member")
+          .in("contact_email", customerEmails)
+      : Promise.resolve({ data: [] as ClubMemberLookupRow[], error: null }),
   ])
 
   if (userOrderResult.error) {
@@ -2178,9 +2213,20 @@ async function attachRepeatCustomerFlags(
   if (emailOrderResult.error) {
     throw emailOrderResult.error
   }
+  if (userProfileResult.error) {
+    throw userProfileResult.error
+  }
+  if (emailProfileByEmailResult.error) {
+    throw emailProfileByEmailResult.error
+  }
+  if (emailProfileByContactEmailResult.error) {
+    throw emailProfileByContactEmailResult.error
+  }
 
   const rowsByUserId = new Map<string, RepeatCustomerLookupRow[]>()
   const rowsByEmail = new Map<string, RepeatCustomerLookupRow[]>()
+  const clubMemberByUserId = new Map<string, boolean>()
+  const clubMemberByEmail = new Map<string, boolean>()
 
   for (const lookupRow of [
     ...((userOrderResult.data || []) as RepeatCustomerLookupRow[]),
@@ -2203,13 +2249,45 @@ async function attachRepeatCustomerFlags(
     rowsByEmail.set(normalizedEmail, existingRows)
   }
 
+  for (const profile of [
+    ...((userProfileResult.data || []) as ClubMemberLookupRow[]),
+    ...((emailProfileByEmailResult.data || []) as ClubMemberLookupRow[]),
+    ...((emailProfileByContactEmailResult.data || []) as ClubMemberLookupRow[]),
+  ]) {
+    const isClubMember = profile.is_club_member === true
+    clubMemberByUserId.set(
+      profile.id,
+      clubMemberByUserId.get(profile.id) === true || isClubMember
+    )
+
+    const normalizedEmail = normalizeOrderCustomerEmail(profile.email)
+    if (normalizedEmail) {
+      clubMemberByEmail.set(
+        normalizedEmail,
+        clubMemberByEmail.get(normalizedEmail) === true || isClubMember
+      )
+    }
+
+    const normalizedContactEmail = normalizeOrderCustomerEmail(profile.contact_email)
+    if (normalizedContactEmail) {
+      clubMemberByEmail.set(
+        normalizedContactEmail,
+        clubMemberByEmail.get(normalizedContactEmail) === true || isClubMember
+      )
+    }
+  }
+
   return rows.map((row) => {
     const customerRows = row.user_id
       ? rowsByUserId.get(row.user_id) || []
       : rowsByEmail.get(normalizeOrderCustomerEmail(row.customer_email) || "") || []
+    const isClubMember = row.user_id
+      ? clubMemberByUserId.get(row.user_id) === true
+      : clubMemberByEmail.get(normalizeOrderCustomerEmail(row.customer_email) || "") === true
 
     return {
       ...row,
+      is_club_member: isClubMember,
       is_repeat_customer: customerRows.some(
         (customerRow) =>
           customerRow.id !== row.id &&
@@ -2245,7 +2323,7 @@ export async function getAdminOrders(
     const totalPages = Math.ceil(count / limit) || 1
 
     return {
-      orders: await attachRepeatCustomerFlags(
+      orders: await attachOrderCustomerFlags(
         supabase,
         (data || []) as AdminOrderListRow[]
       ),
@@ -2290,7 +2368,7 @@ export async function getAdminOrders(
   if (error) throw error
 
   return {
-    orders: await attachRepeatCustomerFlags(
+    orders: await attachOrderCustomerFlags(
       supabase,
       (data || []) as AdminOrderListRow[]
     ),
@@ -2316,6 +2394,7 @@ export async function getRecentAdminOrders(
 
   return ((data || []) as AdminOrderListRow[]).map((order) => ({
     ...order,
+    is_club_member: false,
     is_repeat_customer: false,
   }))
 }

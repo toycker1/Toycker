@@ -53,6 +53,7 @@ const formatPaymentMethodDisplay = (method?: string | null, hasPayuTxn?: string 
 
 type Props = {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ from?: string }>
 }
 
 type AdminOrderItem = {
@@ -167,12 +168,30 @@ const getOrderItemVariantTitle = (item: AdminOrderItem) => {
   return variantTitle
 }
 
+const getSafeOrdersBackHref = (href?: string) => {
+  if (!href) {
+    return "/admin/orders"
+  }
+
+  if (href === "/admin/orders" || href.startsWith("/admin/orders?")) {
+    return href
+  }
+
+  return "/admin/orders"
+}
+
+const getOrderDetailHref = (orderId: string, backHref: string) => {
+  return `/admin/orders/${orderId}?from=${encodeURIComponent(backHref)}`
+}
+
 function OrderNavigationLink({
   order,
   direction,
+  backHref,
 }: {
   order: { id: string; display_id: number } | null
   direction: "older" | "newer"
+  backHref: string
 }) {
   const Icon = direction === "older" ? ChevronLeftIcon : ChevronRightIcon
   const label =
@@ -199,14 +218,16 @@ function OrderNavigationLink({
   }
 
   return (
-    <Link href={`/admin/orders/${order.id}`} aria-label={label} title={label} className={className}>
+    <Link href={getOrderDetailHref(order.id, backHref)} aria-label={label} title={label} className={className}>
       <Icon className="h-5 w-5" />
     </Link>
   )
 }
 
-export default async function AdminOrderDetails({ params }: Props) {
+export default async function AdminOrderDetails({ params, searchParams }: Props) {
   const { id } = await params
+  const { from } = await searchParams
+  const backHref = getSafeOrdersBackHref(from)
   await expireStaleEasebuzzPendingPayments()
   const order = await getAdminOrder(id)
 
@@ -316,14 +337,14 @@ export default async function AdminOrderDetails({ params }: Props) {
       <RealtimeOrderManager orderId={order.id} />
       <div className="flex items-center justify-between gap-4">
         <nav className="flex items-center text-xs font-bold text-gray-400 uppercase tracking-widest">
-          <Link href="/admin/orders" className="flex items-center hover:text-black transition-colors">
+          <Link href={backHref} className="flex items-center hover:text-black transition-colors">
             <ChevronLeftIcon className="h-3 w-3 mr-1" strokeWidth={3} />
             Back to Orders
           </Link>
         </nav>
         <div className="flex items-center gap-1.5">
-          <OrderNavigationLink order={orderNavigation.olderOrder} direction="older" />
-          <OrderNavigationLink order={orderNavigation.newerOrder} direction="newer" />
+          <OrderNavigationLink order={orderNavigation.olderOrder} direction="older" backHref={backHref} />
+          <OrderNavigationLink order={orderNavigation.newerOrder} direction="newer" backHref={backHref} />
         </div>
       </div>
 
