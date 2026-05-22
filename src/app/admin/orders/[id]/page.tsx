@@ -1,4 +1,4 @@
-import { getAdminOrder, getTrivaraFulfillmentPartner, getOrderTimeline, getCustomerDisplayId } from "@/lib/data/admin"
+import { getAdminOrder, getAdminOrderNavigation, getTrivaraFulfillmentPartner, getOrderTimeline, getCustomerDisplayId } from "@/lib/data/admin"
 import { getRegion } from "@/lib/data/regions"
 import { formatCustomerDisplayId } from "@/lib/util/customer"
 import {
@@ -7,7 +7,7 @@ import {
 } from "@/lib/util/order-shipping-address-edit"
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import { ChevronLeftIcon, EnvelopeIcon, PhoneIcon, MapPinIcon, CheckIcon, TruckIcon, CreditCardIcon, GiftIcon } from "@heroicons/react/24/outline"
+import { ChevronLeftIcon, ChevronRightIcon, EnvelopeIcon, PhoneIcon, MapPinIcon, CheckIcon, TruckIcon, CreditCardIcon, GiftIcon } from "@heroicons/react/24/outline"
 import AdminCard from "@modules/admin/components/admin-card"
 import AdminBadge from "@modules/admin/components/admin-badge"
 import { convertToLocale } from "@lib/util/money"
@@ -53,6 +53,7 @@ const formatPaymentMethodDisplay = (method?: string | null, hasPayuTxn?: string 
 
 type Props = {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ from?: string }>
 }
 
 type AdminOrderItem = {
@@ -167,19 +168,78 @@ const getOrderItemVariantTitle = (item: AdminOrderItem) => {
   return variantTitle
 }
 
-export default async function AdminOrderDetails({ params }: Props) {
+const getSafeOrdersBackHref = (href?: string) => {
+  if (!href) {
+    return "/admin/orders"
+  }
+
+  if (href === "/admin/orders" || href.startsWith("/admin/orders?")) {
+    return href
+  }
+
+  return "/admin/orders"
+}
+
+const getOrderDetailHref = (orderId: string, backHref: string) => {
+  return `/admin/orders/${orderId}?from=${encodeURIComponent(backHref)}`
+}
+
+function OrderNavigationLink({
+  order,
+  direction,
+  backHref,
+}: {
+  order: { id: string; display_id: number } | null
+  direction: "older" | "newer"
+  backHref: string
+}) {
+  const Icon = direction === "older" ? ChevronLeftIcon : ChevronRightIcon
+  const label =
+    direction === "older"
+      ? order
+        ? `Open older order #${order.display_id}`
+        : "No older order"
+      : order
+        ? `Open newer order #${order.display_id}`
+        : "No newer order"
+  const className =
+    "inline-flex h-9 w-9 items-center justify-center rounded-lg bg-gray-900 text-white hover:bg-[#1f2937] focus:outline-none "
+
+  if (!order) {
+    return (
+      <span
+        aria-disabled="true"
+        title={label}
+        className={`${className} cursor-not-allowed opacity-50 hover:opacity-50`}
+      >
+        <Icon className="h-5 w-5" />
+      </span>
+    )
+  }
+
+  return (
+    <Link href={getOrderDetailHref(order.id, backHref)} aria-label={label} title={label} className={className}>
+      <Icon className="h-5 w-5" />
+    </Link>
+  )
+}
+
+export default async function AdminOrderDetails({ params, searchParams }: Props) {
   const { id } = await params
+  const { from } = await searchParams
+  const backHref = getSafeOrdersBackHref(from)
   await expireStaleEasebuzzPendingPayments()
   const order = await getAdminOrder(id)
 
   if (!order) notFound()
 
   // Fetch additional data
-  const [trivaraFulfillmentPartner, timeline, customerDisplayId, region] = await Promise.all([
+  const [trivaraFulfillmentPartner, timeline, customerDisplayId, region, orderNavigation] = await Promise.all([
     getTrivaraFulfillmentPartner(),
     getOrderTimeline(id).catch(() => []),
     order.user_id ? getCustomerDisplayId(order.user_id).catch(() => null) : null,
     getRegion(),
+    getAdminOrderNavigation(order.display_id),
   ])
   const canEditShippingAddress = canEditOrderShippingAddress(order.status)
   const canAcceptOrder =
@@ -275,12 +335,18 @@ export default async function AdminOrderDetails({ params }: Props) {
   return (
     <div className="space-y-6">
       <RealtimeOrderManager orderId={order.id} />
-      <nav className="flex items-center text-xs font-bold text-gray-400 uppercase tracking-widest">
-        <Link href="/admin/orders" className="flex items-center hover:text-black transition-colors">
-          <ChevronLeftIcon className="h-3 w-3 mr-1" strokeWidth={3} />
-          Back to Orders
-        </Link>
-      </nav>
+      <div className="flex items-center justify-between gap-4">
+        <nav className="flex items-center text-xs font-bold text-gray-400 uppercase tracking-widest">
+          <Link href={backHref} className="flex items-center hover:text-black transition-colors">
+            <ChevronLeftIcon className="h-3 w-3 mr-1" strokeWidth={3} />
+            Back to Orders
+          </Link>
+        </nav>
+        <div className="flex items-center gap-1.5">
+          <OrderNavigationLink order={orderNavigation.olderOrder} direction="older" backHref={backHref} />
+          <OrderNavigationLink order={orderNavigation.newerOrder} direction="newer" backHref={backHref} />
+        </div>
+      </div>
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -464,7 +530,7 @@ export default async function AdminOrderDetails({ params }: Props) {
                       : normalizedPaymentStatus === 'paid' || normalizedPaymentStatus === 'captured'
                         ? 'Paid'
                       : normalizedPaymentStatus === 'partially_paid'
-                        ? 'Advance Paid - Balance Due'
+                        ? 'Partial Paid - Balance Due'
                       : normalizedPaymentStatus === 'cancelled' || normalizedPaymentStatus === 'failed'
                           ? normalizedPaymentStatus === 'failed' && isEasebuzzPayment
                             ? 'Incomplete Transaction'
@@ -496,7 +562,7 @@ export default async function AdminOrderDetails({ params }: Props) {
                     </span>
                   </div>
                   <div className="flex justify-between gap-3 text-sm">
-                    <span className="text-gray-500">Advance Paid</span>
+                    <span className="text-gray-500">Partial Paid</span>
                     <span className="font-bold text-emerald-700">
                       {convertToLocale({
                         amount: partialPaymentData.advanceAmount,

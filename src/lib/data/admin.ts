@@ -98,6 +98,11 @@ type OrderDisplayRow = {
   display_id: number
 }
 
+export type AdminOrderNavigation = {
+  olderOrder: OrderDisplayRow | null
+  newerOrder: OrderDisplayRow | null
+}
+
 type AdminProductVariantListItem = Pick<
   ProductVariant,
   | "id"
@@ -132,6 +137,7 @@ export type AdminProductOption = Pick<Product, "id" | "name" | "thumbnail">
 export type AdminOrderListItem = Pick<
   Order,
   | "id"
+  | "user_id"
   | "display_id"
   | "created_at"
   | "customer_email"
@@ -143,7 +149,18 @@ export type AdminOrderListItem = Pick<
   | "total_amount"
   | "currency_code"
   | "status"
+> & {
+  is_repeat_customer: boolean
+  is_club_member: boolean
+}
+
+type AdminOrderListRow = Omit<
+  AdminOrderListItem,
+  "is_repeat_customer" | "is_club_member"
 >
+
+const ADMIN_ORDER_LIST_SELECT =
+  "id, user_id, display_id, created_at, customer_email, payment_status, payment_method, payu_txn_id, gateway_txn_id, fulfillment_status, total_amount, currency_code, status"
 
 type OrderAddressActionState = {
   success: boolean
@@ -2114,6 +2131,173 @@ interface PaginatedOrdersResponse {
   currentPage: number
 }
 
+type RepeatCustomerLookupRow = Pick<
+  Order,
+  "id" | "user_id" | "customer_email" | "created_at"
+>
+
+type ClubMemberLookupRow = {
+  id: string
+  email: string | null
+  contact_email: string | null
+  is_club_member: boolean | null
+}
+
+function normalizeOrderCustomerEmail(email: string | null | undefined) {
+  return email?.trim().toLowerCase() || null
+}
+
+async function attachOrderCustomerFlags(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  rows: AdminOrderListRow[]
+): Promise<AdminOrderListItem[]> {
+  if (rows.length === 0) {
+    return []
+  }
+
+  const userIds = Array.from(
+    new Set(rows.map((row) => row.user_id).filter((id): id is string => Boolean(id)))
+  )
+  const customerEmails = Array.from(
+    new Set(
+      rows
+        .filter((row) => !row.user_id)
+        .map((row) => normalizeOrderCustomerEmail(row.customer_email))
+        .filter((email): email is string => Boolean(email))
+    )
+  )
+
+  const [
+    userOrderResult,
+    emailOrderResult,
+    userProfileResult,
+    emailProfileByEmailResult,
+    emailProfileByContactEmailResult,
+  ] = await Promise.all([
+    userIds.length > 0
+      ? supabase
+          .from("orders")
+          .select("id, user_id, customer_email, created_at")
+          .in("user_id", userIds)
+      : Promise.resolve({ data: [] as RepeatCustomerLookupRow[], error: null }),
+    customerEmails.length > 0
+      ? supabase
+          .from("orders")
+          .select("id, user_id, customer_email, created_at")
+          .in("customer_email", customerEmails)
+          .is("user_id", null)
+      : Promise.resolve({ data: [] as RepeatCustomerLookupRow[], error: null }),
+    userIds.length > 0
+      ? supabase
+          .from("profiles")
+          .select("id, email, contact_email, is_club_member")
+          .in("id", userIds)
+      : Promise.resolve({ data: [] as ClubMemberLookupRow[], error: null }),
+    customerEmails.length > 0
+      ? supabase
+          .from("profiles")
+          .select("id, email, contact_email, is_club_member")
+          .in("email", customerEmails)
+      : Promise.resolve({ data: [] as ClubMemberLookupRow[], error: null }),
+    customerEmails.length > 0
+      ? supabase
+          .from("profiles")
+          .select("id, email, contact_email, is_club_member")
+          .in("contact_email", customerEmails)
+      : Promise.resolve({ data: [] as ClubMemberLookupRow[], error: null }),
+  ])
+
+  if (userOrderResult.error) {
+    throw userOrderResult.error
+  }
+  if (emailOrderResult.error) {
+    throw emailOrderResult.error
+  }
+  if (userProfileResult.error) {
+    throw userProfileResult.error
+  }
+  if (emailProfileByEmailResult.error) {
+    throw emailProfileByEmailResult.error
+  }
+  if (emailProfileByContactEmailResult.error) {
+    throw emailProfileByContactEmailResult.error
+  }
+
+  const rowsByUserId = new Map<string, RepeatCustomerLookupRow[]>()
+  const rowsByEmail = new Map<string, RepeatCustomerLookupRow[]>()
+  const clubMemberByUserId = new Map<string, boolean>()
+  const clubMemberByEmail = new Map<string, boolean>()
+
+  for (const lookupRow of [
+    ...((userOrderResult.data || []) as RepeatCustomerLookupRow[]),
+    ...((emailOrderResult.data || []) as RepeatCustomerLookupRow[]),
+  ]) {
+    if (lookupRow.user_id) {
+      const existingRows = rowsByUserId.get(lookupRow.user_id) || []
+      existingRows.push(lookupRow)
+      rowsByUserId.set(lookupRow.user_id, existingRows)
+      continue
+    }
+
+    const normalizedEmail = normalizeOrderCustomerEmail(lookupRow.customer_email)
+    if (!normalizedEmail) {
+      continue
+    }
+
+    const existingRows = rowsByEmail.get(normalizedEmail) || []
+    existingRows.push(lookupRow)
+    rowsByEmail.set(normalizedEmail, existingRows)
+  }
+
+  for (const profile of [
+    ...((userProfileResult.data || []) as ClubMemberLookupRow[]),
+    ...((emailProfileByEmailResult.data || []) as ClubMemberLookupRow[]),
+    ...((emailProfileByContactEmailResult.data || []) as ClubMemberLookupRow[]),
+  ]) {
+    const isClubMember = profile.is_club_member === true
+    clubMemberByUserId.set(
+      profile.id,
+      clubMemberByUserId.get(profile.id) === true || isClubMember
+    )
+
+    const normalizedEmail = normalizeOrderCustomerEmail(profile.email)
+    if (normalizedEmail) {
+      clubMemberByEmail.set(
+        normalizedEmail,
+        clubMemberByEmail.get(normalizedEmail) === true || isClubMember
+      )
+    }
+
+    const normalizedContactEmail = normalizeOrderCustomerEmail(profile.contact_email)
+    if (normalizedContactEmail) {
+      clubMemberByEmail.set(
+        normalizedContactEmail,
+        clubMemberByEmail.get(normalizedContactEmail) === true || isClubMember
+      )
+    }
+  }
+
+  return rows.map((row) => {
+    const customerRows = row.user_id
+      ? rowsByUserId.get(row.user_id) || []
+      : rowsByEmail.get(normalizeOrderCustomerEmail(row.customer_email) || "") || []
+    const isClubMember = row.user_id
+      ? clubMemberByUserId.get(row.user_id) === true
+      : clubMemberByEmail.get(normalizeOrderCustomerEmail(row.customer_email) || "") === true
+
+    return {
+      ...row,
+      is_club_member: isClubMember,
+      is_repeat_customer: customerRows.some(
+        (customerRow) =>
+          customerRow.id !== row.id &&
+          new Date(customerRow.created_at).getTime() <
+            new Date(row.created_at).getTime()
+      ),
+    }
+  })
+}
+
 export async function getAdminOrders(
   params: GetAdminOrdersParams = {}
 ): Promise<PaginatedOrdersResponse> {
@@ -2128,9 +2312,7 @@ export async function getAdminOrders(
   if (!isNaN(searchNum)) {
     const { data, error } = await supabase
       .from("orders")
-      .select(
-        "id, display_id, created_at, customer_email, payment_status, payment_method, payu_txn_id, gateway_txn_id, fulfillment_status, total_amount, currency_code, status"
-      )
+      .select(ADMIN_ORDER_LIST_SELECT)
       .eq("display_id", searchNum)
       .order("created_at", { ascending: false })
       .range((page - 1) * limit, page * limit - 1)
@@ -2141,7 +2323,10 @@ export async function getAdminOrders(
     const totalPages = Math.ceil(count / limit) || 1
 
     return {
-      orders: (data || []) as AdminOrderListItem[],
+      orders: await attachOrderCustomerFlags(
+        supabase,
+        (data || []) as AdminOrderListRow[]
+      ),
       count,
       totalPages,
       currentPage: page,
@@ -2170,9 +2355,7 @@ export async function getAdminOrders(
   // Fetch paginated data
   let query = supabase
     .from("orders")
-    .select(
-      "id, display_id, created_at, customer_email, payment_status, payment_method, payu_txn_id, gateway_txn_id, fulfillment_status, total_amount, currency_code, status"
-    )
+    .select(ADMIN_ORDER_LIST_SELECT)
     .order("created_at", { ascending: false })
     .range(from, to)
 
@@ -2185,7 +2368,10 @@ export async function getAdminOrders(
   if (error) throw error
 
   return {
-    orders: (data || []) as AdminOrderListItem[],
+    orders: await attachOrderCustomerFlags(
+      supabase,
+      (data || []) as AdminOrderListRow[]
+    ),
     count: count || 0,
     totalPages,
     currentPage: page,
@@ -2200,15 +2386,17 @@ export async function getRecentAdminOrders(
   const supabase = await createClient()
   const { data, error } = await supabase
     .from("orders")
-    .select(
-      "id, display_id, created_at, customer_email, payment_status, payment_method, payu_txn_id, gateway_txn_id, fulfillment_status, total_amount, currency_code, status"
-    )
+    .select(ADMIN_ORDER_LIST_SELECT)
     .order("created_at", { ascending: false })
     .limit(limit)
 
   if (error) throw error
 
-  return (data || []) as AdminOrderListItem[]
+  return ((data || []) as AdminOrderListRow[]).map((order) => ({
+    ...order,
+    is_club_member: false,
+    is_repeat_customer: false,
+  }))
 }
 
 export async function getAdminOrder(id: string): Promise<AdminOrder | null> {
@@ -2267,6 +2455,42 @@ export async function getAdminOrder(id: string): Promise<AdminOrder | null> {
     ...(data as Order),
     customer_phone: customerPhone,
   } satisfies AdminOrder
+}
+
+export async function getAdminOrderNavigation(
+  displayId: number
+): Promise<AdminOrderNavigation> {
+  await ensureAdmin()
+
+  const supabase = await createClient()
+  const [olderResult, newerResult] = await Promise.all([
+    supabase
+      .from("orders")
+      .select("id, display_id")
+      .lt("display_id", displayId)
+      .order("display_id", { ascending: false })
+      .limit(1)
+      .maybeSingle<OrderDisplayRow>(),
+    supabase
+      .from("orders")
+      .select("id, display_id")
+      .gt("display_id", displayId)
+      .order("display_id", { ascending: true })
+      .limit(1)
+      .maybeSingle<OrderDisplayRow>(),
+  ])
+
+  if (olderResult.error) {
+    throw olderResult.error
+  }
+  if (newerResult.error) {
+    throw newerResult.error
+  }
+
+  return {
+    olderOrder: olderResult.data,
+    newerOrder: newerResult.data,
+  }
 }
 
 export async function updateOrderStatus(id: string, status: string) {
@@ -3514,6 +3738,9 @@ export async function markPartialPaymentBalancePaid(
 
   if (updateError) throw updateError
 
+  const { syncClubMembershipForOrder } = await import("@lib/data/club")
+  await syncClubMembershipForOrder(orderId, "partial_payment_completed")
+
   await logOrderEvent(
     orderId,
     "payment_captured",
@@ -3562,16 +3789,7 @@ async function creditRewardsOnDelivery(order: {
     .eq("id", order.user_id)
     .maybeSingle()
 
-  if (!profile?.is_club_member) {
-    // Try to activate membership if order qualifies (safety net for orders placed before fix)
-    const { checkAndActivateMembership } = await import("@lib/data/club")
-    const orderTotal = Number(order.total || 0)
-    const activated = await checkAndActivateMembership(
-      order.user_id,
-      orderTotal
-    )
-    if (!activated) return // Not eligible, skip rewards
-  }
+  if (!profile?.is_club_member) return
 
   const { getClubSettings } = await import("@lib/data/club")
   const settings = await getClubSettings()
@@ -3645,6 +3863,9 @@ export async function markOrderAsDelivered(orderId: string) {
 
   if (error) throw error
 
+  const { syncClubMembershipForOrder } = await import("@lib/data/club")
+  await syncClubMembershipForOrder(orderId, "order_delivered")
+
   // Credit reward points to club members (idempotent)
   await creditRewardsOnDelivery(order)
 
@@ -3713,8 +3934,10 @@ export async function cancelOrder(orderId: string) {
 
   // Deduct Club Membership savings when present
   try {
-    const { deductClubSavingsFromOrder } = await import("@lib/data/club")
+    const { deductClubSavingsFromOrder, revokeOrReplaceMembership } =
+      await import("@lib/data/club")
     await deductClubSavingsFromOrder(orderId)
+    await revokeOrReplaceMembership(orderId, "order_cancelled")
   } catch (savingsError) {
     console.error(
       `[ADMIN] Failed to deduct club savings on admin cancellation for ${orderId}:`,
@@ -3887,6 +4110,9 @@ export async function markOrderAsPaid(orderId: string) {
     .eq("id", orderId)
 
   if (updateError) throw new Error(updateError.message)
+
+  const { syncClubMembershipForOrder } = await import("@lib/data/club")
+  await syncClubMembershipForOrder(orderId, "manual_payment_completed")
 
   await logOrderEvent(
     orderId,

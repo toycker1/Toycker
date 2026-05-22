@@ -30,6 +30,11 @@ export interface OrderPricingMetadata {
   balance_payment_method?: string
   club_savings_credited?: boolean
   club_savings_deducted?: boolean
+  club_membership_status?: "none" | "pending_eligible" | "active" | "revoked"
+  club_qualifying_order_id?: string | null
+  club_qualifying_subtotal?: number
+  club_membership_activated_at?: string
+  club_revocation_reason?: string
   deducted_amount?: number
   deduction_date?: string
 }

@@ -51,6 +51,9 @@ async function markPendingPaymentOrderIncomplete(order: PendingPaymentOrder) {
     return false
   }
 
+  const { revokeOrReplaceMembership } = await import("@lib/data/club")
+  await revokeOrReplaceMembership(order.id, "payment_failed")
+
   try {
     await logOrderEvent(
       order.id,
@@ -200,6 +203,9 @@ export async function cancelPendingPaymentOrders(
       )
       continue
     }
+
+    const { revokeOrReplaceMembership } = await import("@lib/data/club")
+    await revokeOrReplaceMembership(order.id, "payment_cancelled")
 
     try {
       await logOrderEvent(

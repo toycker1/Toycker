@@ -21,6 +21,9 @@ export async function GET() {
                 last_name: customer.last_name,
                 is_club_member: customer.is_club_member,
                 club_member_since: customer.club_member_since,
+                club_membership_status: customer.club_membership_status,
+                club_qualifying_order_id: customer.club_qualifying_order_id,
+                club_revocation_reason: customer.club_revocation_reason,
                 total_club_savings: customer.total_club_savings,
             },
             { status: 200 }

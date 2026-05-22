@@ -386,6 +386,9 @@ export async function POST(request: NextRequest) {
             })
             .eq("id", existingOrder.id)
 
+          const { revokeOrReplaceMembership } = await import("@lib/data/club")
+          await revokeOrReplaceMembership(existingOrder.id, "payment_cancelled")
+
           const { logOrderEvent } = await import("@/lib/data/admin")
           await logOrderEvent(
             existingOrder.id,

@@ -371,6 +371,9 @@ export interface CustomerProfile {
   addresses: Address[]
   is_club_member?: boolean
   club_member_since?: string | null
+  club_membership_status?: "none" | "pending_eligible" | "active" | "revoked"
+  club_qualifying_order_id?: string | null
+  club_revocation_reason?: string | null
   total_club_savings?: number
   customer_display_id?: number | null
 }

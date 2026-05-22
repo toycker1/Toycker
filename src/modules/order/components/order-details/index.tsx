@@ -45,7 +45,7 @@ const OrderDetails = ({ order, customerPhone }: OrderDetailsProps) => {
     : normalizedPaymentStatus === "paid" || normalizedPaymentStatus === "captured"
       ? "Paid"
     : normalizedPaymentStatus === "partially_paid"
-      ? "Advance Paid - Balance Due"
+      ? "Partial Paid - Balance Due"
     : normalizedPaymentStatus === "cancelled" || normalizedPaymentStatus === "failed"
         ? normalizedPaymentStatus === "failed"
           ? "Incomplete Transaction"
