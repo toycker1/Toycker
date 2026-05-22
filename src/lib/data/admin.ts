@@ -98,6 +98,11 @@ type OrderDisplayRow = {
   display_id: number
 }
 
+export type AdminOrderNavigation = {
+  olderOrder: OrderDisplayRow | null
+  newerOrder: OrderDisplayRow | null
+}
+
 type AdminProductVariantListItem = Pick<
   ProductVariant,
   | "id"
@@ -2371,6 +2376,42 @@ export async function getAdminOrder(id: string): Promise<AdminOrder | null> {
     ...(data as Order),
     customer_phone: customerPhone,
   } satisfies AdminOrder
+}
+
+export async function getAdminOrderNavigation(
+  displayId: number
+): Promise<AdminOrderNavigation> {
+  await ensureAdmin()
+
+  const supabase = await createClient()
+  const [olderResult, newerResult] = await Promise.all([
+    supabase
+      .from("orders")
+      .select("id, display_id")
+      .lt("display_id", displayId)
+      .order("display_id", { ascending: false })
+      .limit(1)
+      .maybeSingle<OrderDisplayRow>(),
+    supabase
+      .from("orders")
+      .select("id, display_id")
+      .gt("display_id", displayId)
+      .order("display_id", { ascending: true })
+      .limit(1)
+      .maybeSingle<OrderDisplayRow>(),
+  ])
+
+  if (olderResult.error) {
+    throw olderResult.error
+  }
+  if (newerResult.error) {
+    throw newerResult.error
+  }
+
+  return {
+    olderOrder: olderResult.data,
+    newerOrder: newerResult.data,
+  }
 }
 
 export async function updateOrderStatus(id: string, status: string) {

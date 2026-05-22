@@ -1,4 +1,4 @@
-import { getAdminOrder, getTrivaraFulfillmentPartner, getOrderTimeline, getCustomerDisplayId } from "@/lib/data/admin"
+import { getAdminOrder, getAdminOrderNavigation, getTrivaraFulfillmentPartner, getOrderTimeline, getCustomerDisplayId } from "@/lib/data/admin"
 import { getRegion } from "@/lib/data/regions"
 import { formatCustomerDisplayId } from "@/lib/util/customer"
 import {
@@ -7,7 +7,7 @@ import {
 } from "@/lib/util/order-shipping-address-edit"
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import { ChevronLeftIcon, EnvelopeIcon, PhoneIcon, MapPinIcon, CheckIcon, TruckIcon, CreditCardIcon, GiftIcon } from "@heroicons/react/24/outline"
+import { ChevronLeftIcon, ChevronRightIcon, EnvelopeIcon, PhoneIcon, MapPinIcon, CheckIcon, TruckIcon, CreditCardIcon, GiftIcon } from "@heroicons/react/24/outline"
 import AdminCard from "@modules/admin/components/admin-card"
 import AdminBadge from "@modules/admin/components/admin-badge"
 import { convertToLocale } from "@lib/util/money"
@@ -167,6 +167,44 @@ const getOrderItemVariantTitle = (item: AdminOrderItem) => {
   return variantTitle
 }
 
+function OrderNavigationLink({
+  order,
+  direction,
+}: {
+  order: { id: string; display_id: number } | null
+  direction: "older" | "newer"
+}) {
+  const Icon = direction === "older" ? ChevronLeftIcon : ChevronRightIcon
+  const label =
+    direction === "older"
+      ? order
+        ? `Open older order #${order.display_id}`
+        : "No older order"
+      : order
+        ? `Open newer order #${order.display_id}`
+        : "No newer order"
+  const className =
+    "inline-flex h-9 w-9 items-center justify-center rounded-lg bg-gray-900 text-white hover:bg-[#1f2937] focus:outline-none "
+
+  if (!order) {
+    return (
+      <span
+        aria-disabled="true"
+        title={label}
+        className={`${className} cursor-not-allowed opacity-50 hover:opacity-50`}
+      >
+        <Icon className="h-5 w-5" />
+      </span>
+    )
+  }
+
+  return (
+    <Link href={`/admin/orders/${order.id}`} aria-label={label} title={label} className={className}>
+      <Icon className="h-5 w-5" />
+    </Link>
+  )
+}
+
 export default async function AdminOrderDetails({ params }: Props) {
   const { id } = await params
   await expireStaleEasebuzzPendingPayments()
@@ -175,11 +213,12 @@ export default async function AdminOrderDetails({ params }: Props) {
   if (!order) notFound()
 
   // Fetch additional data
-  const [trivaraFulfillmentPartner, timeline, customerDisplayId, region] = await Promise.all([
+  const [trivaraFulfillmentPartner, timeline, customerDisplayId, region, orderNavigation] = await Promise.all([
     getTrivaraFulfillmentPartner(),
     getOrderTimeline(id).catch(() => []),
     order.user_id ? getCustomerDisplayId(order.user_id).catch(() => null) : null,
     getRegion(),
+    getAdminOrderNavigation(order.display_id),
   ])
   const canEditShippingAddress = canEditOrderShippingAddress(order.status)
   const canAcceptOrder =
@@ -275,12 +314,18 @@ export default async function AdminOrderDetails({ params }: Props) {
   return (
     <div className="space-y-6">
       <RealtimeOrderManager orderId={order.id} />
-      <nav className="flex items-center text-xs font-bold text-gray-400 uppercase tracking-widest">
-        <Link href="/admin/orders" className="flex items-center hover:text-black transition-colors">
-          <ChevronLeftIcon className="h-3 w-3 mr-1" strokeWidth={3} />
-          Back to Orders
-        </Link>
-      </nav>
+      <div className="flex items-center justify-between gap-4">
+        <nav className="flex items-center text-xs font-bold text-gray-400 uppercase tracking-widest">
+          <Link href="/admin/orders" className="flex items-center hover:text-black transition-colors">
+            <ChevronLeftIcon className="h-3 w-3 mr-1" strokeWidth={3} />
+            Back to Orders
+          </Link>
+        </nav>
+        <div className="flex items-center gap-1.5">
+          <OrderNavigationLink order={orderNavigation.olderOrder} direction="older" />
+          <OrderNavigationLink order={orderNavigation.newerOrder} direction="newer" />
+        </div>
+      </div>
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
