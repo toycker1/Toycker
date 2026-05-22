@@ -3659,6 +3659,9 @@ export async function markPartialPaymentBalancePaid(
 
   if (updateError) throw updateError
 
+  const { syncClubMembershipForOrder } = await import("@lib/data/club")
+  await syncClubMembershipForOrder(orderId, "partial_payment_completed")
+
   await logOrderEvent(
     orderId,
     "payment_captured",
@@ -3707,16 +3710,7 @@ async function creditRewardsOnDelivery(order: {
     .eq("id", order.user_id)
     .maybeSingle()
 
-  if (!profile?.is_club_member) {
-    // Try to activate membership if order qualifies (safety net for orders placed before fix)
-    const { checkAndActivateMembership } = await import("@lib/data/club")
-    const orderTotal = Number(order.total || 0)
-    const activated = await checkAndActivateMembership(
-      order.user_id,
-      orderTotal
-    )
-    if (!activated) return // Not eligible, skip rewards
-  }
+  if (!profile?.is_club_member) return
 
   const { getClubSettings } = await import("@lib/data/club")
   const settings = await getClubSettings()
@@ -3790,6 +3784,9 @@ export async function markOrderAsDelivered(orderId: string) {
 
   if (error) throw error
 
+  const { syncClubMembershipForOrder } = await import("@lib/data/club")
+  await syncClubMembershipForOrder(orderId, "order_delivered")
+
   // Credit reward points to club members (idempotent)
   await creditRewardsOnDelivery(order)
 
@@ -3858,8 +3855,10 @@ export async function cancelOrder(orderId: string) {
 
   // Deduct Club Membership savings when present
   try {
-    const { deductClubSavingsFromOrder } = await import("@lib/data/club")
+    const { deductClubSavingsFromOrder, revokeOrReplaceMembership } =
+      await import("@lib/data/club")
     await deductClubSavingsFromOrder(orderId)
+    await revokeOrReplaceMembership(orderId, "order_cancelled")
   } catch (savingsError) {
     console.error(
       `[ADMIN] Failed to deduct club savings on admin cancellation for ${orderId}:`,
@@ -4032,6 +4031,9 @@ export async function markOrderAsPaid(orderId: string) {
     .eq("id", orderId)
 
   if (updateError) throw new Error(updateError.message)
+
+  const { syncClubMembershipForOrder } = await import("@lib/data/club")
+  await syncClubMembershipForOrder(orderId, "manual_payment_completed")
 
   await logOrderEvent(
     orderId,

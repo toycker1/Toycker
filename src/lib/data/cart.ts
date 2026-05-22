@@ -1934,24 +1934,6 @@ export async function placeOrder() {
   redirect(`/order/confirmed/${order.id}`)
 }
 
-const getMembershipQualifyingSubtotal = (cart: Cart): number => {
-  if (!Array.isArray(cart.items) || cart.items.length === 0) {
-    return Number(cart.item_subtotal ?? cart.subtotal ?? 0)
-  }
-
-  const qualifyingSubtotal = cart.items.reduce((sum, item) => {
-    if (item.metadata?.gift_wrap_line === true) {
-      return sum
-    }
-
-    return sum + Number(item.original_total ?? item.total ?? 0)
-  }, 0)
-
-  return qualifyingSubtotal > 0
-    ? qualifyingSubtotal
-    : Number(cart.item_subtotal ?? cart.subtotal ?? 0)
-}
-
 /**
  * Reusable helper to handle post-order logic like membership activation,
  * rewards calculation, and event logging.
@@ -1972,25 +1954,12 @@ export async function handlePostOrderLogic(
 
   // Handle rewards and club functionality for logged-in users
   if (order.user_id) {
-    const { checkAndActivateMembership, getClubSettings } = await import(
-      "@lib/data/club"
-    )
+    const { syncClubMembershipForOrder } = await import("@lib/data/club")
     const { deductRewards } = await import("@lib/data/rewards")
-    const settings = await getClubSettings()
 
     // 1. Deduct reward points used (now works — rewards.ts uses admin client)
     if (rewards_discount > 0) {
       await deductRewards(order.user_id, order.id, rewards_discount)
-    }
-
-    // 2. Check for club membership activation (now works — club.ts uses admin client)
-    const qualifyingSubtotal = getMembershipQualifyingSubtotal(cart)
-    const activated = await checkAndActivateMembership(
-      order.user_id,
-      qualifyingSubtotal
-    )
-    if (activated) {
-      revalidateTag("customers", "max")
     }
 
     // 3. Update order metadata
@@ -2001,11 +1970,6 @@ export async function handlePostOrderLogic(
 
     if (rewards_discount > 0) {
       metadataUpdate.rewards_discount = rewards_discount
-    }
-
-    if (activated) {
-      metadataUpdate.newly_activated_club_member = true
-      metadataUpdate.club_discount_percentage = settings.discount_percentage
     }
 
     if (clubSavings > 0) {
@@ -2046,7 +2010,6 @@ export async function handlePostOrderLogic(
 
     // Always update metadata if we have something new to add
     if (
-      activated ||
       rewards_discount > 0 ||
       clubSavings > 0 ||
       metadataUpdate.club_savings_credited === true
@@ -2058,9 +2021,18 @@ export async function handlePostOrderLogic(
         })
         .eq("id", order.id)
     }
+
+    // 5. Sync club eligibility after metadata updates so audit fields are not overwritten.
+    const clubMembershipResult = await syncClubMembershipForOrder(
+      order.id,
+      "order_created_or_payment_captured"
+    )
+    if (clubMembershipResult.activated) {
+      revalidateTag("customers", "max")
+    }
   }
 
-  // 5. Update promotion use count
+  // 6. Update promotion use count
   const promo_code =
     order.promo_code || orderMetadata.promo_code || cart.promotions?.[0]?.code
   if (promo_code) {

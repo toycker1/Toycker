@@ -77,7 +77,7 @@ export const retrieveCustomer = cache(
     const { data: profile } = await supabase
       .from("profiles")
       .select(
-        "first_name, last_name, phone, email, contact_email, is_club_member, club_member_since, total_club_savings"
+        "first_name, last_name, phone, email, contact_email, is_club_member, club_member_since, club_membership_status, club_qualifying_order_id, club_revocation_reason, total_club_savings"
       )
       .eq("id", user.id)
       .single()
@@ -105,6 +105,18 @@ export const retrieveCustomer = cache(
       club_member_since:
         profile?.club_member_since ??
         user.user_metadata?.club_member_since ??
+        null,
+      club_membership_status:
+        profile?.club_membership_status ??
+        user.user_metadata?.club_membership_status ??
+        (profile?.is_club_member ? "active" : "none"),
+      club_qualifying_order_id:
+        profile?.club_qualifying_order_id ??
+        user.user_metadata?.club_qualifying_order_id ??
+        null,
+      club_revocation_reason:
+        profile?.club_revocation_reason ??
+        user.user_metadata?.club_revocation_reason ??
         null,
       total_club_savings: Number(
         profile?.total_club_savings ?? user.user_metadata?.total_club_savings ?? 0
