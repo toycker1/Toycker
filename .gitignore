@@ -12,6 +12,12 @@
 # testing
 /coverage
 /tests/
+!/tests/
+/tests/*
+!/tests/lib/
+/tests/lib/*
+!/tests/lib/util/
+!/tests/lib/util/cart-calculations.test.ts
 
 # next.js
 /.next/

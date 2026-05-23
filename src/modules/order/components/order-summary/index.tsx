@@ -1,11 +1,13 @@
 import { convertToLocale } from "@lib/util/money"
 import { Order } from "@/lib/supabase/types"
+import { getOrderPricingMetadata } from "@/lib/util/order-pricing"
 
 type OrderSummaryProps = {
   order: Order
 }
 
 const OrderSummary = ({ order }: OrderSummaryProps) => {
+  const metadata = getOrderPricingMetadata(order.metadata)
   const getAmount = (amount?: number | null) => {
     if (!amount) {
       return
@@ -27,7 +29,6 @@ const OrderSummary = ({ order }: OrderSummaryProps) => {
         </div>
         <div className="flex flex-col gap-y-1">
           {(() => {
-            const metadata = order.metadata as Record<string, any> || {}
             const paymentDiscount = metadata.payment_discount_amount || 0
             const paymentPercentage = metadata.payment_discount_percentage || 0
 
@@ -42,7 +43,6 @@ const OrderSummary = ({ order }: OrderSummaryProps) => {
             return null
           })()}
           {order.discount_total > 0 && (() => {
-            const metadata = order.metadata as Record<string, any> || {}
             const paymentDiscount = metadata.payment_discount_amount || 0
             const rewardsDiscount = metadata.rewards_discount || 0
             const promoDiscount = order.discount_total - paymentDiscount - rewardsDiscount

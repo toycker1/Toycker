@@ -31,6 +31,7 @@ import {
   calculateCartTotals,
   CartShippingMethod,
   DatabaseCartItem,
+  isFullOnlinePaymentProvider,
 } from "@/lib/util/cart-calculations"
 
 type CartWriteContext = {
@@ -671,7 +672,7 @@ export async function retrieveCartRaw(cartId?: string): Promise<Cart | null> {
     )?.provider_id
 
   let paymentDiscountPercentage = 0
-  if (selectedPaymentProviderId) {
+  if (isFullOnlinePaymentProvider(selectedPaymentProviderId)) {
     const { data: provider } = await supabase
       .from("payment_providers")
       .select("discount_percentage")

@@ -6,6 +6,19 @@ import {
 } from "@/lib/supabase/types"
 import { fixUrl } from "./images"
 
+export const roundCurrencyAmount = (amount: number): number => {
+    if (!Number.isFinite(amount)) {
+        return 0
+    }
+
+    return Math.round((amount + Number.EPSILON) * 100) / 100
+}
+
+export const isFullOnlinePaymentProvider = (
+    providerId?: string | null
+): boolean =>
+    providerId === "pp_payu_payu" || providerId === "pp_easebuzz_easebuzz"
+
 /** Raw cart item from database with nested product/variant objects */
 export interface DatabaseCartItem {
     id: string
@@ -52,7 +65,7 @@ export const mapCartItems = (items: DatabaseCartItem[], clubDiscountPercentage =
         const originalPrice = Number(variant?.price || product?.price || 0)
         const hasClubDiscount = clubDiscountPercentage > 0
         const discountedPrice = hasClubDiscount
-            ? Math.round(originalPrice * (1 - clubDiscountPercentage / 100))
+            ? roundCurrencyAmount(originalPrice * (1 - clubDiscountPercentage / 100))
             : originalPrice
 
         const metadata = (item.metadata || {}) as Record<string, unknown>
@@ -74,9 +87,9 @@ export const mapCartItems = (items: DatabaseCartItem[], clubDiscountPercentage =
             thumbnail: isGiftWrapLine ? undefined : (thumbnail ?? undefined),
             unit_price: finalUnitPrice,
             original_unit_price: finalOriginalUnitPrice,
-            total: finalUnitPrice * item.quantity,
-            original_total: finalOriginalUnitPrice * item.quantity,
-            subtotal: finalUnitPrice * item.quantity,
+            total: roundCurrencyAmount(finalUnitPrice * item.quantity),
+            original_total: roundCurrencyAmount(finalOriginalUnitPrice * item.quantity),
+            subtotal: roundCurrencyAmount(finalUnitPrice * item.quantity),
             has_club_discount: !isGiftWrapLine && hasClubDiscount,
             product: product ?? undefined,
             variant: variantWithProduct
@@ -107,9 +120,9 @@ export const calculateCartTotals = ({
     paymentDiscountPercentage = 0,
     defaultShippingOption,
 }: CalculateTotalsParams) => {
-    const item_subtotal = items.reduce((sum, item) => sum + item.total, 0)
-    const original_subtotal = items.reduce((sum, item) => sum + (item.original_total || item.total), 0)
-    const club_savings = original_subtotal - item_subtotal
+    const item_subtotal = roundCurrencyAmount(items.reduce((sum, item) => sum + item.total, 0))
+    const original_subtotal = roundCurrencyAmount(items.reduce((sum, item) => sum + (item.original_total || item.total), 0))
+    const club_savings = roundCurrencyAmount(original_subtotal - item_subtotal)
 
     let discount_total = 0
     let isFreeShipping = false
@@ -122,9 +135,9 @@ export const calculateCartTotals = ({
         if ((!startsAt || startsAt <= now) && (!endsAt || endsAt >= now)) {
             if (item_subtotal >= (promotion.min_order_amount || 0)) {
                 if (promotion.type === "percentage") {
-                    discount_total = Math.round((item_subtotal * promotion.value) / 100)
+                    discount_total = roundCurrencyAmount((item_subtotal * promotion.value) / 100)
                 } else if (promotion.type === "fixed") {
-                    discount_total = Math.min(promotion.value, item_subtotal)
+                    discount_total = roundCurrencyAmount(Math.min(promotion.value, item_subtotal))
                 } else if (promotion.type === "free_shipping") {
                     isFreeShipping = true
                 }
@@ -165,9 +178,9 @@ export const calculateCartTotals = ({
     const tax_total = 0
 
     // Calculate payment discount (on item subtotal)
-    const payment_discount = Math.round(item_subtotal * (paymentDiscountPercentage / 100))
+    const payment_discount = roundCurrencyAmount(item_subtotal * (paymentDiscountPercentage / 100))
 
-    const total = Math.max(0, item_subtotal + tax_total + shipping_total - discount_total - rewards_discount - payment_discount)
+    const total = roundCurrencyAmount(Math.max(0, item_subtotal + tax_total + shipping_total - discount_total - rewards_discount - payment_discount))
 
     return {
         item_subtotal,
