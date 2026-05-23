@@ -42,10 +42,10 @@ export const footerDescription =
 
 export const footerContactItems: FooterContactItem[] = [
   {
-    id: "address",
-    label: "Plot No.C/4,C/5, Geetanagar Co.Op.Hou.Society, Ring Road, Gujarat Gas Circle, Adajan, Surat, Gujarat, 395009",
-    value: "Plot No.C/4,C/5, Geetanagar Co.Op.Hou.Society, Ring Road, Gujarat Gas Circle, Adajan, Surat, Gujarat, 395009",
-    href: "https://maps.app.goo.gl/XNVLuFb6Mig5zzWs7",
+    id: "address-varachha",
+    label: "shed no-7/8, sardar campus, opp. River Kent, Mota Varachha, Surat, Gujarat 394101",
+    value: "shed no-7/8, sardar campus, opp. River Kent, Mota Varachha, Surat, Gujarat 394101",
+    href: "https://maps.google.com/?q=Toycker+Head+Office+Varachha+Surat",
     type: "address",
   },
   {

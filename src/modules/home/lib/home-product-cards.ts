@@ -2,6 +2,7 @@
 
 import { unstable_cache } from "next/cache"
 
+import type { Product } from "@/lib/supabase/types"
 import { createClient } from "@/lib/supabase/server"
 import { ACTIVE_PRODUCT_STATUS } from "@lib/util/product-visibility"
 import { fixUrl } from "@lib/util/images"
@@ -21,13 +22,15 @@ export type HomeProductCard = {
   currency_code: string
   image_url: string | null
   thumbnail: string | null
+  images: string[]
   metadata: Record<string, unknown> | null
   variants: HomeProductVariantRow[]
 }
 
-type HomeProductCardRow = Omit<HomeProductCard, "image_url" | "thumbnail" | "variants"> & {
+type HomeProductCardRow = Omit<HomeProductCard, "image_url" | "thumbnail" | "images" | "variants"> & {
   image_url: string | null
   thumbnail: string | null
+  images: Product["images"]
   variants: HomeProductVariantRow[] | null
 }
 
@@ -45,6 +48,7 @@ const HOME_PRODUCT_CARD_SELECT = `
   currency_code,
   image_url,
   thumbnail,
+  images,
   metadata,
   variants:product_variants (
     id,
@@ -56,11 +60,22 @@ const HOME_PRODUCT_CARD_SELECT = `
 const normalizeCard = (row: HomeProductCardRow): HomeProductCard => {
   const imageUrl = fixUrl(row.image_url)
   const thumbnail = fixUrl(row.thumbnail) ?? imageUrl
+  const rawImages = Array.isArray(row.images) ? row.images : []
+  const images = rawImages
+    .map((image) => {
+      if (typeof image === "string") {
+        return fixUrl(image)
+      }
+
+      return fixUrl(image.url)
+    })
+    .filter((url): url is string => Boolean(url))
 
   return {
     ...row,
     image_url: imageUrl,
     thumbnail,
+    images: Array.from(new Set(images)),
     variants: row.variants ?? [],
   }
 }

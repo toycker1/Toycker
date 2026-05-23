@@ -32,6 +32,7 @@ const PRODUCT_CARD_SELECT = `
   currency_code,
   image_url,
   thumbnail,
+  images,
   stock_count,
   metadata,
   category_id,
@@ -225,6 +226,7 @@ type PriceFilteredProductRow = {
   currency_code: string
   image_url: string | null
   thumbnail: string | null
+  images: Product["images"]
   stock_count: number
   metadata: Record<string, unknown> | null
   category_id: string | null
@@ -295,6 +297,7 @@ const mapPriceFilteredProductRow = (row: Record<string, unknown>): PriceFiltered
   currency_code: toStringValue(row.currency_code, "INR"),
   image_url: toNullableStringValue(row.image_url),
   thumbnail: toNullableStringValue(row.thumbnail),
+  images: Array.isArray(row.images) ? row.images as Product["images"] : null,
   stock_count: toNumberValue(row.stock_count),
   metadata: toMetadataValue(row.metadata),
   category_id: toNullableStringValue(row.category_id),
@@ -313,6 +316,38 @@ const mapPriceFilteredRowsToProducts = (rows: unknown[]) =>
   rows
     .filter(isRecord)
     .map((row) => normalizeProductImage(mapPriceFilteredProductRow(row) as unknown as Product))
+
+const addImagesToPriceFilteredRows = async (
+  rows: PriceFilteredProductRow[]
+): Promise<PriceFilteredProductRow[]> => {
+  if (rows.length === 0) {
+    return rows
+  }
+
+  const supabase = createPublicClient()
+  const productIds = rows.map((row) => row.id)
+  const { data, error } = await supabase
+    .from("products")
+    .select("id, images")
+    .in("id", productIds)
+
+  if (error) {
+    console.error("Error fetching product images for price-filtered products:", error.message)
+    return rows
+  }
+
+  const imagesByProductId = new Map<string, Product["images"]>(
+    (data ?? []).map((row) => [
+      row.id,
+      Array.isArray(row.images) ? row.images as Product["images"] : null,
+    ])
+  )
+
+  return rows.map((row) => ({
+    ...row,
+    images: imagesByProductId.get(row.id) ?? row.images,
+  }))
+}
 
 const getPriceFilteredCount = (rows: PriceFilteredProductRow[]) => {
   const firstCount = rows[0]?.total_count
@@ -494,7 +529,9 @@ export const listPaginatedProducts = cache(async function listPaginatedProducts(
       return { response: { products: [], count: 0 }, pagination: { page: range.page, limit: range.limit } }
     }
 
-    const rows = (data ?? []).filter(isRecord).map(mapPriceFilteredProductRow)
+    const rows = await addImagesToPriceFilteredRows(
+      (data ?? []).filter(isRecord).map(mapPriceFilteredProductRow)
+    )
 
     return {
       response: {

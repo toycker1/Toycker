@@ -64,12 +64,14 @@ export function ReviewTextarea({
   onChange,
   placeholder,
   variant,
+  required = true,
 }: {
   label: string
   value: string
   onChange: (_value: string) => void
   placeholder: string
   variant: ReviewFormVariant
+  required?: boolean
 }) {
   const isCustomer = variant === "customer"
 
@@ -82,10 +84,10 @@ export function ReviewTextarea({
             : "text-sm font-semibold text-gray-700"
         }
       >
-        {label} <span className="text-red-500">*</span>
+        {label} {required && <span className="text-red-500">*</span>}
       </label>
       <textarea
-        required
+        required={required}
         value={value}
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}

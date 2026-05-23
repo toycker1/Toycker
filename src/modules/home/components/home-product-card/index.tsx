@@ -54,6 +54,9 @@ export default function HomeProductCard({
   imageSizes = "(max-width: 768px) 50vw, (max-width: 1024px) 25vw, 20vw",
 }: HomeProductCardProps) {
   const imageSrc = product.thumbnail ?? product.image_url
+  const hoverImageSrc =
+    product.images?.find((image) => image && image !== imageSrc) ?? null
+  const hasHoverImage = Boolean(imageSrc && hoverImageSrc)
   const currencyCode = product.currency_code || "INR"
   const { price, compareAtPrice } = getLowestPrice(product)
   const clubPrice =
@@ -77,14 +80,30 @@ export default function HomeProductCard({
       <article className="flex h-full flex-col">
         <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-gray-100">
           {imageSrc ? (
-            <Image
-              src={imageSrc}
-              alt={product.name}
-              fill
-              draggable={false}
-              sizes={imageSizes}
-              className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
-            />
+            <>
+              <Image
+                src={imageSrc}
+                alt={product.name}
+                fill
+                draggable={false}
+                sizes={imageSizes}
+                className={`object-cover transition-all duration-500 ${
+                  hasHoverImage
+                    ? "opacity-100 group-hover:opacity-0"
+                    : "group-hover:scale-[1.04]"
+                }`}
+              />
+              {hoverImageSrc && (
+                <Image
+                  src={hoverImageSrc}
+                  alt={product.name}
+                  fill
+                  draggable={false}
+                  sizes={imageSizes}
+                  className="object-cover opacity-0 scale-[1.01] transition-all duration-500 group-hover:opacity-100 group-hover:scale-[1.05]"
+                />
+              )}
+            </>
           ) : (
             <div className="h-full w-full bg-gray-100" aria-hidden="true" />
           )}

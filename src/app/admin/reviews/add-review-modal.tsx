@@ -41,9 +41,10 @@ export default function AddReviewModal({
     const [isOpen, setIsOpen] = useState(false)
     const [productId, setProductId] = useState("")
     const [search, setSearch] = useState("")
+    const [reviewDate, setReviewDate] = useState("")
     const [status, setStatus] = useState<SubmitStatus>("idle")
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
-    const reviewForm = useReviewForm()
+    const reviewForm = useReviewForm({}, { contentRequired: false })
 
     const selectedProduct = products.find(
         (product) => product.id === productId
@@ -66,6 +67,7 @@ export default function AddReviewModal({
     const resetForm = () => {
         setProductId("")
         setSearch("")
+        setReviewDate("")
         setErrorMessage(null)
         setStatus("idle")
         reviewForm.reset()
@@ -115,6 +117,7 @@ export default function AddReviewModal({
                 display_name: reviewForm.values.displayName,
                 is_anonymous: reviewForm.values.isAnonymous,
                 media: uploadedMedia,
+                review_date: reviewDate || undefined,
             })
 
             if (result?.error) {
@@ -161,7 +164,7 @@ export default function AddReviewModal({
                                 Add Product Review
                             </h2>
                             <p className="mt-1 text-sm text-gray-500">
-                                Create an approved review for any product.
+                                Create an approved review for a product.
                             </p>
                         </div>
                         <button
@@ -199,6 +202,18 @@ export default function AddReviewModal({
                                             variant="admin"
                                         />
 
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-semibold text-gray-700">
+                                                Review Date
+                                            </label>
+                                            <input
+                                                type="date"
+                                                value={reviewDate}
+                                                onChange={(event) => setReviewDate(event.target.value)}
+                                                className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                                            />
+                                        </div>
+
                                         <ReviewTextInput
                                             label="Review Title"
                                             required
@@ -218,6 +233,7 @@ export default function AddReviewModal({
                                                 reviewForm.updateField("content", value)
                                             }
                                             variant="admin"
+                                            required={false}
                                         />
 
                                         <ReviewTextInput

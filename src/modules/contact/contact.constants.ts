@@ -8,7 +8,7 @@ export type ContactHours = {
   sunday: string
 }
 
-export const PRIMARY_CONTACT_NUMBER = "9925819695"
+export const PRIMARY_CONTACT_NUMBER = "9925819692"
 export const PRIMARY_CONTACT_COUNTRY_CODE = "91"
 export const PRIMARY_CONTACT_DISPLAY = `+${PRIMARY_CONTACT_COUNTRY_CODE} ${PRIMARY_CONTACT_NUMBER}`
 export const PRIMARY_CONTACT_E164 = `+${PRIMARY_CONTACT_COUNTRY_CODE}${PRIMARY_CONTACT_NUMBER}`
@@ -74,7 +74,7 @@ export const contactLocations: ContactLocation[] = [
   {
     id: "branch-2-adajan",
     title: "ADAJAN, SURAT",
-    label: "Address",
+    label: "Branch Address",
     addressLines: [
       "Plot No.C/4,C/5, Geetanagar Co.Op.Hou.Society,",
       "Ring Road, Gujarat Gas Circle,",

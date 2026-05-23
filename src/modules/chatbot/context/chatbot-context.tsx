@@ -592,7 +592,7 @@ export function ChatbotProvider({ children }: { children: React.ReactNode }) {
 
             case 'contact_call':
                 addBotMessage(
-                    `📞 **Call Us**\n\n**Main Office:** ${PRIMARY_CONTACT_DISPLAY}\n**Branch 2:** +91 90991 44170\n\n**Hours:**\nMonday – Saturday: 10:00 AM – 10:00 PM\nSunday: Closed`,
+                    `📞 **Call Us**\n\n**Head Office:** ${PRIMARY_CONTACT_DISPLAY}\n\n**Hours:**\nMonday – Saturday: 10:00 AM – 10:00 PM\nSunday: Closed`,
                     [BACK_TO_MENU]
                 )
                 break
@@ -606,7 +606,7 @@ export function ChatbotProvider({ children }: { children: React.ReactNode }) {
 
             case 'contact_locations':
                 addBotMessage(
-                    `📍 **Store Locations**\n\n**HEAD OFFICE - VARACHHA**\nshed no-7/8, sardar campus, opp. River Kent,\nMota Varachha, Surat, Gujarat 394101\n📞 ${PRIMARY_CONTACT_DISPLAY}\n\n**BRANCH 2 - ADAJAN**\nPlot No.C/4,C/5, Geetanagar Co.Op.Hou.Society,\nRing Road, Gujarat Gas Circle,\nAdajan, Surat, Gujarat, 395009\n📞 +91 90991 44170`,
+                    `📍 **Store Location**\n\n**HEAD OFFICE - VARACHHA**\nshed no-7/8, sardar campus, opp. River Kent,\nMota Varachha, Surat, Gujarat 394101\n📞 ${PRIMARY_CONTACT_DISPLAY}`,
                     [BACK_TO_MENU]
                 )
                 break
