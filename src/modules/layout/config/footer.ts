@@ -122,8 +122,9 @@ export const footerBadgeGroups: FooterBadgeGroup[] = [
 ]
 
 export const newsletterCopy = {
-  title: "Subscribe & Save 50% 🔥",
-  description: "Get your Exclusive Coupon code in seconds and Enjoy 50% OFF on Every Product with Free Delivery, only for New Subscribers!",
+  title: "Join Toycker Play Club",
+  description:
+    "Get kid-friendly toy picks, fresh arrivals, and special member deals delivered to your inbox.",
   placeholder: "Enter your email...",
   cta: "Send",
 }

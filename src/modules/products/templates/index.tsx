@@ -11,7 +11,6 @@ import { Product, Region } from "@/lib/supabase/types"
 
 import ProductActionsWrapper from "./product-actions-wrapper"
 import CustomerReviewsServer from "@modules/products/components/customer-reviews/server"
-import OrderInformation from "@modules/products/components/order-information"
 import RecentlyViewedTracker from "@modules/products/components/recently-viewed-tracker"
 import { getProductReviewStats } from "@/lib/actions/reviews"
 import FrequentlyBoughtTogetherServer from "@modules/products/components/frequently-bought-together/server"
@@ -137,7 +136,7 @@ const ProductTemplate = async ({
               />
             </Suspense>
             <div className="mt-6">
-              <OrderInformation />
+              {/* Order information block temporarily hidden. */}
               {(() => {
                 const videoId = getYoutubeId(product.video_url)
                 const embedUrl = getYoutubeEmbedUrl(videoId)
@@ -177,15 +176,17 @@ const ProductTemplate = async ({
             <ProductTabs product={product} />
           </LazyLoadSection>
 
-          <LazyLoadSection minHeight="400px">
-            <Suspense fallback={null}>
-              <CustomerReviewsServer
-                productId={product.id}
-                productHandle={product.handle}
-                productThumbnail={product.thumbnail || product.image_url}
-              />
-            </Suspense>
-          </LazyLoadSection>
+          <section id="product-reviews" className="scroll-mt-32">
+            <LazyLoadSection minHeight="400px">
+              <Suspense fallback={null}>
+                <CustomerReviewsServer
+                  productId={product.id}
+                  productHandle={product.handle}
+                  productThumbnail={product.thumbnail || product.image_url}
+                />
+              </Suspense>
+            </LazyLoadSection>
+          </section>
         </div>
       </div>
 
