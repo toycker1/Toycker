@@ -14,7 +14,12 @@ const initialValues: ReviewFormValues = {
   isAnonymous: false,
 }
 
-export function validateReviewForm(values: ReviewFormValues) {
+export function validateReviewForm(
+  values: ReviewFormValues,
+  options: { contentRequired?: boolean } = {}
+) {
+  const contentRequired = options.contentRequired ?? true
+
   if (values.rating === 0) {
     return "Please select a star rating."
   }
@@ -23,7 +28,7 @@ export function validateReviewForm(values: ReviewFormValues) {
     return "Please enter a review title."
   }
 
-  if (!values.content.trim()) {
+  if (contentRequired && !values.content.trim()) {
     return "Please enter the review details."
   }
 
@@ -34,7 +39,10 @@ export function validateReviewForm(values: ReviewFormValues) {
   return null
 }
 
-export function useReviewForm(defaultValues: Partial<ReviewFormValues> = {}) {
+export function useReviewForm(
+  defaultValues: Partial<ReviewFormValues> = {},
+  options: { contentRequired?: boolean } = {}
+) {
   const [values, setValues] = useState<ReviewFormValues>({
     ...initialValues,
     ...defaultValues,
@@ -103,7 +111,7 @@ export function useReviewForm(defaultValues: Partial<ReviewFormValues> = {}) {
     updateField,
     handleFileChange,
     removeFile,
-    validate: () => validateReviewForm(values),
+    validate: () => validateReviewForm(values, options),
     reset,
   }
 }

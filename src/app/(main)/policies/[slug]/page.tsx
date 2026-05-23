@@ -30,7 +30,7 @@ const POLICY_CONTENT: Record<PolicySlug, { title: string; intro: string; section
           "Eligible products show their return window on the product page, Exchange or Replacement will be done Within 7 days.",
           "Return will be done within 7 business days.",
           "Items must be unused, unwashed, and sent back with original packaging, tags, and accessories for hygiene and quality reasons.",
-          "If Toycker pickup isn’t available in your pin code, self-ship to: Toycker.com Returns Department, Plot No.C/4,C/5, Geetanagar Co.Op.Hou.Society, Ring Road, Gujarat Gas Circle, Adajan, Surat, Gujarat, 395009.",
+          "If Toycker pickup isn’t available in your pin code, self-ship to: Toycker.com Returns Department, shed no-7/8, sardar campus, opp. River Kent, Mota Varachha, Surat, Gujarat 394101.",
         ],
       },
       {
@@ -51,7 +51,7 @@ const POLICY_CONTENT: Record<PolicySlug, { title: string; intro: string; section
         heading: "Need help?",
         body: [
           `Reach Toycker Customer Care at support@toycker.com or ${PRIMARY_CONTACT_DISPLAY}.`,
-          "Postal correspondence: Plot No.C/4,C/5, Geetanagar Co.Op.Hou.Society, Ring Road, Gujarat Gas Circle, Adajan, Surat, Gujarat, 395009.",
+          "Postal correspondence: shed no-7/8, sardar campus, opp. River Kent, Mota Varachha, Surat, Gujarat 394101.",
         ],
       },
     ],
@@ -86,13 +86,13 @@ const POLICY_CONTENT: Record<PolicySlug, { title: string; intro: string; section
         heading: "Delays & support",
         body: [
           "Weather, high volume, or logistics disruptions can add time—thank you for your patience if that happens.",
-          `For help, contact ${PRIMARY_CONTACT_DISPLAY} or support@toycker.com (Plot No.C/4,C/5, Geetanagar Co.Op.Hou.Society, Ring Road, Gujarat Gas Circle, Adajan, Surat, Gujarat, 395009).`,
+          `For help, contact ${PRIMARY_CONTACT_DISPLAY} or support@toycker.com (shed no-7/8, sardar campus, opp. River Kent, Mota Varachha, Surat, Gujarat 394101).`,
         ],
       },
       {
         heading: "Contact information",
         body: [
-          "TOYCKER INDIA, Plot No.C/4,C/5, Geetanagar Co.Op.Hou.Society, Ring Road, Gujarat Gas Circle, Adajan, Surat, Gujarat, 395009",
+          "TOYCKER INDIA, shed no-7/8, sardar campus, opp. River Kent, Mota Varachha, Surat, Gujarat 394101",
           `Phone: ${PRIMARY_CONTACT_DISPLAY} | Email: support@toycker.com`,
         ],
       },
@@ -181,7 +181,7 @@ const POLICY_CONTENT: Record<PolicySlug, { title: string; intro: string; section
       {
         heading: "Contact",
         body: [
-          "TOYCKER INDIA, Plot No.C/4,C/5, Geetanagar Co.Op.Hou.Society, Ring Road, Gujarat Gas Circle, Adajan, Surat, Gujarat, 395009.",
+          "TOYCKER INDIA, shed no-7/8, sardar campus, opp. River Kent, Mota Varachha, Surat, Gujarat 394101.",
           `support@toycker.com | ${PRIMARY_CONTACT_DISPLAY}`,
         ],
       },

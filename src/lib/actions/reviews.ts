@@ -19,6 +19,10 @@ export type ReviewData = {
     }[]
 }
 
+export type AdminReviewData = ReviewData & {
+    review_date?: string
+}
+
 export type ReviewWithMedia = {
     id: string
     product_id: string
@@ -59,7 +63,35 @@ type ProductLookup = {
     handle: string
 }
 
-const validateReviewData = (data: ReviewData) => {
+const isValidReviewDate = (value: string) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return false
+    }
+
+    const parsed = new Date(`${value}T00:00:00.000Z`)
+    return Number.isFinite(parsed.getTime()) && parsed.toISOString().startsWith(value)
+}
+
+const getReviewCreatedAt = (reviewDate?: string) => {
+    const trimmedDate = reviewDate?.trim()
+
+    if (!trimmedDate) {
+        return null
+    }
+
+    if (!isValidReviewDate(trimmedDate)) {
+        return null
+    }
+
+    return `${trimmedDate}T00:00:00.000Z`
+}
+
+const validateReviewData = (
+    data: ReviewData,
+    options: { contentRequired?: boolean; reviewDate?: string } = {}
+) => {
+    const contentRequired = options.contentRequired ?? true
+
     if (!data.product_id) {
         return "Please select a product."
     }
@@ -72,12 +104,16 @@ const validateReviewData = (data: ReviewData) => {
         return "Please enter a review title."
     }
 
-    if (!data.content.trim()) {
+    if (contentRequired && !data.content.trim()) {
         return "Please enter the review details."
     }
 
     if (!data.is_anonymous && !data.display_name.trim()) {
         return "Please enter a display name or post anonymously."
+    }
+
+    if (options.reviewDate && !isValidReviewDate(options.reviewDate)) {
+        return "Please choose a valid review date."
     }
 
     return null
@@ -111,7 +147,7 @@ export async function submitReview(data: ReviewData) {
         return { error: "Failed to verify purchase history. Please try again." }
     }
 
-    // Check if product exists in any of the user's orders
+    // Check whether the product exists in the user's orders
     // Use proper type assertion for items which is JSONB in DB but CartItem[] in app
     const hasPurchased = orders?.some((order) => {
         const items = order.items as unknown as { product_id: string }[]
@@ -153,7 +189,7 @@ export async function submitReview(data: ReviewData) {
 
     const reviewId = insertedReview.id
 
-    // Insert Media if any
+    // Insert media when present
     if (data.media && data.media.length > 0) {
         const mediaInserts = data.media.map((item) => ({
             review_id: reviewId,
@@ -199,7 +235,7 @@ export async function getProductsForAdminReview(): Promise<AdminReviewProduct[]>
     return (data || []) as AdminReviewProduct[]
 }
 
-export async function createAdminReview(data: ReviewData) {
+export async function createAdminReview(data: AdminReviewData) {
     await requirePermission(PERMISSIONS.REVIEWS_UPDATE)
     const supabase = await createClient()
 
@@ -211,7 +247,10 @@ export async function createAdminReview(data: ReviewData) {
         return { error: "You must be logged in as an admin to create a review." }
     }
 
-    const validationError = validateReviewData(data)
+    const validationError = validateReviewData(data, {
+        contentRequired: false,
+        reviewDate: data.review_date,
+    })
     if (validationError) {
         return { error: validationError }
     }
@@ -233,18 +272,35 @@ export async function createAdminReview(data: ReviewData) {
 
     const productLookup = product as ProductLookup
 
+    const createdAt = getReviewCreatedAt(data.review_date)
+    const reviewInsert: {
+        product_id: string
+        user_id: string
+        rating: number
+        title: string
+        content: string
+        display_name: string
+        is_anonymous: boolean
+        approval_status: "approved"
+        created_at?: string
+    } = {
+        product_id: data.product_id,
+        user_id: user.id,
+        rating: data.rating,
+        title: data.title.trim(),
+        content: data.content.trim(),
+        display_name: data.is_anonymous ? "" : data.display_name.trim(),
+        is_anonymous: data.is_anonymous,
+        approval_status: "approved",
+    }
+
+    if (createdAt) {
+        reviewInsert.created_at = createdAt
+    }
+
     const { data: insertedReview, error: insertError } = await supabase
         .from("reviews")
-        .insert({
-            product_id: data.product_id,
-            user_id: user.id,
-            rating: data.rating,
-            title: data.title.trim(),
-            content: data.content.trim(),
-            display_name: data.is_anonymous ? "" : data.display_name.trim(),
-            is_anonymous: data.is_anonymous,
-            approval_status: "approved",
-        })
+        .insert(reviewInsert)
         .select("id")
         .single()
 
