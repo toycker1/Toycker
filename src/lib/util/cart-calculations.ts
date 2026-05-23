@@ -14,6 +14,54 @@ export const roundCurrencyAmount = (amount: number): number => {
     return Math.round((amount + Number.EPSILON) * 100) / 100
 }
 
+export type PartialPaymentSplit = {
+    advancePercentage: number
+    fullOrderAmount: number
+    rawAdvanceAmount: number
+    rawBalanceAmount: number
+    advanceAmount: number
+    balanceAmount: number
+}
+
+export const calculatePartialPaymentSplit = (
+    fullOrderAmount: number,
+    advancePercentage: number
+): PartialPaymentSplit => {
+    const normalizedTotal = roundCurrencyAmount(fullOrderAmount)
+
+    if (
+        normalizedTotal <= 0 ||
+        !Number.isFinite(advancePercentage) ||
+        advancePercentage <= 0 ||
+        advancePercentage >= 100
+    ) {
+        return {
+            advancePercentage,
+            fullOrderAmount: normalizedTotal,
+            rawAdvanceAmount: 0,
+            rawBalanceAmount: 0,
+            advanceAmount: 0,
+            balanceAmount: 0,
+        }
+    }
+
+    const rawAdvanceAmount = roundCurrencyAmount(
+        normalizedTotal * (advancePercentage / 100)
+    )
+    const rawBalanceAmount = roundCurrencyAmount(normalizedTotal - rawAdvanceAmount)
+    const balanceAmount = Math.floor(rawBalanceAmount)
+    const advanceAmount = roundCurrencyAmount(normalizedTotal - balanceAmount)
+
+    return {
+        advancePercentage,
+        fullOrderAmount: normalizedTotal,
+        rawAdvanceAmount,
+        rawBalanceAmount,
+        advanceAmount,
+        balanceAmount,
+    }
+}
+
 export const isFullOnlinePaymentProvider = (
     providerId?: string | null
 ): boolean =>

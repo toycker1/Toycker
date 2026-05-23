@@ -7,6 +7,7 @@ import { ShippingPriceContext } from "@modules/common/context/shipping-price-con
 import { CheckoutContext } from "@modules/checkout/context/checkout-context"
 import { isEasebuzzPartialPayment } from "@/lib/constants"
 import { getPartialPaymentDisplayData } from "@/lib/util/order-pricing"
+import { calculatePartialPaymentSplit } from "@/lib/util/cart-calculations"
 
 type CartTotalsProps = {
   totals: {
@@ -146,11 +147,15 @@ const CartTotals: React.FC<CartTotalsProps> = ({
     !order &&
     isEasebuzzPartialPayment(checkoutCtx?.state.paymentMethod || "") &&
     finalTotal > 0
+  const checkoutPartialSplit = calculatePartialPaymentSplit(
+    finalTotal,
+    checkoutPartialPercentage
+  )
   const checkoutAdvanceAmount = showCheckoutPartialBreakdown
-    ? Math.round(finalTotal * (checkoutPartialPercentage / 100))
+    ? checkoutPartialSplit.advanceAmount
     : 0
   const checkoutBalanceAmount = showCheckoutPartialBreakdown
-    ? Math.max(0, finalTotal - checkoutAdvanceAmount)
+    ? checkoutPartialSplit.balanceAmount
     : 0
 
   return (
