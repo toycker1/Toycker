@@ -37,6 +37,7 @@ import { COLOR_SWATCH_MAP } from "@/lib/constants/colors"
 import { sendProductQuestion } from "@lib/actions/contact-actions"
 import ShareModal from "./share-modal"
 
+const PRODUCT_REVIEWS_SECTION_ID = "product-reviews"
 
 type ProductActionsProps = {
   product: Product
@@ -124,6 +125,22 @@ export default function ProductActions({
       document.body.classList.remove("has-sticky-buy")
     }
   }, [])
+
+  const handleReviewSummaryClick = useCallback(
+    (event: React.MouseEvent<HTMLAnchorElement>) => {
+      event.preventDefault()
+
+      const reviewsSection = document.getElementById(PRODUCT_REVIEWS_SECTION_ID)
+
+      if (!reviewsSection) {
+        return
+      }
+
+      window.history.pushState(null, "", `#${PRODUCT_REVIEWS_SECTION_ID}`)
+      reviewsSection.scrollIntoView({ behavior: "smooth", block: "start" })
+    },
+    []
+  )
 
   const isSimple = isSimpleProduct(product)
 
@@ -635,7 +652,14 @@ export default function ProductActions({
 
           {/* Rating badge */}
           {reviewStats && reviewStats.count > 0 && (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg w-fit border border-amber-200 bg-amber-50">
+            <a
+              href={`#${PRODUCT_REVIEWS_SECTION_ID}`}
+              onClick={handleReviewSummaryClick}
+              aria-label={`Read ${reviewStats.count} product ${
+                reviewStats.count === 1 ? "review" : "reviews"
+              }`}
+              className="flex w-fit items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 transition hover:border-amber-300 hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2"
+            >
               <span className="text-amber-400 text-base" aria-hidden="true">
                 ★
               </span>
@@ -647,7 +671,7 @@ export default function ProductActions({
                 {reviewStats.count}{" "}
                 {reviewStats.count === 1 ? "review" : "reviews"}
               </span>
-            </div>
+            </a>
           )}
         </div>
       </div>
