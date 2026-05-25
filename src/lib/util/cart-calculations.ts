@@ -28,6 +28,8 @@ export const calculatePartialPaymentSplit = (
     advancePercentage: number
 ): PartialPaymentSplit => {
     const normalizedTotal = roundCurrencyAmount(fullOrderAmount)
+    const paisePerRupee = 100
+    const cleanBalanceIncrementPaise = 10 * paisePerRupee
 
     if (
         normalizedTotal <= 0 ||
@@ -45,12 +47,17 @@ export const calculatePartialPaymentSplit = (
         }
     }
 
-    const rawAdvanceAmount = roundCurrencyAmount(
-        normalizedTotal * (advancePercentage / 100)
-    )
-    const rawBalanceAmount = roundCurrencyAmount(normalizedTotal - rawAdvanceAmount)
-    const balanceAmount = Math.floor(rawBalanceAmount)
-    const advanceAmount = roundCurrencyAmount(normalizedTotal - balanceAmount)
+    const totalPaise = Math.round(normalizedTotal * paisePerRupee)
+    const rawAdvancePaise = Math.round(totalPaise * (advancePercentage / 100))
+    const rawBalancePaise = totalPaise - rawAdvancePaise
+    const balancePaise =
+        Math.floor(rawBalancePaise / cleanBalanceIncrementPaise) *
+        cleanBalanceIncrementPaise
+    const advancePaise = totalPaise - balancePaise
+    const rawAdvanceAmount = roundCurrencyAmount(rawAdvancePaise / paisePerRupee)
+    const rawBalanceAmount = roundCurrencyAmount(rawBalancePaise / paisePerRupee)
+    const advanceAmount = roundCurrencyAmount(advancePaise / paisePerRupee)
+    const balanceAmount = roundCurrencyAmount(balancePaise / paisePerRupee)
 
     return {
         advancePercentage,

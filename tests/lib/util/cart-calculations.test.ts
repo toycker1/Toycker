@@ -122,13 +122,25 @@ describe("cart pricing calculations", () => {
     expect(roundCurrencyAmount(1262.599)).toBe(1262.6)
   })
 
-  it("moves partial payment balance decimals into the online advance", () => {
+  it("rounds partial payment cash balance down to the nearest 10 rupees", () => {
+    const split = calculatePartialPaymentSplit(1091.55, 20)
+
+    expect(split.rawAdvanceAmount).toBe(218.31)
+    expect(split.rawBalanceAmount).toBe(873.24)
+    expect(split.advanceAmount).toBe(221.55)
+    expect(split.balanceAmount).toBe(870)
+    expect(roundCurrencyAmount(split.advanceAmount + split.balanceAmount)).toBe(
+      1091.55
+    )
+  })
+
+  it("moves partial payment rounded-balance difference into the online advance", () => {
     const split = calculatePartialPaymentSplit(1329.05, 20)
 
     expect(split.rawAdvanceAmount).toBe(265.81)
     expect(split.rawBalanceAmount).toBe(1063.24)
-    expect(split.advanceAmount).toBe(266.05)
-    expect(split.balanceAmount).toBe(1063)
+    expect(split.advanceAmount).toBe(269.05)
+    expect(split.balanceAmount).toBe(1060)
     expect(roundCurrencyAmount(split.advanceAmount + split.balanceAmount)).toBe(
       1329.05
     )
@@ -139,11 +151,41 @@ describe("cart pricing calculations", () => {
 
     expect(split.rawAdvanceAmount).toBe(436.81)
     expect(split.rawBalanceAmount).toBe(1747.24)
-    expect(split.advanceAmount).toBe(437.05)
-    expect(split.balanceAmount).toBe(1747)
+    expect(split.advanceAmount).toBe(444.05)
+    expect(split.balanceAmount).toBe(1740)
     expect(roundCurrencyAmount(split.advanceAmount + split.balanceAmount)).toBe(
       2184.05
     )
+  })
+
+  it("keeps non-club partial payment totals exact after cash balance rounding", () => {
+    const split = calculatePartialPaymentSplit(1149, 20)
+
+    expect(split.rawAdvanceAmount).toBe(229.8)
+    expect(split.rawBalanceAmount).toBe(919.2)
+    expect(split.advanceAmount).toBe(239)
+    expect(split.balanceAmount).toBe(910)
+    expect(roundCurrencyAmount(split.advanceAmount + split.balanceAmount)).toBe(
+      1149
+    )
+  })
+
+  it("does not adjust partial payment when the cash balance is already clean", () => {
+    const split = calculatePartialPaymentSplit(1000, 20)
+
+    expect(split.rawAdvanceAmount).toBe(200)
+    expect(split.rawBalanceAmount).toBe(800)
+    expect(split.advanceAmount).toBe(200)
+    expect(split.balanceAmount).toBe(800)
+  })
+
+  it("moves the full amount online when the cash balance is below 10 rupees", () => {
+    const split = calculatePartialPaymentSplit(9.99, 20)
+
+    expect(split.rawAdvanceAmount).toBe(2)
+    expect(split.rawBalanceAmount).toBe(7.99)
+    expect(split.advanceAmount).toBe(9.99)
+    expect(split.balanceAmount).toBe(0)
   })
 
   it("returns a safe empty partial payment split for invalid inputs", () => {
