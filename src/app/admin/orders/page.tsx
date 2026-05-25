@@ -11,8 +11,11 @@ import { ClickableTableRow } from "@modules/admin/components/clickable-table-row
 import RealtimeOrdersListener from "@modules/admin/components/realtime-orders-listener"
 import { AdminTableWrapper } from "@modules/admin/components/admin-table-wrapper"
 import { expireStaleEasebuzzPendingPayments } from "@/lib/actions/cancel-pending-payment"
+import {
+  getPaymentMethodDisplay,
+  getPaymentStatusDisplay,
+} from "@/lib/util/payment-status"
 
-// Helper to format payment status for display
 function normalizePaymentMethod(method?: string | null, hasPayuTxn?: string | null, hasGatewayTxn?: string | null) {
   if (!method && hasGatewayTxn) return "easebuzz"
   if (!method && hasPayuTxn) return "payu"
@@ -25,7 +28,7 @@ function normalizePaymentMethod(method?: string | null, hasPayuTxn?: string | nu
   return method
 }
 
-function formatPaymentMethodDisplay(method?: string | null, hasPayuTxn?: string | null, hasGatewayTxn?: string | null) {
+function _formatPaymentMethodDisplay(method?: string | null, hasPayuTxn?: string | null, hasGatewayTxn?: string | null) {
   const normalized = normalizePaymentMethod(method, hasPayuTxn, hasGatewayTxn)
   if (normalized === "easebuzz") return "Easebuzz"
   if (normalized === "easebuzz_partial") return "Easebuzz Partial"
@@ -35,7 +38,7 @@ function formatPaymentMethodDisplay(method?: string | null, hasPayuTxn?: string 
   return label ? label.replace(/\b\w/g, c => c.toUpperCase()) : "—"
 }
 
-function getPaymentBadge(paymentStatus: string, paymentMethod?: string | null, hasPayuTxn?: string | null, orderStatus?: string | null, hasGatewayTxn?: string | null) {
+function _getPaymentBadge(paymentStatus: string, paymentMethod?: string | null, hasPayuTxn?: string | null, orderStatus?: string | null, hasGatewayTxn?: string | null) {
   const normalizedMethod = normalizePaymentMethod(paymentMethod, hasPayuTxn, hasGatewayTxn)
   const isCOD = normalizedMethod === "cod" || normalizedMethod === "manual"
   const isEasebuzz = normalizedMethod === "easebuzz" || normalizedMethod === "easebuzz_partial"
@@ -170,13 +173,14 @@ export default async function AdminOrders({
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
               {orders.length > 0 ? orders.map((order) => {
-                const normalizedMethod = normalizePaymentMethod(order.payment_method, order.payu_txn_id, order.gateway_txn_id)
-                const _isCOD = normalizedMethod === "cod" || normalizedMethod === "manual"
-
-                const paymentBadge = getPaymentBadge(order.payment_status, order.payment_method, order.payu_txn_id, order.status, order.gateway_txn_id)
+                const paymentBadge = getPaymentStatusDisplay({
+                  paymentStatus: order.payment_status,
+                  paymentMethod: order.payment_method,
+                  orderStatus: order.status,
+                })
                 const acceptanceBadge = getAcceptanceBadge(order.status)
                 const fulfillmentBadge = getFulfillmentBadge(order.fulfillment_status)
-                const paymentMethodDisplay = formatPaymentMethodDisplay(order.payment_method, order.payu_txn_id, order.gateway_txn_id)
+                const paymentMethodDisplay = getPaymentMethodDisplay(order.payment_method)
 
                 return (
                   <ClickableTableRow
@@ -211,7 +215,7 @@ export default async function AdminOrders({
                       </AdminBadge>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <AdminBadge variant={paymentBadge.variant}>
+                      <AdminBadge variant={paymentBadge.tone}>
                         {paymentBadge.label}
                       </AdminBadge>
                     </td>

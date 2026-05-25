@@ -4,6 +4,8 @@ import { paymentInfoMap } from "@lib/constants"
 import Divider from "@modules/common/components/divider"
 import { convertToLocale } from "@lib/util/money"
 import { Order } from "@/lib/supabase/types"
+import { getPartialPaymentDisplayData } from "@/lib/util/order-pricing"
+import { getPaymentStatusDisplay } from "@/lib/util/payment-status"
 import { CreditCard, Wallet, Smartphone } from "lucide-react"
 
 type PaymentDetailsProps = {
@@ -61,6 +63,13 @@ const PaymentDetails = ({ order }: PaymentDetailsProps) => {
   }
 
   const paymentInfo = getPaymentInfo()
+  const paymentStatusDisplay = getPaymentStatusDisplay({
+    paymentStatus: order.payment_status,
+    paymentMethod: fallbackPaymentMethod,
+    orderStatus: order.status,
+    metadata: order.metadata,
+  })
+  const partialPaymentData = getPartialPaymentDisplayData(order.metadata)
 
   return (
     <div>
@@ -90,7 +99,25 @@ const PaymentDetails = ({ order }: PaymentDetailsProps) => {
               <Text className="text-sm font-medium text-gray-500 mb-2">
                 Details
               </Text>
-              {paymentInfo.cardLast4 ? (
+              {partialPaymentData ? (
+                <div className="space-y-1 text-base font-medium text-gray-900">
+                  <Text>{paymentStatusDisplay.label}</Text>
+                  <Text>
+                    Advance paid:{" "}
+                    {convertToLocale({
+                      amount: partialPaymentData.advanceAmount,
+                      currency_code: order.currency_code,
+                    })}
+                  </Text>
+                  <Text>
+                    Balance remaining:{" "}
+                    {convertToLocale({
+                      amount: partialPaymentData.balanceRemainingAmount,
+                      currency_code: order.currency_code,
+                    })}
+                  </Text>
+                </div>
+              ) : paymentInfo.cardLast4 ? (
                 <Text className="text-base font-medium text-gray-900" data-testid="payment-card">
                   Ending in {paymentInfo.cardLast4}
                 </Text>
@@ -104,7 +131,7 @@ const PaymentDetails = ({ order }: PaymentDetailsProps) => {
                 </Text>
               ) : (
                 <Text className="text-base font-medium text-gray-900">
-                  Payment completed successfully
+                  {paymentStatusDisplay.label}
                 </Text>
               )}
             </div>

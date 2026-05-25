@@ -42,6 +42,7 @@ type LogisticsOrderSummary = Pick<
   | "currency_code"
   | "created_at"
   | "shipping_address"
+  | "metadata"
 >
 
 export type TrivaraLogisticsRecord = TrivaraOrderBooking & {
@@ -636,7 +637,7 @@ export async function getTrivaraLogisticsRecords(
     const { data: orders, error: ordersError } = await supabase
       .from("orders")
       .select(
-        "id, display_id, customer_email, status, payment_method, payment_status, total_amount, currency_code, created_at, shipping_address"
+        "id, display_id, customer_email, status, payment_method, payment_status, total_amount, currency_code, created_at, shipping_address, metadata"
       )
       .in("id", orderIds)
 
@@ -680,7 +681,7 @@ export async function getTrivaraLogisticsRecord(
   const { data: order, error } = await supabase
     .from("orders")
     .select(
-      "id, display_id, customer_email, status, payment_method, payment_status, total_amount, currency_code, created_at, shipping_address"
+      "id, display_id, customer_email, status, payment_method, payment_status, total_amount, currency_code, created_at, shipping_address, metadata"
     )
     .eq("id", orderId)
     .maybeSingle()
