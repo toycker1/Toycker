@@ -15,13 +15,18 @@ export type PriceRangeFilter = {
   max?: number
 }
 
+export type PriceRangeBounds = {
+  min: number
+  max: number
+}
+
 export type ViewMode = "grid-4" | "grid-5" | "list"
 
 export const isViewMode = (value: unknown): value is ViewMode =>
   value === "grid-4" || value === "grid-5" || value === "list"
 
-export const PRICE_SLIDER_LIMITS = {
+export const PRICE_SLIDER_CONFIG = {
   min: 0,
-  max: 2000,
+  defaultMax: 2000,
   step: 10,
 }
