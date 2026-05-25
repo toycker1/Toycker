@@ -1,4 +1,7 @@
-import { listPaginatedProducts } from "@lib/data/products"
+import {
+  getStorefrontPriceBounds,
+  listPaginatedProducts,
+} from "@lib/data/products"
 import {
   AvailabilityFilter,
   PriceRangeFilter,
@@ -84,16 +87,24 @@ const StoreTemplate = async ({
   const effectiveProductQueryParams: Record<string, string | string[] | undefined> | undefined =
     Object.keys(productQueryParams).length ? productQueryParams : undefined
 
-  const productListing = await listPaginatedProducts({
-    page: pageNumber,
-    limit: STORE_PRODUCT_PAGE_SIZE,
-    queryParams: effectiveProductQueryParams,
-    sortBy: sort,
-    countryCode,
-    availability,
-    priceFilter: priceRange,
-    ageFilter: normalizedAgeFilter,
-  })
+  const [productListing, initialPriceBounds] = await Promise.all([
+    listPaginatedProducts({
+      page: pageNumber,
+      limit: STORE_PRODUCT_PAGE_SIZE,
+      queryParams: effectiveProductQueryParams,
+      sortBy: sort,
+      countryCode,
+      availability,
+      priceFilter: priceRange,
+      ageFilter: normalizedAgeFilter,
+    }),
+    getStorefrontPriceBounds({
+      countryCode,
+      queryParams: effectiveProductQueryParams,
+      availability,
+      ageFilter: normalizedAgeFilter,
+    }),
+  ])
 
   const {
     response: { products: initialProducts, count: initialCount },
@@ -131,6 +142,7 @@ const StoreTemplate = async ({
       }}
       initialProducts={initialProducts}
       initialCount={initialCount}
+      initialPriceBounds={initialPriceBounds}
       pageSize={STORE_PRODUCT_PAGE_SIZE}
     >
       <FilterDrawer

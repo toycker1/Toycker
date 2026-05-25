@@ -1,10 +1,21 @@
 "use client"
 
+import * as Slider from "@radix-ui/react-slider"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { ChangeEvent, ReactNode, useEffect, useMemo, useState } from "react"
+import { ReactNode, useEffect, useMemo, useState } from "react"
 import { useOptionalStorefrontFilters } from "@modules/store/context/storefront-filters"
 
-import { AvailabilityFilter, PRICE_SLIDER_LIMITS } from "./types"
+import {
+  getPriceSliderDomain,
+  getPriceSliderValues,
+  toCommittedPriceRange,
+} from "@modules/store/utils/price-range"
+
+import {
+  AvailabilityFilter,
+  PRICE_SLIDER_CONFIG,
+  PriceRangeBounds,
+} from "./types"
 
 export type ActiveFilter = {
   label: string
@@ -37,6 +48,7 @@ export type RefinementListProps = {
   activeFilters?: ActiveFilter[]
   filterOptions?: FilterConfig
   selectedFilters?: SelectedFilters
+  priceBounds?: PriceRangeBounds
   onFiltersChange?: (_next: SelectedFilters) => void
 }
 
@@ -53,28 +65,24 @@ const currencyFormatter = new Intl.NumberFormat("en-IN", {
 
 const formatCurrency = (value: number) => currencyFormatter.format(value)
 
-const clampToBounds = (value: number | undefined, bounds: typeof PRICE_SLIDER_LIMITS) => {
-  if (value === undefined || Number.isNaN(value)) {
+const normalizePriceValue = (value: number | undefined) => {
+  if (value === undefined || Number.isNaN(value) || !Number.isFinite(value)) {
     return undefined
   }
 
-  return Math.min(Math.max(value, bounds.min), bounds.max)
+  return Math.max(value, PRICE_SLIDER_CONFIG.min)
 }
 
 const normalizePriceRange = (
-  range: PriceRangeState,
-  bounds: typeof PRICE_SLIDER_LIMITS = PRICE_SLIDER_LIMITS,
-  activeField?: "min" | "max"
+  range: PriceRangeState
 ): PriceRangeState => {
-  let min = clampToBounds(range.min, bounds)
-  let max = clampToBounds(range.max, bounds)
+  let min = normalizePriceValue(range.min)
+  let max = normalizePriceValue(range.max)
 
-  if (min !== undefined && max !== undefined) {
-    if (activeField === "min" && min > max) {
-      max = min
-    } else if (activeField === "max" && max < min) {
-      min = max
-    }
+  if (min !== undefined && max !== undefined && min > max) {
+    const previousMin = min
+    min = max
+    max = previousMin
   }
 
   return {
@@ -88,6 +96,7 @@ const RefinementList = ({
   activeFilters,
   filterOptions,
   selectedFilters,
+  priceBounds,
   onFiltersChange,
 }: RefinementListProps) => {
   const router = useRouter()
@@ -95,7 +104,6 @@ const RefinementList = ({
   const searchParams = useSearchParams()
   const storefrontFilters = useOptionalStorefrontFilters()
 
-  const sliderBounds = PRICE_SLIDER_LIMITS
   const fallbackFilters = selectedFilters ?? {}
   const shouldUseCustomState = Boolean(onFiltersChange)
   const effectiveFilters = shouldUseCustomState
@@ -116,28 +124,37 @@ const RefinementList = ({
   const selectedAge = effectiveFilters.age
   const selectedPriceMin = effectiveFilters.priceMin
   const selectedPriceMax = effectiveFilters.priceMax
+  const effectivePriceBounds = storefrontFilters?.priceBounds ?? priceBounds
+  const selectedPriceRange = useMemo(
+    () => ({
+      min: selectedPriceMin,
+      max: selectedPriceMax,
+    }),
+    [selectedPriceMin, selectedPriceMax]
+  )
+  const priceSliderDomain = useMemo(
+    () => getPriceSliderDomain({
+      bounds: effectivePriceBounds,
+      selectedRange: selectedPriceRange,
+    }),
+    [effectivePriceBounds, selectedPriceRange]
+  )
 
   const [priceRange, setPriceRange] = useState<PriceRangeState>(() =>
-    normalizePriceRange(
-      {
-        min: selectedPriceMin ?? sliderBounds.min,
-        max: selectedPriceMax ?? sliderBounds.max,
-      },
-      sliderBounds
-    )
+    normalizePriceRange({
+      min: selectedPriceMin,
+      max: selectedPriceMax,
+    })
   )
 
   useEffect(() => {
     setPriceRange(
-      normalizePriceRange(
-        {
-          min: selectedPriceMin ?? sliderBounds.min,
-          max: selectedPriceMax ?? sliderBounds.max,
-        },
-        sliderBounds
-      )
+      normalizePriceRange({
+        min: selectedPriceMin,
+        max: selectedPriceMax,
+      })
     )
-  }, [selectedPriceMin, selectedPriceMax, sliderBounds])
+  }, [selectedPriceMin, selectedPriceMax])
 
   const pushWithParams = (params: URLSearchParams) => {
     const queryString = params.toString()
@@ -231,26 +248,23 @@ const RefinementList = ({
   }
 
   const commitPriceRange = (range: PriceRangeState) => {
+    const nextPrice = toCommittedPriceRange(range, priceSliderDomain)
+
     if (!shouldUseCustomState && storefrontFilters) {
-      const min = range.min !== undefined && range.min > sliderBounds.min ? Math.round(range.min) : undefined
-      const max = range.max !== undefined && range.max < sliderBounds.max ? Math.round(range.max) : undefined
       storefrontFilters.setPriceRange(
-        min === undefined && max === undefined
+        nextPrice.min === undefined && nextPrice.max === undefined
           ? undefined
-          : {
-            min,
-            max,
-          }
+          : nextPrice
       )
       updateSearchParams((params) => {
-        if (min !== undefined) {
-          params.set("price_min", min.toString())
+        if (nextPrice.min !== undefined) {
+          params.set("price_min", nextPrice.min.toString())
         } else {
           params.delete("price_min")
         }
 
-        if (max !== undefined) {
-          params.set("price_max", max.toString())
+        if (nextPrice.max !== undefined) {
+          params.set("price_max", nextPrice.max.toString())
         } else {
           params.delete("price_max")
         }
@@ -259,26 +273,24 @@ const RefinementList = ({
     }
 
     if (onFiltersChange) {
-      const min = range.min !== undefined && range.min > sliderBounds.min ? Math.round(range.min) : undefined
-      const max = range.max !== undefined && range.max < sliderBounds.max ? Math.round(range.max) : undefined
       onFiltersChange({
         ...effectiveFilters,
-        priceMin: min,
-        priceMax: max,
+        priceMin: nextPrice.min,
+        priceMax: nextPrice.max,
       })
       return
     }
 
     const params = new URLSearchParams(searchParams)
 
-    if (range.min !== undefined && range.min > sliderBounds.min) {
-      params.set("price_min", Math.round(range.min).toString())
+    if (nextPrice.min !== undefined) {
+      params.set("price_min", nextPrice.min.toString())
     } else {
       params.delete("price_min")
     }
 
-    if (range.max !== undefined && range.max < sliderBounds.max) {
-      params.set("price_max", Math.round(range.max).toString())
+    if (nextPrice.max !== undefined) {
+      params.set("price_max", nextPrice.max.toString())
     } else {
       params.delete("price_max")
     }
@@ -287,15 +299,9 @@ const RefinementList = ({
     pushWithParams(params)
   }
 
-  const updatePriceRange = (field: "min" | "max", value: number | undefined, commit?: boolean) => {
-    const next = normalizePriceRange(
-      {
-        ...priceRange,
-        [field]: clampToBounds(value, sliderBounds),
-      },
-      sliderBounds,
-      field
-    )
+  const updatePriceRangeValues = (values: number[], commit?: boolean) => {
+    const [min, max] = values
+    const next = normalizePriceRange({ min, max })
     setPriceRange(next)
 
     if (commit) {
@@ -327,11 +333,11 @@ const RefinementList = ({
     appendChip("age", selectedAge, filterOptions?.ages)
 
     if (selectedPriceMin !== undefined || selectedPriceMax !== undefined) {
-      const formattedMin = formatCurrency(selectedPriceMin ?? sliderBounds.min)
-      const formattedMax = formatCurrency(selectedPriceMax ?? sliderBounds.max)
+      const formattedMin = formatCurrency(selectedPriceMin ?? PRICE_SLIDER_CONFIG.min)
+      const formattedMax = selectedPriceMax !== undefined ? formatCurrency(selectedPriceMax) : "No limit"
       chips.push({
-        label: `Price: ${formattedMin} – ${formattedMax}`,
-        value: `${selectedPriceMin ?? sliderBounds.min}-${selectedPriceMax ?? sliderBounds.max}`,
+        label: `Price: ${formattedMin} - ${formattedMax}`,
+        value: `${selectedPriceMin ?? PRICE_SLIDER_CONFIG.min}-${selectedPriceMax ?? "max"}`,
         paramKey: ["price_min", "price_max"],
       })
     }
@@ -353,7 +359,6 @@ const RefinementList = ({
     selectedAge,
     selectedPriceMin,
     selectedPriceMax,
-    sliderBounds,
   ])
 
   const clearFilter = (paramKey: string | string[]) => {
@@ -436,7 +441,7 @@ const RefinementList = ({
                 aria-label={`Remove ${filter.label}`}
               >
                 <span>{filter.label}</span>
-                <span className="text-gray-400 font-bold">✕</span>
+                <span className="text-gray-400 font-bold">x</span>
               </button>
             ))}
           </div>
@@ -455,9 +460,9 @@ const RefinementList = ({
 
           <FilterSection title="Price">
             <PriceRangeControls
-              sliderBounds={sliderBounds}
               priceRange={priceRange}
-              onRangeChange={updatePriceRange}
+              priceSliderDomain={priceSliderDomain}
+              onRangeValuesChange={updatePriceRangeValues}
             />
           </FilterSection>
 
@@ -523,90 +528,54 @@ const CheckboxGroup = ({
 )
 
 const PriceRangeControls = ({
-  sliderBounds,
   priceRange,
-  onRangeChange,
+  priceSliderDomain,
+  onRangeValuesChange,
 }: {
-  sliderBounds: typeof PRICE_SLIDER_LIMITS
   priceRange: PriceRangeState
-  onRangeChange: (_field: "min" | "max", _value: number | undefined, _commit?: boolean) => void
+  priceSliderDomain: { min: number; max: number }
+  onRangeValuesChange: (_values: number[], _commit?: boolean) => void
 }) => {
-  const handleInputChange = (field: "min" | "max", event: ChangeEvent<HTMLInputElement>) => {
-    const value = event.target.value === "" ? undefined : Number(event.target.value)
-    onRangeChange(field, Number.isNaN(value as number) ? undefined : value)
+  const sliderValues = getPriceSliderValues(priceRange, priceSliderDomain)
+
+  const handleSliderChange = (values: number[]) => {
+    onRangeValuesChange(values)
+  }
+
+  const handleSliderCommit = (values: number[]) => {
+    onRangeValuesChange(values, true)
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <InputField
-          value={priceRange.min ?? sliderBounds.min}
-          onChange={(event) => handleInputChange("min", event)}
-          onBlur={() => onRangeChange("min", priceRange.min, true)}
+    <div className="space-y-3">
+      <Slider.Root
+        className="relative flex h-6 w-full touch-none select-none items-center"
+        min={priceSliderDomain.min}
+        max={priceSliderDomain.max}
+        step={PRICE_SLIDER_CONFIG.step}
+        value={sliderValues}
+        minStepsBetweenThumbs={1}
+        onValueChange={handleSliderChange}
+        onValueCommit={handleSliderCommit}
+        aria-label="Price range"
+      >
+        <Slider.Track className="relative h-1 w-full grow overflow-hidden rounded-full bg-gray-200">
+          <Slider.Range className="absolute h-full rounded-full bg-slate-900" />
+        </Slider.Track>
+        <Slider.Thumb
+          className="block h-4 w-4 rounded-full border-2 border-slate-900 bg-white shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
+          aria-label="Start price range"
         />
-        <span className="text-sm text-ui-fg-muted">—</span>
-        <InputField
-          value={priceRange.max ?? sliderBounds.max}
-          onChange={(event) => handleInputChange("max", event)}
-          onBlur={() => onRangeChange("max", priceRange.max, true)}
+        <Slider.Thumb
+          className="block h-4 w-4 rounded-full border-2 border-slate-900 bg-white shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
+          aria-label="End price range"
         />
-      </div>
-
-      <div className="space-y-3">
-        <div className="relative h-6">
-          <input
-            type="range"
-            min={sliderBounds.min}
-            max={sliderBounds.max}
-            step={sliderBounds.step}
-            value={priceRange.min ?? sliderBounds.min}
-            onChange={(event) => onRangeChange("min", Number(event.target.value))}
-            onMouseUp={(event) => onRangeChange("min", Number((event.target as HTMLInputElement).value), true)}
-            onTouchEnd={(event) => onRangeChange("min", Number((event.target as HTMLInputElement).value), true)}
-            className="absolute inset-0 h-6 w-full appearance-none bg-transparent"
-            style={{ accentColor: "#0f172a" }}
-          />
-          <input
-            type="range"
-            min={sliderBounds.min}
-            max={sliderBounds.max}
-            step={sliderBounds.step}
-            value={priceRange.max ?? sliderBounds.max}
-            onChange={(event) => onRangeChange("max", Number(event.target.value))}
-            onMouseUp={(event) => onRangeChange("max", Number((event.target as HTMLInputElement).value), true)}
-            onTouchEnd={(event) => onRangeChange("max", Number((event.target as HTMLInputElement).value), true)}
-            className="absolute inset-0 h-6 w-full appearance-none bg-transparent"
-            style={{ accentColor: "#0f172a" }}
-          />
-          <div className="pointer-events-none absolute left-0 right-0 top-1/2 -translate-y-1/2 rounded-full border border-slate-900" />
-        </div>
-        <p className="text-sm font-medium text-slate-900">
-          Price: {formatCurrency(priceRange.min ?? sliderBounds.min)} – {formatCurrency(priceRange.max ?? sliderBounds.max)}
-        </p>
-      </div>
+      </Slider.Root>
+      <p className="text-sm font-medium text-slate-900">
+        Price: {formatCurrency(sliderValues[0])} - {formatCurrency(sliderValues[1])}
+      </p>
     </div>
   )
 }
-
-const InputField = ({
-  value,
-  onChange,
-  onBlur,
-}: {
-  value: number
-  onChange: (_event: ChangeEvent<HTMLInputElement>) => void
-  onBlur: () => void
-}) => (
-  <div className="flex flex-1 items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 shadow-sm transition-all focus-within:border-slate-900 focus-within:ring-1 focus-within:ring-slate-900">
-    <span className="text-xs font-bold text-gray-400">₹</span>
-    <input
-      type="number"
-      value={value}
-      onChange={onChange}
-      onBlur={onBlur}
-      className="w-full border-none bg-transparent p-0 text-sm font-bold text-slate-900 outline-none focus:ring-0"
-    />
-  </div>
-)
 
 export default RefinementList

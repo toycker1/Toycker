@@ -1,9 +1,17 @@
 import { notFound } from "next/navigation"
 
-import { listPaginatedProducts } from "@lib/data/products"
+import {
+  getStorefrontPriceBounds,
+  listPaginatedProducts,
+} from "@lib/data/products"
 import { Category } from "@/lib/supabase/types"
 import InteractiveLink from "@modules/common/components/interactive-link"
-import { SortOptions, ViewMode } from "@modules/store/components/refinement-list/types"
+import {
+  AvailabilityFilter,
+  PriceRangeFilter,
+  SortOptions,
+  ViewMode,
+} from "@modules/store/components/refinement-list/types"
 import ProductGridSection from "@modules/store/components/product-grid-section"
 import { StorefrontFiltersProvider } from "@modules/store/context/storefront-filters"
 import { STORE_PRODUCT_PAGE_SIZE } from "@modules/store/constants"
@@ -12,6 +20,8 @@ import Breadcrumbs from "@modules/common/components/breadcrumbs"
 
 export default async function CategoryTemplate({
   category,
+  availability,
+  priceRange,
   sortBy,
   page,
   viewMode,
@@ -19,6 +29,8 @@ export default async function CategoryTemplate({
   clubDiscountPercentage,
 }: {
   category: Category
+  availability?: AvailabilityFilter
+  priceRange?: PriceRangeFilter
   sortBy?: SortOptions
   page?: string
   viewMode?: ViewMode
@@ -31,15 +43,24 @@ export default async function CategoryTemplate({
   const sort = sortBy || "featured"
   const resolvedViewMode = viewMode || "grid-4"
 
-  const [productListing] = await Promise.all([
+  const queryParams = {
+    category_id: [category.id],
+  }
+
+  const [productListing, initialPriceBounds] = await Promise.all([
     listPaginatedProducts({
       page: pageNumber,
       limit: STORE_PRODUCT_PAGE_SIZE,
       sortBy: sort,
       countryCode,
-      queryParams: {
-        category_id: [category.id],
-      },
+      availability,
+      priceFilter: priceRange,
+      queryParams,
+    }),
+    getStorefrontPriceBounds({
+      countryCode,
+      availability,
+      queryParams,
     }),
   ])
   const {
@@ -74,16 +95,26 @@ export default async function CategoryTemplate({
     <StorefrontFiltersProvider
       countryCode={countryCode}
       initialFilters={{
+        availability,
+        priceRange,
         sortBy: sort,
         page: pageNumber,
         viewMode: resolvedViewMode,
       }}
       initialProducts={initialProducts}
       initialCount={initialCount}
+      initialPriceBounds={initialPriceBounds}
       pageSize={STORE_PRODUCT_PAGE_SIZE}
       fixedCategoryId={category.id}
     >
-      <FilterDrawer filterOptions={{ availability: availabilityOptions }}>
+      <FilterDrawer
+        selectedFilters={{
+          availability,
+          priceMin: priceRange?.min,
+          priceMax: priceRange?.max,
+        }}
+        filterOptions={{ availability: availabilityOptions }}
+      >
         <div className="mx-auto p-4 max-w-[1440px] pb-10 w-full" data-testid="category-container">
           <Breadcrumbs items={breadcrumbItems} className="mb-6 hidden small:block" />
           <h1 className="mb-4 text-3xl font-semibold" data-testid="category-page-title">{category.name}</h1>
