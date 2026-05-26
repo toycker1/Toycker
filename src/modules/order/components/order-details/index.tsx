@@ -1,4 +1,5 @@
 import { Order } from "@/lib/supabase/types"
+import { getPaymentStatusDisplay } from "@/lib/util/payment-status"
 import { Text } from "@modules/common/components/text"
 
 type OrderDetailsProps = {
@@ -8,51 +9,26 @@ type OrderDetailsProps = {
 }
 
 const OrderDetails = ({ order, customerPhone }: OrderDetailsProps) => {
-  const isCOD =
-    order.payment_method?.toLowerCase().includes("cod") ||
-    order.payment_method?.toLowerCase().includes("cash") ||
-    (order.metadata?.payment_method as string)?.toLowerCase() === "cod"
-
   const rewardsEarned = (order.metadata?.rewards_earned as number) || 0
 
-  const rawPaymentStatus = (order.payment_status || "").toLowerCase()
-  const isOrderCancelled = order.status === "cancelled" || order.status === "failed"
-
-  const normalizedPaymentStatus = (() => {
-    if (isOrderCancelled && (rawPaymentStatus === "" || rawPaymentStatus === "pending" || rawPaymentStatus === "awaiting")) {
-      return "cancelled"
-    }
-    return rawPaymentStatus || (isOrderCancelled ? "cancelled" : "pending")
-  })()
+  const paymentStatusDisplay = getPaymentStatusDisplay({
+    paymentStatus: order.payment_status,
+    paymentMethod:
+      order.payment_method || (order.metadata?.payment_method as string | undefined),
+    orderStatus: order.status,
+    metadata: order.metadata,
+  })
 
   const paymentTone =
-    normalizedPaymentStatus === "failed" || normalizedPaymentStatus === "cancelled"
+    paymentStatusDisplay.tone === "error"
       ? "bg-red-100 text-red-700 border border-red-200"
-      : normalizedPaymentStatus === "refunded"
+      : paymentStatusDisplay.tone === "neutral"
         ? "bg-slate-100 text-slate-700 border border-slate-200"
-        : normalizedPaymentStatus === "pending"
+        : paymentStatusDisplay.tone === "warning"
           ? "bg-amber-100 text-amber-700 border border-amber-200"
+          : paymentStatusDisplay.tone === "info"
+            ? "bg-blue-100 text-blue-700 border border-blue-200"
           : "bg-emerald-100 text-emerald-700 border border-emerald-200"
-
-  const paymentLabel = isCOD
-    ? normalizedPaymentStatus === "paid" || normalizedPaymentStatus === "captured"
-      ? "Paid"
-      : normalizedPaymentStatus === "cancelled" || normalizedPaymentStatus === "failed"
-        ? "COD Cancelled"
-        : normalizedPaymentStatus === "refunded"
-          ? "COD Refunded"
-          : "COD Pending"
-    : normalizedPaymentStatus === "paid" || normalizedPaymentStatus === "captured"
-      ? "Paid"
-    : normalizedPaymentStatus === "partially_paid"
-      ? "Partial Paid - Balance Due"
-    : normalizedPaymentStatus === "cancelled" || normalizedPaymentStatus === "failed"
-        ? normalizedPaymentStatus === "failed"
-          ? "Incomplete Transaction"
-          : "Payment Cancelled"
-        : normalizedPaymentStatus === "refunded"
-          ? "Refunded"
-          : "Pending"
 
   return (
     <div className="flex flex-col gap-y-8">
@@ -105,7 +81,7 @@ const OrderDetails = ({ order, customerPhone }: OrderDetailsProps) => {
             <span
               className={`px-4 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider shadow-sm ${paymentTone}`}
             >
-              {paymentLabel}
+              {paymentStatusDisplay.label}
             </span>
           </div>
         </div>

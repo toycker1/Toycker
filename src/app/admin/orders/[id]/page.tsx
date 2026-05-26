@@ -12,6 +12,10 @@ import AdminCard from "@modules/admin/components/admin-card"
 import AdminBadge from "@modules/admin/components/admin-badge"
 import { convertToLocale } from "@lib/util/money"
 import { getPartialPaymentDisplayData } from "@/lib/util/order-pricing"
+import {
+  getPaymentMethodDisplay,
+  getPaymentStatusDisplay,
+} from "@/lib/util/payment-status"
 import Image from "next/image"
 import FulfillmentModal from "./fulfillment-modal"
 import { MarkAsPaidButton } from "./mark-as-paid-button"
@@ -292,7 +296,7 @@ export default async function AdminOrderDetails({ params, searchParams }: Props)
     const payload = order.metadata.easebuzz_payload as Record<string, string>
     const mode = payload.mode ? (modeMap[payload.mode] || payload.mode) : ""
     const bank = payload.bankcode && payload.bankcode !== 'UPI' ? ` (${payload.bankcode})` : ""
-    paymentMethod = `Easebuzz - ${mode}${bank}`.trim()
+    paymentMethod = `${getPaymentMethodDisplay(order.payment_method)} - ${mode}${bank}`.trim()
   } else if (order.payu_txn_id && order.metadata?.payu_payload) {
     const payload = order.metadata.payu_payload as Record<string, string>
     const mode = payload.mode ? (modeMap[payload.mode] || payload.mode) : ""
@@ -310,13 +314,17 @@ export default async function AdminOrderDetails({ params, searchParams }: Props)
 
   const normalizedMethod = normalizePaymentMethod(order.payment_method, order.payu_txn_id, order.gateway_txn_id)
   const isCodPayment = normalizedMethod === "cod" || normalizedMethod === "manual"
-  const isEasebuzzPayment =
-    normalizedMethod === "easebuzz" || normalizedMethod === "easebuzz_partial"
   const paymentStatusPending = ["pending", "awaiting", "unpaid"].includes(normalizedPaymentStatus)
   const canMarkAsPaid = !isCodPayment && paymentStatusPending && order.status === "delivered"
   const isPartialPayment = normalizedMethod === "easebuzz_partial"
   const canMarkBalancePaid =
     isPartialPayment && normalizedPaymentStatus === "partially_paid"
+  const paymentStatusDisplay = getPaymentStatusDisplay({
+    paymentStatus: order.payment_status,
+    paymentMethod: order.payment_method,
+    orderStatus: order.status,
+    metadata: order.metadata,
+  })
 
   const rewardsUsed = Number(order.metadata?.rewards_used || 0)
   const orderMetadata = (order.metadata || {}) as Record<string, unknown>
@@ -519,28 +527,7 @@ export default async function AdminOrderDetails({ params, searchParams }: Props)
                 <div>
                   <p className="text-sm font-bold text-gray-900">{paymentMethod}</p>
                   <p className="text-xs text-gray-500">
-                    {paymentMethod.includes('Cash on Delivery') || paymentMethod.includes('Manual')
-                      ? normalizedPaymentStatus === 'paid' || normalizedPaymentStatus === 'captured'
-                        ? 'Paid'
-                        : normalizedPaymentStatus === 'cancelled' || normalizedPaymentStatus === 'failed'
-                          ? 'COD - Cancelled'
-                          : normalizedPaymentStatus === 'refunded'
-                            ? 'COD - Refunded'
-                            : 'COD - Pending'
-                      : normalizedPaymentStatus === 'paid' || normalizedPaymentStatus === 'captured'
-                        ? 'Paid'
-                      : normalizedPaymentStatus === 'partially_paid'
-                        ? 'Partial Paid - Balance Due'
-                      : normalizedPaymentStatus === 'cancelled' || normalizedPaymentStatus === 'failed'
-                          ? normalizedPaymentStatus === 'failed' && isEasebuzzPayment
-                            ? 'Incomplete Transaction'
-                            : normalizedPaymentStatus === 'failed'
-                              ? 'Payment Failed'
-                              : 'Payment Cancelled'
-                          : normalizedPaymentStatus === 'refunded'
-                            ? 'Refunded'
-                            : (normalizedPaymentStatus?.charAt(0).toUpperCase() + normalizedPaymentStatus?.slice(1) || '—')
-                    }
+                    {paymentStatusDisplay.label}
                   </p>
                 </div>
               </div>
@@ -568,9 +555,9 @@ export default async function AdminOrderDetails({ params, searchParams }: Props)
                         amount: partialPaymentData.advanceAmount,
                         currency_code: order.currency_code,
                       })}
-                      {partialPaymentData.advancePercentage
+                      {/* {partialPaymentData.advancePercentage
                         ? ` (${partialPaymentData.advancePercentage}%)`
-                        : ""}
+                        : ""} */}
                     </span>
                   </div>
                   <div className="flex justify-between gap-3 text-sm">

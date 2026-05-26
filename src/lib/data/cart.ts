@@ -31,6 +31,8 @@ import {
   calculateCartTotals,
   CartShippingMethod,
   DatabaseCartItem,
+  calculatePartialPaymentSplit,
+  isFullOnlinePaymentProvider,
 } from "@/lib/util/cart-calculations"
 
 type CartWriteContext = {
@@ -671,7 +673,7 @@ export async function retrieveCartRaw(cartId?: string): Promise<Cart | null> {
     )?.provider_id
 
   let paymentDiscountPercentage = 0
-  if (selectedPaymentProviderId) {
+  if (isFullOnlinePaymentProvider(selectedPaymentProviderId)) {
     const { data: provider } = await supabase
       .from("payment_providers")
       .select("discount_percentage")
@@ -1701,6 +1703,7 @@ export async function initiatePaymentSession(
     const fullOrderAmount = Number(cart.total || 0)
     let advancePercentage: number | null = null
     let payableAmount = fullOrderAmount
+    let balanceAmount = 0
 
     if (data.provider_id === "pp_easebuzz_partial_payment") {
       const { data: providerConfig, error: providerError } = await supabase
@@ -1728,10 +1731,14 @@ export async function initiatePaymentSession(
       }
 
       advancePercentage = configuredPercentage
-      payableAmount = Math.round(fullOrderAmount * (configuredPercentage / 100))
+      const partialPaymentSplit = calculatePartialPaymentSplit(
+        fullOrderAmount,
+        configuredPercentage
+      )
+      payableAmount = partialPaymentSplit.advanceAmount
+      balanceAmount = partialPaymentSplit.balanceAmount
     }
 
-    const balanceAmount = Math.max(0, fullOrderAmount - payableAmount)
     const amount = payableAmount.toFixed(2)
     const productinfo = "Store Order"
     const checkoutCustomerAddress =

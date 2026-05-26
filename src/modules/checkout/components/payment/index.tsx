@@ -9,6 +9,7 @@ import {
   isTemporarilyDisabledPaymentMethod,
   paymentInfoMap,
 } from "@lib/constants"
+import { calculatePartialPaymentSplit } from "@lib/util/cart-calculations"
 import { convertToLocale } from "@lib/util/money"
 import { Text } from "@modules/common/components/text"
 import ErrorMessage from "@modules/checkout/components/error-message"
@@ -78,14 +79,19 @@ const Payment = ({
         ? percentage
         : 20
     const total = Number(cart.total || 0)
-    const advanceAmount = Math.round(total * (normalizedPercentage / 100))
-    const balanceAmount = Math.max(0, total - advanceAmount)
+    const partialPaymentSplit = calculatePartialPaymentSplit(
+      total,
+      normalizedPercentage
+    )
+    const advanceAmount = partialPaymentSplit.advanceAmount
+    const balanceAmount = partialPaymentSplit.balanceAmount
 
     return (
       <div className="mt-3 rounded-lg border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-sm">
         <div className="flex items-center justify-between gap-3">
           <span className="font-semibold text-indigo-900">
-            Pay now ({normalizedPercentage}%)
+            Pay now
+            {/* ({normalizedPercentage}%) */}
           </span>
           <span className="font-black text-indigo-900">
             {convertToLocale({

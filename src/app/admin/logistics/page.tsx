@@ -19,6 +19,10 @@ import {
   TrivaraOrderBookingStatus,
 } from "@/lib/supabase/types"
 import { LogisticsSyncActions } from "./logistics-sync-actions"
+import {
+  getPaymentMethodDisplay,
+  getPaymentStatusDisplay,
+} from "@/lib/util/payment-status"
 
 const STATUS_FILTERS: Array<{
   label: string
@@ -45,20 +49,6 @@ function getStatusBadge(status: TrivaraOrderBookingStatus) {
     case "cancelled":
       return { variant: "neutral" as const, label: "Cancelled" }
   }
-}
-
-function normalizePaymentMethod(method?: string | null) {
-  const value = (method || "").toLowerCase()
-  if (value.includes("cod") || value.includes("cash")) {
-    return "COD"
-  }
-  if (value.includes("easebuzz")) {
-    return "Easebuzz"
-  }
-  if (value.includes("payu")) {
-    return "PayU"
-  }
-  return method || "Manual"
 }
 
 export default async function AdminLogistics({
@@ -159,6 +149,13 @@ export default async function AdminLogistics({
             {records.map((record) => {
               const statusBadge = getStatusBadge(record.status)
               const canUseReference = Boolean(record.trivara_reference_number)
+              const paymentStatus = record.order
+                ? getPaymentStatusDisplay({
+                    paymentStatus: record.order.payment_status,
+                    paymentMethod: record.order.payment_method,
+                    orderStatus: record.order.status,
+                  })
+                : null
               const canRetry =
                 record.status === "failed" || record.status === "skipped"
               const canCancelOrder = Boolean(
@@ -209,7 +206,12 @@ export default async function AdminLogistics({
                     )}
                   </td>
                   <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-600">
-                    <p>{normalizePaymentMethod(record.order?.payment_method)}</p>
+                    <p>{getPaymentMethodDisplay(record.order?.payment_method)}</p>
+                    {paymentStatus && (
+                      <p className="mt-1 text-xs text-gray-500">
+                        {paymentStatus.label}
+                      </p>
+                    )}
                     {record.order && (
                       <p className="mt-1 font-medium text-gray-900">
                         {convertToLocale({

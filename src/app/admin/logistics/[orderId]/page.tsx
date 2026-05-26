@@ -24,6 +24,12 @@ import {
 } from "@/lib/integrations/trivara"
 import { TrivaraOrderBookingStatus } from "@/lib/supabase/types"
 import { LogisticsDetailActions } from "./logistics-detail-actions"
+import {
+  getPaymentMethodDisplay,
+  getPaymentStatusDisplay,
+  isPartialPaymentMethod,
+} from "@/lib/util/payment-status"
+import { getPartialPaymentDisplayData } from "@/lib/util/order-pricing"
 
 type Props = {
   params: Promise<{ orderId: string }>
@@ -224,6 +230,35 @@ function getPayloadNumberOrString(
 ): string | number | null {
   const value = getPayloadValue(payload, keys)
   return asDisplayValue(value)
+}
+
+function formatCurrencyDiagnostic(
+  amount: number | null | undefined,
+  currencyCode: string | null | undefined
+): string | null {
+  if (typeof amount !== "number" || !Number.isFinite(amount)) {
+    return null
+  }
+
+  return convertToLocale({
+    amount,
+    currency_code: currencyCode || "inr",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
+
+function toDiagnosticNumber(value: string | number | null): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null
+  }
+
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return null
+  }
+
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 function getDimensions(payload: Record<string, unknown> | null): string | null {
@@ -708,6 +743,43 @@ export default async function AdminLogisticsDetail({ params }: Props) {
   const packageItems = getPackageItems(record.request_payload)
   const trackingEvents = getTrackingEvents(record.tracking_payload)
   const cancellationSource = getCancellationSource(record, currentTrivaraStatus)
+  const orderPaymentStatus = record.order
+    ? getPaymentStatusDisplay({
+        paymentStatus: record.order.payment_status,
+        paymentMethod: record.order.payment_method,
+        orderStatus: record.order.status,
+      })
+    : null
+  const partialPaymentData = record.order
+    ? getPartialPaymentDisplayData(record.order.metadata)
+    : null
+  const diagnosticBillAmount = record.order
+    ? formatCurrencyDiagnostic(
+        record.order.total_amount,
+        record.order.currency_code
+      )
+    : null
+  const payloadCodAmount = toDiagnosticNumber(
+    getPayloadNumberOrString(record.request_payload, ["total_cod_amount"])
+  )
+  const diagnosticCodAmount =
+    record.order &&
+    isPartialPaymentMethod(record.order.payment_method) &&
+    partialPaymentData?.balancePaymentStatus === "pending"
+      ? formatCurrencyDiagnostic(
+          partialPaymentData.balanceRemainingAmount,
+          record.order.currency_code
+        )
+      : record.order &&
+          (record.order.payment_method || "").toLowerCase().includes("cash")
+        ? formatCurrencyDiagnostic(
+            record.order.total_amount,
+            record.order.currency_code
+          )
+        : formatCurrencyDiagnostic(
+            payloadCodAmount,
+            record.order?.currency_code
+          )
   const canCancelOrder = Boolean(
     record.order &&
       ["pending", "order_placed", "accepted"].includes(record.order.status)
@@ -804,7 +876,16 @@ export default async function AdminLogisticsDetail({ params }: Props) {
           />
           <DetailRow label="Customer" value={record.order?.customer_email} />
           <DetailRow label="Order status" value={record.order?.status} />
-          <DetailRow label="Payment" value={record.order?.payment_method} />
+          <DetailRow
+            label="Payment"
+            value={
+              record.order
+                ? `${getPaymentMethodDisplay(record.order.payment_method)}${
+                    orderPaymentStatus ? ` - ${orderPaymentStatus.label}` : ""
+                  }`
+                : null
+            }
+          />
           <DetailRow
             label="Total"
             value={
@@ -883,15 +964,19 @@ export default async function AdminLogisticsDetail({ params }: Props) {
           />
           <DiagnosticCell
             label="Bill amount sent"
-            value={getPayloadNumberOrString(record.request_payload, [
-              "total_amount",
-            ])}
+            value={
+              diagnosticBillAmount ??
+              getPayloadNumberOrString(record.request_payload, ["total_amount"])
+            }
           />
           <DiagnosticCell
             label="COD collection amount"
-            value={getPayloadNumberOrString(record.request_payload, [
-              "total_cod_amount",
-            ])}
+            value={
+              diagnosticCodAmount ??
+              getPayloadNumberOrString(record.request_payload, [
+                "total_cod_amount",
+              ])
+            }
           />
           <DiagnosticCell
             label="Delivery pincode"
