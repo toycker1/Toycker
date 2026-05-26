@@ -1,6 +1,14 @@
-import { listPaginatedProducts } from "@lib/data/products"
+import {
+  getStorefrontPriceBounds,
+  listPaginatedProducts,
+} from "@lib/data/products"
 import { Collection } from "@/lib/supabase/types"
-import { SortOptions, ViewMode } from "@modules/store/components/refinement-list/types"
+import {
+  AvailabilityFilter,
+  PriceRangeFilter,
+  SortOptions,
+  ViewMode,
+} from "@modules/store/components/refinement-list/types"
 import ProductGridSection from "@modules/store/components/product-grid-section"
 import { StorefrontFiltersProvider } from "@modules/store/context/storefront-filters"
 import { STORE_PRODUCT_PAGE_SIZE } from "@modules/store/constants"
@@ -10,6 +18,8 @@ import Breadcrumbs from "@modules/common/components/breadcrumbs"
 export default async function CollectionTemplate({
   sortBy,
   collection,
+  availability,
+  priceRange,
   page,
   viewMode,
   countryCode,
@@ -17,6 +27,8 @@ export default async function CollectionTemplate({
 }: {
   sortBy?: SortOptions
   collection: Collection
+  availability?: AvailabilityFilter
+  priceRange?: PriceRangeFilter
   page?: string
   viewMode?: ViewMode
   countryCode: string
@@ -26,15 +38,24 @@ export default async function CollectionTemplate({
   const sort = sortBy || "featured"
   const resolvedViewMode = viewMode || "grid-4"
 
-  const [productListing] = await Promise.all([
+  const queryParams = {
+    collection_id: [collection.id],
+  }
+
+  const [productListing, initialPriceBounds] = await Promise.all([
     listPaginatedProducts({
       page: pageNumber,
       limit: STORE_PRODUCT_PAGE_SIZE,
       sortBy: sort,
       countryCode,
-      queryParams: {
-        collection_id: [collection.id],
-      },
+      availability,
+      priceFilter: priceRange,
+      queryParams,
+    }),
+    getStorefrontPriceBounds({
+      countryCode,
+      availability,
+      queryParams,
     }),
   ])
   const {
@@ -50,16 +71,26 @@ export default async function CollectionTemplate({
     <StorefrontFiltersProvider
       countryCode={countryCode}
       initialFilters={{
+        availability,
+        priceRange,
         sortBy: sort,
         page: pageNumber,
         viewMode: resolvedViewMode,
       }}
       initialProducts={initialProducts}
       initialCount={initialCount}
+      initialPriceBounds={initialPriceBounds}
       pageSize={STORE_PRODUCT_PAGE_SIZE}
       fixedCollectionId={collection.id}
     >
-      <FilterDrawer filterOptions={{ availability: availabilityOptions }}>
+      <FilterDrawer
+        selectedFilters={{
+          availability,
+          priceMin: priceRange?.min,
+          priceMax: priceRange?.max,
+        }}
+        filterOptions={{ availability: availabilityOptions }}
+      >
         <div className="mx-auto p-4 max-w-[1440px] pb-10 w-full">
           <Breadcrumbs
             className="mb-6 hidden small:block"

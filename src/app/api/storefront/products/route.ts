@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server"
 
-import { listPaginatedProducts } from "@lib/data/products"
+import {
+  getStorefrontPriceBounds,
+  listPaginatedProducts,
+} from "@lib/data/products"
 import {
   AvailabilityFilter,
   PriceRangeFilter,
@@ -41,7 +44,7 @@ type RequestBody = {
   page?: number
   limit?: number
   sortBy?: SortOptions
-  categoryId?: string
+  categoryId?: string | string[]
   collectionId?: string | string[]
   productsIds?: string[]
   searchQuery?: string
@@ -123,19 +126,29 @@ export async function POST(request: Request) {
     const requestedPrice = sanitizePriceRange(body.filters?.price)
     const normalizedAgeFilter = resolveAgeFilterValue(body.filters?.age)
 
-    const { response } = await listPaginatedProducts({
-      page,
-      limit,
-      sortBy,
-      countryCode: body.countryCode,
-      queryParams,
-      availability: body.filters?.availability,
-      priceFilter: requestedPrice,
-      ageFilter: normalizedAgeFilter,
-      includeDetails: body.includeDetails === true,
-    })
+    const [productListing, priceBounds] = await Promise.all([
+      listPaginatedProducts({
+        page,
+        limit,
+        sortBy,
+        countryCode: body.countryCode,
+        queryParams,
+        availability: body.filters?.availability,
+        priceFilter: requestedPrice,
+        ageFilter: normalizedAgeFilter,
+        includeDetails: body.includeDetails === true,
+      }),
+      getStorefrontPriceBounds({
+        countryCode: body.countryCode,
+        queryParams,
+        availability: body.filters?.availability,
+        ageFilter: normalizedAgeFilter,
+      }),
+    ])
 
-    return NextResponse.json({ products: response.products, count: response.count })
+    const { response } = productListing
+
+    return NextResponse.json({ products: response.products, count: response.count, priceBounds })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load products"
     return NextResponse.json({ message }, { status: 500 })

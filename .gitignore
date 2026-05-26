@@ -18,6 +18,8 @@
 /tests/lib/*
 !/tests/lib/util/
 !/tests/lib/util/cart-calculations.test.ts
+!/tests/store/
+/tests/store/*
 
 # next.js
 /.next/

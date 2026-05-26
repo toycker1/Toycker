@@ -4,11 +4,15 @@ import { cache } from "react"
 import { createPublicClient } from "@/lib/supabase/public-server"
 import { createClient } from "@/lib/supabase/server"
 import { Product } from "@/lib/supabase/types"
-import { SortOptions } from "@modules/store/components/refinement-list/types"
+import {
+  PriceRangeBounds,
+  SortOptions,
+} from "@modules/store/components/refinement-list/types"
 
 import { normalizeProductImage } from "@lib/util/images"
 import { ACTIVE_PRODUCT_STATUS } from "@lib/util/product-visibility"
 import { getProductRange } from "@modules/store/utils/pagination"
+import { sanitizePriceRangeBounds } from "@modules/store/utils/price-range"
 import {
   MIN_SEARCH_QUERY_LENGTH,
   SEARCH_MAX_QUERY_LENGTH,
@@ -238,6 +242,11 @@ type PriceFilteredProductRow = {
   total_count: number | string | null
 }
 
+type PriceBoundsRow = {
+  min_price: number | string | null
+  max_price: number | string | null
+}
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value)
 
@@ -364,6 +373,49 @@ const getPriceFilteredCount = (rows: PriceFilteredProductRow[]) => {
   return 0
 }
 
+const mapPriceBoundsRow = (row: Record<string, unknown>): PriceBoundsRow => ({
+  min_price:
+    typeof row.min_price === "number" || typeof row.min_price === "string"
+      ? row.min_price
+      : null,
+  max_price:
+    typeof row.max_price === "number" || typeof row.max_price === "string"
+      ? row.max_price
+      : null,
+})
+
+const normalizeQueryParamArray = (
+  value: string | string[] | undefined
+): string[] => {
+  if (!value) {
+    return []
+  }
+
+  return Array.isArray(value) ? value : [value]
+}
+
+const parsePriceBound = (value: number | string | null) => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : undefined
+  }
+
+  return undefined
+}
+
+const getProductFilterInputs = (
+  queryParams?: Record<string, string[] | string | undefined>
+) => ({
+  categoryIds: normalizeQueryParamArray(queryParams?.category_id),
+  collectionIds: normalizeQueryParamArray(queryParams?.collection_id),
+  productIds: normalizeQueryParamArray(queryParams?.id),
+  searchQuery: normalizeProductSearchQuery(queryParams?.q),
+})
+
 export const listProducts = cache(async function listProducts(options: {
   regionId?: string
   queryParams?: {
@@ -420,6 +472,46 @@ export const listProducts = cache(async function listProducts(options: {
 
   const products = (data || []).map((p) => normalizeProductImage(p as unknown as Product))
   return { response: { products, count: count || 0 } }
+})
+
+export const getStorefrontPriceBounds = cache(async function getStorefrontPriceBounds({
+  queryParams,
+  availability,
+}: {
+  countryCode?: string
+  queryParams?: Record<string, string[] | string | undefined>
+  availability?: string
+  ageFilter?: string
+}): Promise<PriceRangeBounds | undefined> {
+  const supabase = createPublicClient()
+  const { categoryIds, collectionIds, productIds, searchQuery } =
+    getProductFilterInputs(queryParams)
+
+  const { data, error } = await supabase.rpc("get_storefront_product_price_bounds", {
+    p_category_ids: categoryIds.length ? categoryIds : null,
+    p_collection_ids: collectionIds.length ? collectionIds : null,
+    p_product_ids: productIds.length ? productIds : null,
+    p_search_query: searchQuery ?? null,
+    p_availability: availability ?? null,
+  })
+
+  if (error) {
+    console.error("Error fetching storefront price bounds:", error.message)
+    return undefined
+  }
+
+  const firstRow = Array.isArray(data) ? data.find(isRecord) : undefined
+
+  if (!firstRow) {
+    return undefined
+  }
+
+  const boundsRow = mapPriceBoundsRow(firstRow)
+
+  return sanitizePriceRangeBounds({
+    min: parsePriceBound(boundsRow.min_price),
+    max: parsePriceBound(boundsRow.max_price),
+  })
 })
 
 export const retrieveProduct = cache(async function retrieveProduct(id: string): Promise<Product | null> {
@@ -498,16 +590,8 @@ export const listPaginatedProducts = cache(async function listPaginatedProducts(
   const range = getProductRange(page, limit)
   const productSelect = includeDetails ? PRODUCT_QUICK_VIEW_SELECT : PRODUCT_CARD_SELECT
 
-  const categoryIds = queryParams?.category_id
-    ? (Array.isArray(queryParams.category_id) ? queryParams.category_id : [queryParams.category_id])
-    : []
-  const collectionIds = queryParams?.collection_id
-    ? (Array.isArray(queryParams.collection_id) ? queryParams.collection_id : [queryParams.collection_id])
-    : []
-  const productIds = queryParams?.id
-    ? (Array.isArray(queryParams.id) ? queryParams.id : [queryParams.id])
-    : []
-  const searchQuery = normalizeProductSearchQuery(queryParams?.q)
+  const { categoryIds, collectionIds, productIds, searchQuery } =
+    getProductFilterInputs(queryParams)
   const needsDatabasePriceFiltering = priceFilter?.min !== undefined || priceFilter?.max !== undefined
 
   if (needsDatabasePriceFiltering) {

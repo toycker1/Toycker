@@ -18,6 +18,7 @@ import { Product } from "@/lib/supabase/types"
 
 import {
   AvailabilityFilter,
+  PriceRangeBounds,
   PriceRangeFilter,
   SortOptions,
   ViewMode,
@@ -43,6 +44,7 @@ type StorefrontFiltersProviderProps = {
   initialFilters: FilterState
   initialProducts: Product[]
   initialCount: number
+  initialPriceBounds?: PriceRangeBounds
   pageSize?: number
   fixedCategoryId?: string
   fixedCollectionId?: string
@@ -57,6 +59,7 @@ type StorefrontFiltersContextValue = {
   isFetching: boolean
   error?: string
   activeFilterCount: number
+  priceBounds?: PriceRangeBounds
   setAvailability: (_value?: AvailabilityFilter) => void
   setPriceRange: (_range?: PriceRangeFilter) => void
   setAge: (_value?: string) => void
@@ -117,6 +120,7 @@ export const StorefrontFiltersProvider = ({
   initialFilters,
   initialProducts,
   initialCount,
+  initialPriceBounds,
   pageSize = STORE_PRODUCT_PAGE_SIZE,
   fixedCategoryId,
   fixedCollectionId,
@@ -127,6 +131,7 @@ export const StorefrontFiltersProvider = ({
     products: dedupeProducts(initialProducts),
     count: initialCount,
   }))
+  const [priceBounds, setPriceBounds] = useState<PriceRangeBounds | undefined>(initialPriceBounds)
   const [isFetching, setIsFetching] = useState(false)
   const [error, setError] = useState<string | undefined>()
   const [isPending, startTransition] = useTransition()
@@ -142,9 +147,10 @@ export const StorefrontFiltersProvider = ({
     filtersRef.current = initialFilters
     setFilterState(initialFilters)
     setListing({ products: dedupeProducts(initialProducts), count: initialCount })
+    setPriceBounds(initialPriceBounds)
     setError(undefined)
     setIsFetching(false)
-  }, [initialFilters, initialProducts, initialCount])
+  }, [initialFilters, initialProducts, initialCount, initialPriceBounds])
 
   const fetchProducts = useCallback(
     async (nextFilters: FilterState) => {
@@ -211,6 +217,7 @@ export const StorefrontFiltersProvider = ({
         const payload = (await response.json()) as {
           products: Product[]
           count: number
+          priceBounds?: PriceRangeBounds
         }
 
         // Use startTransition to prevent flash of stale products
@@ -221,6 +228,7 @@ export const StorefrontFiltersProvider = ({
             products: dedupeProducts(payload.products),
             count: payload.count,
           })
+          setPriceBounds(payload.priceBounds)
           setIsFetching(false)
         })
       } catch (error) {
@@ -410,6 +418,7 @@ export const StorefrontFiltersProvider = ({
       isFetching,
       error,
       activeFilterCount,
+      priceBounds,
       isPending,
       setAvailability,
       setPriceRange,
@@ -434,6 +443,7 @@ export const StorefrontFiltersProvider = ({
       isFetching,
       error,
       activeFilterCount,
+      priceBounds,
       isPending,
       setAvailability,
       setPriceRange,
