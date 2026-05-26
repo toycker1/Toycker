@@ -296,7 +296,8 @@ const CartTotals: React.FC<CartTotalsProps> = ({
         <div className="rounded-lg border border-indigo-100 bg-indigo-50/70 p-4">
           <div className="flex items-center justify-between gap-3 text-sm">
             <span className="font-bold uppercase tracking-widest text-indigo-700">
-              Pay Now ({checkoutPartialPercentage}%)
+              Pay Now
+              {/* ({checkoutPartialPercentage}%) */}
             </span>
             <span className="font-black text-indigo-900">
               {convertToLocale({

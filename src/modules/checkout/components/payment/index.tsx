@@ -90,7 +90,8 @@ const Payment = ({
       <div className="mt-3 rounded-lg border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-sm">
         <div className="flex items-center justify-between gap-3">
           <span className="font-semibold text-indigo-900">
-            Pay now ({normalizedPercentage}%)
+            Pay now
+            {/* ({normalizedPercentage}%) */}
           </span>
           <span className="font-black text-indigo-900">
             {convertToLocale({

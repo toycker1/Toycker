@@ -555,9 +555,9 @@ export default async function AdminOrderDetails({ params, searchParams }: Props)
                         amount: partialPaymentData.advanceAmount,
                         currency_code: order.currency_code,
                       })}
-                      {partialPaymentData.advancePercentage
+                      {/* {partialPaymentData.advancePercentage
                         ? ` (${partialPaymentData.advancePercentage}%)`
-                        : ""}
+                        : ""} */}
                     </span>
                   </div>
                   <div className="flex justify-between gap-3 text-sm">
