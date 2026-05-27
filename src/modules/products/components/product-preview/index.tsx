@@ -150,7 +150,6 @@ export default function ProductPreview({
 
     startTransition(async () => {
       setStatus("added")
-      openCart?.()
       try {
         // Not awaiting to keep UI snappy
         optimisticAdd({
@@ -159,6 +158,7 @@ export default function ProductPreview({
           quantity: 1,
           countryCode: "in",
         })
+        openCart?.({ skipReload: true })
 
         const endTime = performance.now()
         console.log(

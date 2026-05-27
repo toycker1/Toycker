@@ -15,6 +15,7 @@ import { isGiftWrapLine } from "@modules/cart/utils/gift-wrap"
 import Image from "next/image"
 import { useBodyScrollLock } from "@modules/layout/hooks/useBodyScrollLock"
 import { useCartSidebar } from "@modules/layout/context/cart-sidebar-context"
+import { useLayoutData } from "@modules/layout/context/layout-data-context"
 import { getImageUrl } from "@lib/util/get-image-url"
 import QuantitySelector from "@modules/common/components/quantity-selector"
 import { useCartStore } from "@modules/cart/context/cart-store-context"
@@ -26,12 +27,15 @@ type CartSidebarProps = {
 
 const CartSidebar = ({ isOpen, onClose }: CartSidebarProps) => {
   const { cart } = useCartSidebar()
-  const { optimisticUpdateQuantity, isUpdating, isRemoving } = useCartStore()
+  const { optimisticUpdateQuantity, isUpdating, isRemoving, isSyncing } = useCartStore()
+  const { cart: layoutCart } = useLayoutData()
   useBodyScrollLock({ isLocked: isOpen })
 
   const totalItems = cart?.items?.reduce((acc, item) => acc + item.quantity, 0) || 0
   const subtotal = cart?.subtotal ?? 0
   const hasItems = Boolean(cart && cart.items && cart.items.length)
+  const expectsItems = (layoutCart?.item_count ?? 0) > 0
+  const showLoadingState = !hasItems && expectsItems && isSyncing
 
   return (
     <Transition show={isOpen} as={Fragment}>
@@ -218,6 +222,24 @@ const CartSidebar = ({ isOpen, onClose }: CartSidebarProps) => {
                           </div>
                         )
                       })}
+                  </div>
+                ) : showLoadingState ? (
+                  <div className="space-y-4">
+                    {Array.from({ length: Math.min(Math.max(layoutCart?.item_count ?? 2, 1), 3) }).map((_, index) => (
+                      <div
+                        key={index}
+                        className="flex gap-4 rounded-2xl border border-gray-200 bg-white p-3"
+                      >
+                        <div className="h-24 w-24 flex-shrink-0 animate-pulse rounded-xl bg-slate-100" />
+                        <div className="flex flex-1 flex-col justify-between py-1">
+                          <div className="space-y-2">
+                            <div className="h-4 w-3/4 animate-pulse rounded bg-slate-100" />
+                            <div className="h-3 w-1/2 animate-pulse rounded bg-slate-100" />
+                          </div>
+                          <div className="h-8 w-24 animate-pulse rounded-full bg-slate-100" />
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center gap-4 rounded-3xl border border-dashed border-slate-200 bg-white/70 px-6 py-16 text-center text-slate-500">

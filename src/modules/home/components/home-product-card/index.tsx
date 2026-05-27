@@ -65,7 +65,6 @@ export default function HomeProductCard({
       : null
   const isDiscounted = Boolean(compareAtPrice && compareAtPrice > price)
   const hasVariants = product.variants.length > 0
-  const variantId = product.variants[0]?.id ?? null
   const discountPercentage =
     compareAtPrice && compareAtPrice > price
       ? Math.round(((compareAtPrice - price) / compareAtPrice) * 100)
@@ -108,10 +107,7 @@ export default function HomeProductCard({
             <div className="h-full w-full bg-gray-100" aria-hidden="true" />
           )}
           <HomeProductCardActions
-            productId={product.id}
-            productHandle={product.handle}
-            productTitle={product.name}
-            variantId={variantId}
+            product={product}
             hasVariants={hasVariants}
           />
           <div className="pointer-events-none absolute inset-0 rounded-2xl bg-black/0 transition-colors duration-300 group-hover:bg-black/5" />

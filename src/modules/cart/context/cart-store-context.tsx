@@ -2,13 +2,19 @@
 
 import { addToCart, deleteLineItem, updateLineItem } from "@lib/data/cart"
 import { DEFAULT_COUNTRY_CODE } from "@lib/constants/region"
-import { Cart, Product, ProductVariant, CartItem } from "@/lib/supabase/types"
+import {
+  Cart,
+  CartItem,
+  type CartProductSummary,
+  type CartVariantSummary,
+} from "@/lib/supabase/types"
 import type { LayoutCartSummary } from "@/lib/types/layout-state"
 import isEqual from "lodash/isEqual"
 import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -19,8 +25,8 @@ import { useOptionalToast } from "@modules/common/context/toast-context"
 import { clearStoredCartState, useCartPersistence } from "@lib/hooks/use-cart-persistence"
 
 type OptimisticAddInput = {
-  product: Product
-  variant?: ProductVariant // Make optional
+  product: CartProductSummary
+  variant?: CartVariantSummary
   quantity: number
   countryCode?: string
   metadata?: Record<string, string | number | boolean | null>
@@ -76,8 +82,8 @@ const mergeLineItems = (
 }
 
 const buildOptimisticLineItem = (
-  product: Product,
-  variant: ProductVariant | undefined,
+  product: CartProductSummary,
+  variant: CartVariantSummary | undefined,
   quantity: number,
   _cartRef: Cart,
   metadata?: Record<string, string | number | boolean | null>,
@@ -138,6 +144,7 @@ export const CartStoreProvider = ({ children }: { children: ReactNode }) => {
   const addQueueRef = useRef<Promise<void>>(Promise.resolve())
   const removeQueueRef = useRef<Promise<void>>(Promise.resolve())
   const updateQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const initialCartLoadRef = useRef(false)
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set())
   const [updatingIds, setUpdatingIds] = useState<Set<string>>(new Set())
 
@@ -411,6 +418,20 @@ export const CartStoreProvider = ({ children }: { children: ReactNode }) => {
       setIsSyncing(false)
     }
   }, [setFromServer, showToast])
+
+  useEffect(() => {
+    if (
+      cart ||
+      initialCartLoadRef.current ||
+      !layoutCart?.id ||
+      (layoutCart.item_count ?? 0) <= 0
+    ) {
+      return
+    }
+
+    initialCartLoadRef.current = true
+    void reloadFromServer()
+  }, [cart, layoutCart?.id, layoutCart?.item_count, reloadFromServer])
 
   const applyPromotionCode = useCallback(async (code: string) => {
     setIsSyncing(true)
