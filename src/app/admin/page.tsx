@@ -11,6 +11,9 @@ import ReportsChartLoader from "@modules/admin/components/charts/reports-chart-l
 import TopProducts from "@modules/admin/components/dashboard/top-products"
 import { cn } from "@lib/util/cn"
 
+const formatRecentOrderDate = (date: string | Date) =>
+  formatIST(date).replace(/\b(am|pm)\b/i, (period) => period.toUpperCase())
+
 export default async function AdminDashboard() {
   const stats = await getDashboardStats()
   const latestOrders = await getRecentAdminOrders(5)
@@ -54,94 +57,71 @@ export default async function AdminDashboard() {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          <AdminCard title="Reports">
-            <ReportsChartLoader initialData={initialChartData} />
-          </AdminCard>
+      <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-3">
+        <AdminCard title="Reports" className="lg:col-span-2">
+          <ReportsChartLoader initialData={initialChartData} />
+        </AdminCard>
 
-          <AdminCard title="Recent Orders" className="p-0">
-            <div className="divide-y divide-gray-100">
-              {latestOrders.map(order => (
-                <Link key={order.id} href={`/admin/orders/${order.id}`} className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors group">
-                  <div className="flex items-center gap-4">
-                    <div className="h-10 w-10 rounded-lg bg-[#f1f2f4] flex items-center justify-center text-gray-500 border border-[#e1e3e5]">
-                      <ShoppingBagIcon className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900 group-hover:underline decoration-gray-400 underline-offset-2">Order #{order.display_id}</p>
-                      <p className="text-xs text-gray-500">{order.customer_email}</p>
-                    </div>
+        <AdminCard title="Top Selling Products">
+          <TopProducts products={topProducts} />
+        </AdminCard>
+      </div>
+
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
+        <AdminCard title="Recent Orders" className="p-0 lg:col-span-2">
+          <div className="divide-y divide-gray-100">
+            {latestOrders.map(order => (
+              <Link key={order.id} href={`/admin/orders/${order.id}`} className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors group">
+                <div className="flex items-center gap-4">
+                  <div className="h-10 w-10 rounded-lg bg-[#f1f2f4] flex items-center justify-center text-gray-500 border border-[#e1e3e5]">
+                    <ShoppingBagIcon className="h-5 w-5" />
                   </div>
-                  <p className="text-sm font-medium text-gray-900">{convertToLocale({ amount: order.total_amount, currency_code: order.currency_code })}</p>
-                </Link>
-              ))}
-            </div>
-            <div className="p-3 bg-gray-50 border-t border-gray-100 flex justify-center">
-              <Link href="/admin/orders" className="text-xs font-medium text-gray-600 hover:text-gray-900 transition-colors">View all orders</Link>
-            </div>
-          </AdminCard>
-        </div>
-
-        <div className="space-y-6">
-          <AdminCard title="Activity">
-            <div className="space-y-6">
-              {latestOrders.length > 0 ? latestOrders.map((order, i) => (
-                <div key={order.id} className="relative pl-6 pb-6 last:pb-0">
-                  {/* Timeline line */}
-                  {i !== latestOrders.length - 1 && <div className="absolute left-[7px] top-[24px] bottom-0 w-px bg-gray-200" />}
-
-                  <div className="absolute left-0 top-1.5 h-3.5 w-3.5 rounded-full border-2 border-white bg-indigo-500 shadow-sm ring-1 ring-gray-200" />
-
                   <div>
-                    <p className="text-sm text-gray-900">Order <span className="font-semibold">#{order.display_id}</span> was placed</p>
-                    <p className="text-xs text-gray-500 mt-0.5">{formatIST(order.created_at)}</p>
+                    <p className="text-sm font-semibold text-gray-900 group-hover:underline decoration-gray-400 underline-offset-2">Order #{order.display_id}</p>
+                    <p className="text-xs text-gray-500">{order.customer_email}</p>
+                    <p className="mt-0.5 text-xs text-gray-400">{formatRecentOrderDate(order.created_at)}</p>
                   </div>
                 </div>
-              )) : (
-                <div className="py-8 text-center">
-                  <p className="text-sm text-gray-500">No recent activity</p>
-                </div>
-              )}
-            </div>
-          </AdminCard>
+                <p className="text-sm font-medium text-gray-900">{convertToLocale({ amount: order.total_amount, currency_code: order.currency_code })}</p>
+              </Link>
+            ))}
+          </div>
+          <div className="p-3 bg-gray-50 border-t border-gray-100 flex justify-center">
+            <Link href="/admin/orders" className="text-xs font-medium text-gray-600 hover:text-gray-900 transition-colors">View all orders</Link>
+          </div>
+        </AdminCard>
 
-          <AdminCard title="Top Selling Products">
-            <TopProducts products={topProducts} />
-          </AdminCard>
-
-          <AdminCard
-            title="Inventory Health"
-            footer={
-              <Link href="/admin/inventory" className="text-xs font-medium text-indigo-600 hover:text-indigo-700 transition-colors">Manage inventory</Link>
-            }
-          >
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Out of Stock</span>
-                <span className={cn(
-                  "text-xs font-bold px-2 py-1 rounded-lg",
-                  stats.products.outOfStock > 0 ? "text-red-600 bg-red-50" : "text-gray-900 bg-gray-100"
-                )}>
-                  {stats.products.outOfStock} items
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Low Stock</span>
-                <span className={cn(
-                  "text-xs font-bold px-2 py-1 rounded-lg",
-                  stats.products.lowStock > 0 ? "text-amber-600 bg-amber-50" : "text-gray-900 bg-gray-100"
-                )}>
-                  {stats.products.lowStock} items
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Active Products</span>
-                <span className="text-xs font-bold text-gray-900 bg-gray-100 px-2 py-1 rounded-lg">{stats.products.value} items</span>
-              </div>
+        <AdminCard
+          title="Inventory Health"
+          footer={
+            <Link href="/admin/inventory" className="text-xs font-medium text-indigo-600 hover:text-indigo-700 transition-colors">Manage inventory</Link>
+          }
+        >
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">Out of Stock</span>
+              <span className={cn(
+                "text-xs font-bold px-2 py-1 rounded-lg",
+                stats.products.outOfStock > 0 ? "text-red-600 bg-red-50" : "text-gray-900 bg-gray-100"
+              )}>
+                {stats.products.outOfStock} items
+              </span>
             </div>
-          </AdminCard>
-        </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">Low Stock</span>
+              <span className={cn(
+                "text-xs font-bold px-2 py-1 rounded-lg",
+                stats.products.lowStock > 0 ? "text-amber-600 bg-amber-50" : "text-gray-900 bg-gray-100"
+              )}>
+                {stats.products.lowStock} items
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">Active Products</span>
+              <span className="text-xs font-bold text-gray-900 bg-gray-100 px-2 py-1 rounded-lg">{stats.products.value} items</span>
+            </div>
+          </div>
+        </AdminCard>
       </div>
     </div>
   )

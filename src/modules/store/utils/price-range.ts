@@ -14,6 +14,24 @@ export type PriceSliderDomain = {
   max: number
 }
 
+export type PriceRangePreset = {
+  label: string
+  min?: number
+  max?: number
+}
+
+export const TOYCKER_PRICE_RANGE_PRESETS: PriceRangePreset[] = [
+  { label: "All Prices" },
+  { label: "Up to ₹250", max: 250 },
+  { label: "₹250 - ₹500", min: 250, max: 500 },
+  { label: "₹500 - ₹1,000", min: 500, max: 1000 },
+  { label: "₹1,000 - ₹1,800", min: 1000, max: 1800 },
+  { label: "₹1,800 - ₹3,600", min: 1800, max: 3600 },
+  { label: "₹3,600 - ₹7,000", min: 3600, max: 7000 },
+  { label: "₹7,000 - ₹10,000", min: 7000, max: 10000 },
+  { label: "Over ₹10,000", min: 10000 },
+]
+
 const normalizeBound = (value?: number) => {
   if (typeof value !== "number" || Number.isNaN(value)) {
     return undefined

@@ -8,6 +8,7 @@ import { useOptionalStorefrontFilters } from "@modules/store/context/storefront-
 import {
   getPriceSliderDomain,
   getPriceSliderValues,
+  TOYCKER_PRICE_RANGE_PRESETS,
   toCommittedPriceRange,
 } from "@modules/store/utils/price-range"
 
@@ -299,14 +300,18 @@ const RefinementList = ({
     pushWithParams(params)
   }
 
-  const updatePriceRangeValues = (values: number[], commit?: boolean) => {
-    const [min, max] = values
-    const next = normalizePriceRange({ min, max })
+  const updatePriceRange = (range: PriceRangeState, commit?: boolean) => {
+    const next = normalizePriceRange(range)
     setPriceRange(next)
 
     if (commit) {
       commitPriceRange(next)
     }
+  }
+
+  const updatePriceRangeValues = (values: number[], commit?: boolean) => {
+    const [min, max] = values
+    updatePriceRange({ min, max }, commit)
   }
 
   const resolvedFilters = useMemo(() => {
@@ -462,6 +467,7 @@ const RefinementList = ({
             <PriceRangeControls
               priceRange={priceRange}
               priceSliderDomain={priceSliderDomain}
+              onRangeChange={updatePriceRange}
               onRangeValuesChange={updatePriceRangeValues}
             />
           </FilterSection>
@@ -530,10 +536,12 @@ const CheckboxGroup = ({
 const PriceRangeControls = ({
   priceRange,
   priceSliderDomain,
+  onRangeChange,
   onRangeValuesChange,
 }: {
   priceRange: PriceRangeState
   priceSliderDomain: { min: number; max: number }
+  onRangeChange: (_range: PriceRangeState, _commit?: boolean) => void
   onRangeValuesChange: (_values: number[], _commit?: boolean) => void
 }) => {
   const sliderValues = getPriceSliderValues(priceRange, priceSliderDomain)
@@ -544,6 +552,14 @@ const PriceRangeControls = ({
 
   const handleSliderCommit = (values: number[]) => {
     onRangeValuesChange(values, true)
+  }
+
+  const isPresetActive = (preset: PriceRangeState) =>
+    (priceRange.min ?? undefined) === (preset.min ?? undefined) &&
+    (priceRange.max ?? undefined) === (preset.max ?? undefined)
+
+  const handlePresetClick = (preset: PriceRangeState) => {
+    onRangeChange(preset, true)
   }
 
   return (
@@ -574,6 +590,27 @@ const PriceRangeControls = ({
       <p className="text-sm font-medium text-slate-900">
         Price: {formatCurrency(sliderValues[0])} - {formatCurrency(sliderValues[1])}
       </p>
+      <div className="flex flex-wrap gap-2" aria-label="Preset price ranges">
+        {TOYCKER_PRICE_RANGE_PRESETS.map((preset) => {
+          const isActive = isPresetActive(preset)
+
+          return (
+            <button
+              key={preset.label}
+              type="button"
+              onClick={() => handlePresetClick(preset)}
+              className={`rounded-md border px-3 py-2 text-xs font-bold transition ${
+                isActive
+                  ? "border-sky-600 bg-sky-50 text-slate-900 shadow-sm"
+                  : "border-gray-300 bg-white text-slate-900 hover:border-slate-500"
+              }`}
+              aria-pressed={isActive}
+            >
+              {preset.label}
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }
