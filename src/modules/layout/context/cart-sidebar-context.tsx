@@ -1,13 +1,13 @@
 "use client"
 
 import { Cart } from "@/lib/supabase/types"
-import { ReactNode, createContext, useCallback, useContext, useMemo, useRef, useState } from "react"
+import { ReactNode, createContext, useCallback, useContext, useMemo, useState } from "react"
 
 import { useCartStore } from "@modules/cart/context/cart-store-context"
 
 type CartSidebarContextValue = {
   isOpen: boolean
-  openCart: () => void
+  openCart: (_options?: { skipReload?: boolean }) => void
   closeCart: () => void
   cart: Cart | null
   setCart: (_cart: Cart | null) => void
@@ -23,7 +23,6 @@ const CartSidebarContext = createContext<CartSidebarContextValue | undefined>(
 export const CartSidebarProvider = ({ children }: { children: ReactNode }) => {
   const [isOpen, setIsOpen] = useState(false)
   const { cart, setFromServer, optimisticRemove, reloadFromServer, isRemoving } = useCartStore()
-  const hasLoadedCartOnOpen = useRef(false)
 
   const refreshCart = useCallback(async () => {
     try {
@@ -33,10 +32,9 @@ export const CartSidebarProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [reloadFromServer])
 
-  const openCart = useCallback(() => {
+  const openCart = useCallback((options?: { skipReload?: boolean }) => {
     setIsOpen(true)
-    if (!cart?.items?.length && !hasLoadedCartOnOpen.current) {
-      hasLoadedCartOnOpen.current = true
+    if (!options?.skipReload && !cart?.items?.length) {
       void reloadFromServer()
     }
   }, [cart?.items?.length, reloadFromServer])

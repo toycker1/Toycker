@@ -4,32 +4,28 @@ import { useState, useTransition, type MouseEvent } from "react"
 import { useRouter } from "next/navigation"
 import { Loader2, ShoppingBag } from "lucide-react"
 
-import { addToCart } from "@lib/data/cart"
 import { cn } from "@lib/util/cn"
+import type { CartProductSummary } from "@/lib/supabase/types"
+import type { HomeProductCard } from "@modules/home/lib/home-product-cards"
 import { useCartStore } from "@modules/cart/context/cart-store-context"
 import { useOptionalCartSidebar } from "@modules/layout/context/cart-sidebar-context"
 import WishlistButton from "@modules/products/components/wishlist-button"
 
 type HomeProductCardActionsProps = {
-  productId: string
-  productHandle: string
-  productTitle: string
-  variantId?: string | null
+  product: HomeProductCard
   hasVariants: boolean
 }
 
 const HomeProductCardActions = ({
-  productId,
-  productHandle,
-  productTitle,
-  variantId,
+  product,
   hasVariants,
 }: HomeProductCardActionsProps) => {
   const router = useRouter()
   const cartSidebar = useOptionalCartSidebar()
-  const { setFromServer } = useCartStore()
+  const { optimisticAdd } = useCartStore()
   const [isPending, startTransition] = useTransition()
   const [status, setStatus] = useState<"idle" | "added" | "error">("idle")
+  const productTitle = product.name
 
   const buttonLabel =
     status === "added"
@@ -45,24 +41,34 @@ const HomeProductCardActions = ({
     event.stopPropagation()
 
     if (hasVariants) {
-      router.push(`/products/${productHandle}`)
+      router.push(`/products/${product.handle}`)
       return
     }
 
     startTransition(async () => {
       setStatus("added")
-      cartSidebar?.openCart()
 
       try {
-        const cart = await addToCart({
-          productId,
-          variantId: variantId ?? undefined,
+        const optimisticProduct: CartProductSummary = {
+          id: product.id,
+          handle: product.handle,
+          name: product.name,
+          price: product.price,
+          currency_code: product.currency_code,
+          image_url: product.image_url,
+          thumbnail: product.thumbnail,
+          images: product.images,
+          metadata: product.metadata,
+          status: "active",
+        }
+
+        const addPromise = optimisticAdd({
+          product: optimisticProduct,
           quantity: 1,
         })
 
-        if (cart) {
-          setFromServer(cart)
-        }
+        cartSidebar?.openCart({ skipReload: true })
+        await addPromise
 
         window.setTimeout(() => setStatus("idle"), 2000)
       } catch {
@@ -75,11 +81,11 @@ const HomeProductCardActions = ({
   return (
     <>
       <div className="absolute right-3 top-3 z-20 hidden translate-x-4 opacity-0 transition-all duration-300 group-hover:translate-x-0 group-hover:opacity-100 sm:block">
-        <WishlistButton productId={productId} productTitle={productTitle} />
+        <WishlistButton productId={product.id} productTitle={productTitle} />
       </div>
 
       <div className="absolute right-2 bottom-2 z-20 flex flex-col gap-2 sm:hidden">
-        <WishlistButton productId={productId} productTitle={productTitle} />
+        <WishlistButton productId={product.id} productTitle={productTitle} />
         <button
           type="button"
           onClick={handleAction}
