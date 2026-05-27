@@ -1,14 +1,14 @@
 ﻿"use client"
 
-import { useCallback, useEffect, useRef, useState, useMemo, type KeyboardEvent, type MouseEvent } from "react"
+import { useCallback, useEffect, useRef, useState, useMemo, type MouseEvent } from "react"
 import Image from "next/image"
-import { ChevronLeft, ChevronRight, Pause, Play, Star, X } from "lucide-react"
+import { ChevronLeft, ChevronRight, Mic, Pause, Play, Star } from "lucide-react"
 import useEmblaCarousel from "embla-carousel-react"
 import { cn } from "@lib/util/cn"
 import { getImageUrl } from "@/lib/util/get-image-url"
 import { type HomeReview } from "@/lib/actions/home-reviews"
 
-type ReviewType = "text" | "video" | "image"
+type ReviewType = "text" | "video" | "image" | "audio"
 
 type BaseReview = {
   id: string
@@ -16,12 +16,11 @@ type BaseReview = {
   quote?: string
   summary?: string
   videoSrc?: string | null
+  audioSrc?: string | null
   posterSrc?: string | null
   author: string
   avatar: string
   tag?: string
-  priceCurrent?: string
-  priceOriginal?: string
   cardBg?: string
   cardBorder?: string
   productImage?: string | null
@@ -29,24 +28,109 @@ type BaseReview = {
 
 type Review = BaseReview
 
-type AudioReview = {
-  id: string
-  title: string
-  author: string
-  durationLabel: string
-  coverImage: string | null
-  audioSrc: string | null
-}
-
-
-const formatTime = (timeInSeconds?: number) => {
-  if (!Number.isFinite(timeInSeconds) || timeInSeconds === undefined) {
-    return "00:00"
+const formatAudioTime = (timeInSeconds: number) => {
+  if (!Number.isFinite(timeInSeconds)) {
+    return "0:00"
   }
+
   const minutes = Math.floor(timeInSeconds / 60)
   const seconds = Math.floor(timeInSeconds % 60)
-  return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`
 }
+
+const AudioReviewPlayer = ({ src, title }: { src: string; title: string }) => {
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+
+  const progress = duration > 0 ? Math.min(Math.max(currentTime / duration, 0), 1) : 0
+
+  const togglePlayback = async () => {
+    const audio = audioRef.current
+    if (!audio) {
+      return
+    }
+
+    if (audio.paused) {
+      try {
+        await audio.play()
+        setIsPlaying(true)
+      } catch {
+        setIsPlaying(false)
+      }
+    } else {
+      audio.pause()
+      setIsPlaying(false)
+    }
+  }
+
+  const handleProgressClick = (event: MouseEvent<HTMLDivElement>) => {
+    const audio = audioRef.current
+    if (!audio || !duration) {
+      return
+    }
+
+    const rect = event.currentTarget.getBoundingClientRect()
+    const ratio = Math.min(Math.max((event.clientX - rect.left) / rect.width, 0), 1)
+    audio.currentTime = ratio * duration
+    setCurrentTime(audio.currentTime)
+  }
+
+  return (
+    <div className="rounded-2xl border border-[#ffe2b8] bg-white p-4 shadow-sm">
+      <div className="flex items-center gap-4">
+        <button
+          type="button"
+          onClick={togglePlayback}
+          className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#111827] text-white transition hover:bg-[#263244]"
+          aria-label={`${isPlaying ? "Pause" : "Play"} ${title}`}
+        >
+          {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 fill-current" />}
+        </button>
+
+        <div className="min-w-0 flex-1">
+          <div
+            role="slider"
+            aria-label={`Audio progress for ${title}`}
+            aria-valuemin={0}
+            aria-valuemax={duration || 1}
+            aria-valuenow={currentTime}
+            tabIndex={0}
+            onClick={handleProgressClick}
+            className="relative h-2 cursor-pointer rounded-full bg-[#f3e1c5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f59e0b]"
+          >
+            <span
+              className="absolute inset-y-0 left-0 rounded-full bg-[#f59e0b]"
+              style={{ width: `${progress * 100}%` }}
+            />
+          </div>
+          <div className="mt-2 flex items-center justify-between text-xs font-semibold text-[#7c5c2e]">
+            <span>{formatAudioTime(currentTime)}</span>
+            <span>{duration > 0 ? formatAudioTime(duration) : "Audio"}</span>
+          </div>
+        </div>
+      </div>
+
+      <audio
+        ref={audioRef}
+        src={src}
+        preload="metadata"
+        onLoadedMetadata={(event) => setDuration(event.currentTarget.duration)}
+        onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+        onPause={() => setIsPlaying(false)}
+        onPlay={() => setIsPlaying(true)}
+        onEnded={() => {
+          setIsPlaying(false)
+          setCurrentTime(0)
+        }}
+      >
+        <track kind="captions" />
+      </audio>
+    </div>
+  )
+}
+
 
 const ReviewCard = ({ review }: { review: Review }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -86,6 +170,8 @@ const ReviewCard = ({ review }: { review: Review }) => {
   }
 
   if (review.type === "video" && review.videoSrc) {
+    const videoPoster = review.posterSrc || review.productImage || undefined
+
     return (
       <article className="group relative flex h-[480px] flex-col overflow-hidden rounded-3xl bg-black text-white">
         <video
@@ -93,7 +179,7 @@ const ReviewCard = ({ review }: { review: Review }) => {
           controls={isPlaying}
           playsInline
           preload="none"
-          poster={review.posterSrc ?? undefined}
+          poster={videoPoster}
           className="absolute inset-0 h-full w-full object-cover transition duration-500 ease-out group-hover:scale-105"
           aria-label={`Video review from ${review.author}`}
           onPlay={() => setIsPlaying(true)}
@@ -110,19 +196,11 @@ const ReviewCard = ({ review }: { review: Review }) => {
         <div
           className={`relative z-10 flex h-full flex-col justify-between p-6 transition-opacity duration-500 ${isPlaying ? "opacity-0" : ""}`}
         >
-          <div className="flex items-center justify-between text-sm font-semibold tracking-wide">
+          <div className="flex items-start text-sm font-semibold tracking-wide">
             {review.tag && (
-              <span className="rounded-full bg-white/80 px-3 py-1 text-xs text-[#1f2937]">
+              <span className="max-w-full rounded-2xl bg-white/85 px-3 py-2 text-xs leading-snug text-[#1f2937] shadow-sm">
                 {review.tag}
               </span>
-            )}
-            {review.priceCurrent && (
-              <div className="text-right">
-                <span className="block text-lg font-semibold text-white">{review.priceCurrent}</span>
-                {review.priceOriginal && (
-                  <span className="text-sm text-white/70 line-through">{review.priceOriginal}</span>
-                )}
-              </div>
             )}
           </div>
 
@@ -167,8 +245,43 @@ const ReviewCard = ({ review }: { review: Review }) => {
 
   const cardBg = review.cardBg ?? "bg-white"
   const cardBorder = review.cardBorder ?? "border-white/70"
-  const productImage = review.productImage ?? review.avatar
+  const productImage = review.productImage || review.posterSrc || review.avatar || "/assets/images/placeholder.jpg"
   const productName = review.tag ?? "Featured product"
+
+  if (review.type === "audio" && review.audioSrc) {
+    return (
+      <article className={`flex h-[480px] flex-col rounded-3xl border ${cardBorder} ${cardBg} p-6 overflow-hidden`}>
+        <div className="flex items-center gap-4 shrink-0">
+          <div className="relative h-20 w-20 overflow-hidden rounded-xl bg-white border border-black/5">
+            <Image src={productImage} alt={productName} fill sizes="80px" className="object-cover" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="line-clamp-3 break-words text-sm font-bold uppercase leading-relaxed tracking-[0.2em] text-[#9ca3af]">
+              {productName}
+            </p>
+            <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-[#c45700]">
+              <Mic className="h-3.5 w-3.5" />
+              Audio review
+            </span>
+          </div>
+        </div>
+
+        <div className="mt-6 flex min-h-0 flex-1 flex-col justify-between gap-5 overflow-hidden rounded-2xl border border-[#ffe2b8] bg-white/70 p-5">
+          {review.quote && (
+            <blockquote className="line-clamp-6 text-xl font-semibold leading-relaxed text-[#111827]">
+              “{review.quote}”
+            </blockquote>
+          )}
+          <AudioReviewPlayer src={review.audioSrc} title={productName} />
+        </div>
+
+        <div className={`mt-6 border-t ${cardBorder} pt-4 shrink-0`}>
+          <p className="font-bold italic text-[#111827]">{review.author}</p>
+          {renderStars("text-[#fbbf24]", "mt-2")}
+        </div>
+      </article>
+    )
+  }
 
   return (
     <article className={`flex h-[480px] flex-col rounded-3xl border ${cardBorder} ${cardBg} p-6 overflow-hidden`}>
@@ -177,26 +290,24 @@ const ReviewCard = ({ review }: { review: Review }) => {
         <div className="relative h-20 w-20 overflow-hidden rounded-xl bg-white border border-black/5">
           <Image src={productImage} alt={productName} fill sizes="80px" className="object-cover" />
         </div>
-        <div className="space-y-1">
-          {productName && <p className="text-sm font-bold uppercase tracking-[0.2em] text-[#9ca3af]">{productName}</p>}
-          {review.priceCurrent && (
-            <p className="text-2xl font-black text-[#111827] leading-none">{review.priceCurrent}</p>
-          )}
-          {review.priceOriginal && (
-            <p className="text-sm text-[#9ca3af] font-medium line-through">{review.priceOriginal}</p>
+        <div className="min-w-0 flex-1">
+          {productName && (
+            <p className="line-clamp-3 break-words text-sm font-bold uppercase leading-relaxed tracking-[0.2em] text-[#9ca3af]">
+              {productName}
+            </p>
           )}
         </div>
       </div>
 
       {/* Content Area */}
-      <div className="flex-1 overflow-y-auto mt-6 custom-scrollbar pr-2 space-y-4">
+      <div className="mt-6 flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
         {review.quote && (
-          <blockquote className="text-lg font-medium leading-relaxed text-[#111827]">“{review.quote}”</blockquote>
+          <blockquote className="line-clamp-4 text-lg font-medium leading-relaxed text-[#111827]">“{review.quote}”</blockquote>
         )}
 
         {/* Review Image Box - Displayed separately below the text if available */}
         {review.type === "image" && review.posterSrc && (
-          <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl border border-white/50 shadow-sm ring-4 ring-white/10">
+          <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl border border-white/50 shadow-sm ring-4 ring-white/10">
             <Image src={review.posterSrc} alt="Review attachment" fill className="object-cover" />
           </div>
         )}
@@ -217,18 +328,18 @@ const ReviewMediaHub = ({ reviews = [] }: { reviews: HomeReview[] }) => {
   // Map dynamic reviews to the internal types
   const displayReviews: Review[] = useMemo(() => {
     return reviews
-      .filter(hr => !hr.review?.review_media?.some(m => m.file_type === 'audio'))
       .map(hr => {
         const r = hr.review
         if (!r) return null
         const videoMedia = r.review_media?.find(m => m.file_type === 'video')
+        const audioMedia = r.review_media?.find(m => m.file_type === 'audio')
         const imageMedia = r.review_media?.find(m => m.file_type === 'image')
 
         const product = r.product
-        const price = product?.price ? `₹${product.price.toFixed(2)}` : undefined
 
         let type: ReviewType = 'text'
         if (videoMedia) type = 'video'
+        else if (audioMedia) type = 'audio'
         else if (imageMedia) type = 'image'
 
         return {
@@ -238,35 +349,15 @@ const ReviewMediaHub = ({ reviews = [] }: { reviews: HomeReview[] }) => {
           author: r.is_anonymous ? "Verified Buyer" : (r.display_name || "Verified Buyer"),
           avatar: "",
           videoSrc: videoMedia ? getImageUrl(videoMedia.file_path) : undefined,
+          audioSrc: audioMedia ? getImageUrl(audioMedia.file_path) : undefined,
           posterSrc: imageMedia ? getImageUrl(imageMedia.file_path) : undefined,
           tag: product?.name,
-          priceCurrent: price,
           productImage: product?.image_url ? getImageUrl(product.image_url) : undefined,
           cardBg: r.rating >= 4 ? "bg-[#fffdf4]" : "bg-[#f0fbff]",
           cardBorder: r.rating >= 4 ? "border-[#fde9c8]" : "border-[#cdeefd]"
         }
       })
       .filter(r => r !== null) as Review[]
-  }, [reviews])
-
-  const audioReviews: AudioReview[] = useMemo(() => {
-    const allAudio: AudioReview[] = []
-    reviews.forEach(hr => {
-      const r = hr.review
-      if (!r) return
-      const audioMedia = r.review_media?.find(m => m.file_type === 'audio')
-      if (audioMedia) {
-        allAudio.push({
-          id: `audio-${r.id}`,
-          title: r.title || "Voice Review",
-          author: r.is_anonymous ? "Verified Buyer" : (r.display_name || "Verified Buyer"),
-          durationLabel: "Voice",
-          coverImage: (r.product?.image_url ? getImageUrl(r.product.image_url) : "/assets/images/placeholder.jpg") as string | null,
-          audioSrc: getImageUrl(audioMedia.file_path) as string | null
-        })
-      }
-    })
-    return allAudio
   }, [reviews])
   const [emblaRef, emblaApi] = useEmblaCarousel({
     align: "start",
@@ -275,14 +366,6 @@ const ReviewMediaHub = ({ reviews = [] }: { reviews: HomeReview[] }) => {
 
   const [canScrollPrev, setCanScrollPrev] = useState(false)
   const [canScrollNext, setCanScrollNext] = useState(false)
-
-  const [isAudioModalOpen, setIsAudioModalOpen] = useState(false)
-  const audioRefs = useRef<Record<string, HTMLAudioElement | null>>({})
-  const [activeAudioId, setActiveAudioId] = useState<string | null>(null)
-  const activeAudioRef = useRef<string | null>(null)
-  const [audioProgress, setAudioProgress] = useState<Record<string, number>>({})
-  const [audioDurations, setAudioDurations] = useState<Record<string, number>>({})
-  const [audioCurrentTime, setAudioCurrentTime] = useState<Record<string, number>>({})
 
   type EmblaApiType = NonNullable<ReturnType<typeof useEmblaCarousel>[1]>
 
@@ -310,242 +393,10 @@ const ReviewMediaHub = ({ reviews = [] }: { reviews: HomeReview[] }) => {
     if (emblaApi) emblaApi.scrollNext()
   }, [emblaApi])
 
-  useEffect(() => {
-    if (isAudioModalOpen) {
-      const previousOverflow = document.body.style.overflow
-      document.body.style.overflow = "hidden"
-      return () => {
-        document.body.style.overflow = previousOverflow
-      }
-    }
-
-    const currentlyActive = activeAudioRef.current
-    if (currentlyActive) {
-      audioRefs.current[currentlyActive]?.pause()
-      setActiveAudioId(null)
-    }
-    return undefined
-  }, [isAudioModalOpen])
-
-  useEffect(() => {
-    activeAudioRef.current = activeAudioId
-  }, [activeAudioId])
-
   // If no reviews at all, don't render the section
-  if (isMounted && displayReviews.length === 0 && audioReviews.length === 0) {
+  if (isMounted && displayReviews.length === 0) {
     return null
   }
-
-  const startAudio = async (id: string) => {
-    const audio = audioRefs.current[id]
-    if (!audio) {
-      return
-    }
-
-    const currentlyActive = activeAudioRef.current
-    if (currentlyActive && currentlyActive !== id) {
-      audioRefs.current[currentlyActive]?.pause()
-    }
-
-    try {
-      await audio.play()
-      setActiveAudioId(id)
-    } catch {
-      setActiveAudioId(null)
-    }
-  }
-
-  const openAudioModal = () => {
-    setIsAudioModalOpen(true)
-  }
-
-  const closeAudioModal = () => {
-    setIsAudioModalOpen(false)
-  }
-
-  const syncAudioState = (id: string) => {
-    const audio = audioRefs.current[id]
-    if (!audio || !audio.duration) {
-      return
-    }
-    setAudioProgress((prev) => ({ ...prev, [id]: audio.currentTime / audio.duration }))
-    setAudioCurrentTime((prev) => ({ ...prev, [id]: audio.currentTime }))
-  }
-
-  const handleAudioToggle = async (id: string) => {
-    const audio = audioRefs.current[id]
-    if (!audio) {
-      return
-    }
-
-    if (audio.paused) {
-      await startAudio(id)
-    } else {
-      audio.pause()
-      setActiveAudioId(null)
-    }
-  }
-
-  const handleAudioLoaded = (id: string) => {
-    const audio = audioRefs.current[id]
-    if (!audio) {
-      return
-    }
-    setAudioDurations((prev) => ({ ...prev, [id]: audio.duration }))
-  }
-
-  const handleAudioTimeUpdate = (id: string) => {
-    syncAudioState(id)
-  }
-
-  const handleAudioEnd = (id: string) => {
-    if (activeAudioId === id) {
-      setActiveAudioId(null)
-    }
-    setAudioProgress((prev) => ({ ...prev, [id]: 0 }))
-    setAudioCurrentTime((prev) => ({ ...prev, [id]: 0 }))
-  }
-
-  const handleProgressClick = (event: MouseEvent<HTMLDivElement>, id: string) => {
-    const audio = audioRefs.current[id]
-    if (!audio || !audio.duration) {
-      return
-    }
-    const rect = event.currentTarget.getBoundingClientRect()
-    const clickPosition = event.clientX - rect.left
-    const ratio = Math.min(Math.max(clickPosition / rect.width, 0), 1)
-    audio.currentTime = ratio * audio.duration
-    setAudioProgress((prev) => ({ ...prev, [id]: ratio }))
-    setAudioCurrentTime((prev) => ({ ...prev, [id]: audio.currentTime }))
-    void startAudio(id)
-  }
-
-  const handleSliderKeyDown = (event: KeyboardEvent<HTMLDivElement>, id: string) => {
-    const audio = audioRefs.current[id]
-    if (!audio || !audio.duration) {
-      return
-    }
-
-    let nextTime = audio.currentTime
-    if (event.key === "ArrowRight") {
-      nextTime = Math.min(audio.duration, audio.currentTime + 5)
-    } else if (event.key === "ArrowLeft") {
-      nextTime = Math.max(0, audio.currentTime - 5)
-    } else if (event.key === "Home") {
-      nextTime = 0
-    } else if (event.key === "End") {
-      nextTime = audio.duration
-    } else if (event.key === " " || event.key === "Enter") {
-      event.preventDefault()
-      handleAudioToggle(id)
-      return
-    } else {
-      return
-    }
-
-    event.preventDefault()
-    audio.currentTime = nextTime
-    setAudioProgress((prev) => ({ ...prev, [id]: nextTime / audio.duration }))
-    setAudioCurrentTime((prev) => ({ ...prev, [id]: nextTime }))
-    void startAudio(id)
-  }
-
-  const renderAudioCards = (gridClassName: string) => (
-    <div className={`grid gap-4 ${gridClassName}`}>
-      {audioReviews.map((audio) => {
-        const progress = audioProgress[audio.id] ?? 0
-        const safeProgress = Math.min(Math.max(progress, 0), 1)
-        const currentTime = audioCurrentTime[audio.id] ?? 0
-        const totalDuration = audioDurations[audio.id]
-        const formattedTotal = totalDuration ? formatTime(totalDuration) : audio.durationLabel
-        const sliderMax = totalDuration ?? 1
-
-        return (
-          <article
-            key={audio.id}
-            className="flex flex-col gap-5 rounded-3xl border border-[#ffe2b8] bg-gradient-to-br from-white via-[#fff8ec] to-[#ffeeda] p-5 text-[#1f2937]"
-          >
-            <div className="flex items-center gap-4">
-              <div className="relative h-20 w-20 overflow-hidden rounded-2xl border border-[#ffd7a0] bg-white">
-                <Image src={audio.coverImage || "/assets/images/placeholder.jpg"} alt={audio.title} fill sizes="80px" className="object-cover" />
-              </div>
-              <div className="flex-1">
-                <p className="text-lg font-semibold text-[#1f2937]">{audio.title}</p>
-                <p className="text-sm text-[#7c5c2e]">{audio.author}</p>
-                <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-[#fff1dc] px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-[#b45309]">
-                  {audio.durationLabel}
-                </span>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <button
-                type="button"
-                onClick={() => handleAudioToggle(audio.id)}
-                className={`inline-flex w-full items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-semibold transition ${activeAudioId === audio.id
-                  ? "border-transparent bg-[#ff8a00] text-white shadow-[0_12px_30px_rgba(255,138,0,0.35)]"
-                  : "border-[#ffd7a0] bg-white text-[#b45309] hover:bg-[#fff5e5]"
-                  }`}
-                aria-label={`${activeAudioId === audio.id ? "Pause" : "Play"} ${audio.title}`}
-              >
-                {activeAudioId === audio.id ? (
-                  <>
-                    <Pause className="h-4 w-4" />
-                    Pause story
-                  </>
-                ) : (
-                  <>
-                    <Play className="h-4 w-4" />
-                    Play story
-                  </>
-                )}
-              </button>
-
-              <div className="flex items-center gap-3 text-[#9a7a4d]">
-                <span className="text-xs font-semibold">{formatTime(currentTime)}</span>
-                <div
-                  role="slider"
-                  aria-label={`Timeline for ${audio.title}`}
-                  aria-valuemin={0}
-                  aria-valuemax={sliderMax}
-                  aria-valuenow={currentTime}
-                  aria-valuetext={`${formatTime(currentTime)} of ${formattedTotal}`}
-                  tabIndex={0}
-                  onClick={(event) => handleProgressClick(event, audio.id)}
-                  onKeyDown={(event) => handleSliderKeyDown(event, audio.id)}
-                  className="relative h-2 flex-1 cursor-pointer rounded-full bg-[#ffe2b8] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ffbb3d]"
-                >
-                  <div
-                    className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[#ffdd55] to-[#ff8a00]"
-                    style={{ width: `${safeProgress * 100}%` }}
-                  />
-                  <span
-                    className="absolute top-1/2 h-3 w-3 -translate-y-1/2 -translate-x-1/2 rounded-full border border-white bg-[#ffbb3d] shadow"
-                    style={{ left: `${safeProgress * 100}%` }}
-                  />
-                </div>
-                <span className="text-xs font-semibold text-[#b45309]">{formattedTotal}</span>
-              </div>
-            </div>
-
-            <audio
-              ref={(node) => {
-                audioRefs.current[audio.id] = node
-              }}
-              src={audio.audioSrc ?? undefined}
-              preload="metadata"
-              onLoadedMetadata={() => handleAudioLoaded(audio.id)}
-              onTimeUpdate={() => handleAudioTimeUpdate(audio.id)}
-              onEnded={() => handleAudioEnd(audio.id)}
-              className="hidden"
-            >
-              <track kind="captions" />
-            </audio>
-          </article>
-        )
-      })}
-    </div>
-  )
 
   return (
     <>
@@ -558,15 +409,6 @@ const ReviewMediaHub = ({ reviews = [] }: { reviews: HomeReview[] }) => {
                 Trusted by parents and creators across India
               </h2>
             </div>
-            {audioReviews.length > 0 && displayReviews.length > 0 && (
-              <button
-                type="button"
-                onClick={openAudioModal}
-                className="hidden items-center gap-2 rounded-full border border-[#111827] px-5 py-3 text-sm font-semibold text-[#111827] transition hover:bg-[#111827] hover:text-white lg:inline-flex"
-              >
-                Listen to audio stories
-              </button>
-            )}
           </div>
 
           {displayReviews.length > 0 && (
@@ -617,63 +459,7 @@ const ReviewMediaHub = ({ reviews = [] }: { reviews: HomeReview[] }) => {
             )
           )}
 
-          {/* Audio-only: show cards inline on the page, no modal needed */}
-          {displayReviews.length === 0 && audioReviews.length > 0 && (
-            <div className="mt-6">
-              {renderAudioCards("md:grid-cols-2 lg:grid-cols-3")}
-            </div>
-          )}
-
-          {/* Mixed reviews: show "Listen" button for mobile — opens modal */}
-          {audioReviews.length > 0 && displayReviews.length > 0 && (
-            <div className="mt-24 flex justify-center sm:mt-20 lg:hidden">
-              <button
-                type="button"
-                onClick={openAudioModal}
-                className="inline-flex w-full max-w-sm items-center justify-center gap-2 rounded-full border border-[#111827] px-5 py-3 text-sm font-semibold text-[#111827] transition hover:bg-[#111827] hover:text-white"
-              >
-                Listen to audio stories
-              </button>
-            </div>
-          )}
         </div>
-
-        {isAudioModalOpen && displayReviews.length > 0 && (
-          <div
-            className="fixed inset-0 z-50 flex items-stretch justify-stretch bg-black/45 p-0 sm:items-center sm:justify-center sm:px-4 sm:py-8"
-            onClick={closeAudioModal}
-          >
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="audio-modal-title"
-              className="relative h-full w-full max-w-none overflow-y-auto rounded-none border-none bg-gradient-to-b from-white via-[#fff8ec] to-white p-5 sm:h-auto sm:max-h-[90vh] sm:max-w-3xl sm:rounded-[32px] sm:border sm:border-white/60 sm:p-7 md:p-8"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <button
-                type="button"
-                onClick={closeAudioModal}
-                className="absolute right-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#e5e7eb] bg-white text-[#111827] transition hover:bg-[#111827] hover:text-white sm:right-6 sm:top-6"
-                aria-label="Close audio reviews"
-              >
-                <X className="h-5 w-5" />
-              </button>
-              <div className="flex flex-col gap-4 pt-12 sm:flex-row sm:items-start sm:justify-between sm:pt-2">
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-[0.3em] text-[#c45700]">Audio reviews</p>
-                  <h3 id="audio-modal-title" className="mt-2 text-3xl font-semibold text-[#111827]">
-                    Hear Toycker stories on demand
-                  </h3>
-                  <p className="mt-2 text-sm text-[#6b7280]">
-                    Stream quick clips from parents and creators describing their Toycker experiences.
-                  </p>
-                </div>
-              </div>
-
-              {renderAudioCards("md:grid-cols-2")}
-            </div>
-          </div>
-        )}
       </section>
     </>
   )
