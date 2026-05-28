@@ -6,6 +6,7 @@ import { AdminPagination } from "@modules/admin/components/admin-pagination"
 import { AdminSearchInput } from "@modules/admin/components/admin-search-input"
 import ReviewsTable from "./reviews-table"
 import AddReviewModal from "./add-review-modal"
+import ImportReviewsCsvModal from "./import-reviews-csv-modal"
 import { ChatBubbleLeftRightIcon, StarIcon, ClockIcon, MicrophoneIcon, ChatBubbleBottomCenterTextIcon } from "@heroicons/react/24/outline"
 
 export const metadata = {
@@ -50,7 +51,12 @@ export default async function ReviewsPage({
         <div className="flex flex-col gap-8">
             <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-semibold text-gray-900">Reviews & Ratings</h1>
-                {canCreateReview && <AddReviewModal products={products} />}
+                {canCreateReview && (
+                    <div className="flex items-center gap-3">
+                        <ImportReviewsCsvModal />
+                        <AddReviewModal products={products} />
+                    </div>
+                )}
             </div>
 
             {/* Stats Dashboard */}

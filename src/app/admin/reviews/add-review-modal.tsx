@@ -6,12 +6,12 @@ import Image from "next/image"
 import { useRouter } from "next/navigation"
 import {
     Image as ImageIcon,
+    Loader2,
     Plus,
     Search,
     Star,
     X,
 } from "lucide-react"
-import { ActionButton } from "@/modules/admin/components"
 import Modal from "@/modules/common/components/modal"
 import {
     createAdminReview,
@@ -142,13 +142,14 @@ export default function AddReviewModal({
 
     return (
         <>
-            <ActionButton
+            <button
                 type="button"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition-all hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={() => setIsOpen(true)}
-                icon={<Plus className="h-4 w-4" />}
             >
+                <Plus className="h-4 w-4" />
                 Add Review
-            </ActionButton>
+            </button>
 
             <Modal
                 isOpen={isOpen}
@@ -279,21 +280,22 @@ export default function AddReviewModal({
                             )}
 
                             <div className="flex justify-end gap-3 border-t border-gray-100 bg-gray-50 px-6 py-4">
-                                <ActionButton
+                                <button
                                     type="button"
-                                    variant="secondary"
+                                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-100 px-4 py-2 text-sm font-bold text-gray-700 transition-all hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
                                     onClick={closeModal}
                                     disabled={status === "submitting"}
                                 >
                                     Discard
-                                </ActionButton>
-                                <ActionButton
+                                </button>
+                                <button
                                     type="submit"
-                                    isLoading={status === "submitting"}
-                                    loadingText="Publishing..."
+                                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition-all hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                    disabled={status === "submitting"}
                                 >
-                                    Publish Review
-                                </ActionButton>
+                                    {status === "submitting" && <Loader2 className="h-4 w-4 animate-spin" />}
+                                    {status === "submitting" ? "Publishing..." : "Publish Review"}
+                                </button>
                             </div>
                         </form>
                     )}

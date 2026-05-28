@@ -340,6 +340,7 @@ export async function createAdminReview(data: AdminReviewData) {
 }
 
 export async function approveReview(reviewId: string) {
+    await requirePermission(PERMISSIONS.REVIEWS_UPDATE)
     const supabase = await createClient()
     const { error } = await supabase
         .from("reviews")
@@ -354,6 +355,7 @@ export async function approveReview(reviewId: string) {
 }
 
 export async function rejectReview(reviewId: string) {
+    await requirePermission(PERMISSIONS.REVIEWS_UPDATE)
     const supabase = await createClient()
     const { error } = await supabase
         .from("reviews")
@@ -368,17 +370,59 @@ export async function rejectReview(reviewId: string) {
 }
 
 export async function deleteReview(reviewId: string) {
+    return deleteReviews([reviewId])
+}
+
+export async function deleteReviews(reviewIds: string[]) {
+    await requirePermission(PERMISSIONS.REVIEWS_DELETE)
     const supabase = await createClient()
+
+    const uniqueReviewIds = Array.from(
+        new Set(reviewIds.map((id) => id.trim()).filter(Boolean))
+    )
+
+    if (uniqueReviewIds.length === 0) {
+        return { error: "Please select at least one review to delete." }
+    }
+
+    const { data: reviewsToDelete, error: lookupError } = await supabase
+        .from("reviews")
+        .select("id, product_id")
+        .in("id", uniqueReviewIds)
+
+    if (lookupError) {
+        console.error("Error finding reviews to delete:", lookupError)
+        return { error: "Failed to find selected reviews." }
+    }
+
     // Trigger delete on reviews table (cascade will handle media rows)
     // Note: We are NOT deleting files from R2 in this simple implementation, 
     // but in production you'd want to list media and delete objects from R2 too.
-    const { error } = await supabase.from("reviews").delete().eq("id", reviewId)
+    const { error } = await supabase.from("reviews").delete().in("id", uniqueReviewIds)
 
     if (error) {
-        return { error: "Failed to delete review" }
+        return { error: "Failed to delete selected reviews" }
     }
+
+    const productIds = Array.from(
+        new Set((reviewsToDelete || []).map((review) => review.product_id).filter(Boolean))
+    )
+
+    if (productIds.length > 0) {
+        const { data: products } = await supabase
+            .from("products")
+            .select("handle")
+            .in("id", productIds)
+
+        for (const product of products || []) {
+            if (product.handle) {
+                revalidatePath(`/products/${product.handle}`)
+            }
+        }
+    }
+
     revalidatePath("/admin/reviews")
-    return { success: true }
+    return { success: true, deleted: uniqueReviewIds.length }
 }
 
 export async function getProductReviews(productId: string) {
