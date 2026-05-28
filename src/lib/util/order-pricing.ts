@@ -25,6 +25,9 @@ export interface OrderPricingMetadata {
   advance_amount?: number
   balance_amount?: number
   full_order_amount?: number
+  partial_payment_rule_id?: string | null
+  partial_payment_rule_min_order_amount?: number | null
+  partial_payment_rule_max_order_amount?: number | null
   balance_payment_status?: "pending" | "paid"
   balance_paid_at?: string
   balance_payment_method?: string
@@ -51,6 +54,9 @@ export type PartialPaymentSessionData = {
   advance_amount: number
   balance_amount: number
   full_order_amount: number
+  partial_payment_rule_id?: string | null
+  partial_payment_rule_min_order_amount?: number | null
+  partial_payment_rule_max_order_amount?: number | null
   txnid?: string
   expires_at?: string
 }
@@ -291,6 +297,16 @@ export const getPartialPaymentSessionData = (
     advance_amount: advanceAmount,
     balance_amount: balanceAmount,
     full_order_amount: fullOrderAmount,
+    partial_payment_rule_id:
+      typeof data.partial_payment_rule_id === "string"
+        ? data.partial_payment_rule_id
+        : null,
+    partial_payment_rule_min_order_amount: toFiniteNumber(
+      data.partial_payment_rule_min_order_amount
+    ),
+    partial_payment_rule_max_order_amount: toFiniteNumber(
+      data.partial_payment_rule_max_order_amount
+    ),
     txnid: typeof data.txnid === "string" ? data.txnid : undefined,
     expires_at: typeof data.expires_at === "string" ? data.expires_at : undefined,
   }

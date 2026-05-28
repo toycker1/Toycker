@@ -385,7 +385,20 @@ export interface PaymentProvider {
   is_active: boolean
   discount_percentage?: number
   partial_payment_percentage?: number | null
+  partial_payment_rules?: PartialPaymentRule[]
   created_at: string
+}
+
+export interface PartialPaymentRule {
+  id: string
+  payment_provider_id: string
+  min_order_amount: number
+  max_order_amount: number | null
+  advance_percentage: number
+  is_active: boolean
+  sort_order: number
+  created_at: string
+  updated_at: string
 }
 
 export interface ClubSettings {

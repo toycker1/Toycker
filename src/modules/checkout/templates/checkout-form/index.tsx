@@ -1,5 +1,6 @@
 import { listCartOptions } from "@lib/data/cart"
 import { Cart, CustomerProfile } from "@/lib/supabase/types"
+import type { PartialPaymentRule } from "@/lib/supabase/types"
 import Addresses from "@modules/checkout/components/addresses"
 import Payment from "@modules/checkout/components/payment"
 
@@ -15,6 +16,7 @@ export default async function CheckoutForm({
     name: string
     description?: string | null
     partial_payment_percentage?: number | null
+    partial_payment_rules?: PartialPaymentRule[]
   }[]
 }) {
   if (!cart) {

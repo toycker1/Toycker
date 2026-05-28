@@ -1,6 +1,7 @@
 "use client"
 
 import { Cart } from "@/lib/supabase/types"
+import type { PartialPaymentRule } from "@/lib/supabase/types"
 import { Text } from "@modules/common/components/text"
 
 import ItemsPreviewTemplate from "@modules/cart/templates/preview"
@@ -18,6 +19,7 @@ const CheckoutSummary = ({
   paymentMethods: {
     id: string
     partial_payment_percentage?: number | null
+    partial_payment_rules?: PartialPaymentRule[]
   }[]
 }) => {
   const { cart: clientCart } = useCartStore()
@@ -61,6 +63,9 @@ const CheckoutSummary = ({
             cart={cart}
             checkoutPartialPaymentPercentage={
               partialPaymentMethod?.partial_payment_percentage
+            }
+            checkoutPartialPaymentRules={
+              partialPaymentMethod?.partial_payment_rules
             }
           />
         </div>

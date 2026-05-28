@@ -195,6 +195,11 @@ const mergeEasebuzzMetadata = (
     advance_amount: partialPaymentData.advance_amount,
     balance_amount: partialPaymentData.balance_amount,
     full_order_amount: partialPaymentData.full_order_amount,
+    partial_payment_rule_id: partialPaymentData.partial_payment_rule_id ?? null,
+    partial_payment_rule_min_order_amount:
+      partialPaymentData.partial_payment_rule_min_order_amount ?? null,
+    partial_payment_rule_max_order_amount:
+      partialPaymentData.partial_payment_rule_max_order_amount ?? null,
     balance_payment_status: "pending",
   }
 }

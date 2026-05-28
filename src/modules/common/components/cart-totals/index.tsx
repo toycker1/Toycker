@@ -2,12 +2,14 @@
 
 import { convertToLocale } from "@lib/util/money"
 import { Cart, Order } from "@/lib/supabase/types"
+import type { PartialPaymentRule } from "@/lib/supabase/types"
 import React from "react"
 import { ShippingPriceContext } from "@modules/common/context/shipping-price-context"
 import { CheckoutContext } from "@modules/checkout/context/checkout-context"
 import { isEasebuzzPartialPayment } from "@/lib/constants"
 import { getPartialPaymentDisplayData } from "@/lib/util/order-pricing"
 import { calculatePartialPaymentSplit } from "@/lib/util/cart-calculations"
+import { resolvePartialPaymentRule } from "@/lib/util/partial-payment-rules"
 
 type CartTotalsProps = {
   totals: {
@@ -26,6 +28,7 @@ type CartTotalsProps = {
   order?: Order
   includePaymentDiscount?: boolean
   checkoutPartialPaymentPercentage?: number | null
+  checkoutPartialPaymentRules?: PartialPaymentRule[]
 }
 
 const CartTotals: React.FC<CartTotalsProps> = ({
@@ -34,6 +37,7 @@ const CartTotals: React.FC<CartTotalsProps> = ({
   order,
   includePaymentDiscount = true,
   checkoutPartialPaymentPercentage,
+  checkoutPartialPaymentRules,
 }) => {
   const {
     currency_code,
@@ -137,12 +141,12 @@ const CartTotals: React.FC<CartTotalsProps> = ({
         ? order.discount_total || 0
         : discountSubtotal + displayPaymentDiscount)
   )
-  const checkoutPartialPercentage =
-    typeof checkoutPartialPaymentPercentage === "number" &&
-    checkoutPartialPaymentPercentage > 0 &&
-    checkoutPartialPaymentPercentage < 100
-      ? checkoutPartialPaymentPercentage
-      : 20
+  const checkoutRuleMatchAmount = itemSubtotal
+  const checkoutPartialPercentage = resolvePartialPaymentRule({
+    finalOrderAmount: checkoutRuleMatchAmount,
+    rules: checkoutPartialPaymentRules,
+    fallbackPercentage: checkoutPartialPaymentPercentage,
+  }).percentage
   const showCheckoutPartialBreakdown =
     !order &&
     isEasebuzzPartialPayment(checkoutCtx?.state.paymentMethod || "") &&
