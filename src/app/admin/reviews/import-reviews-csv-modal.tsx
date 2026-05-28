@@ -3,10 +3,9 @@
 import type { ChangeEvent } from "react"
 import { useRef, useState } from "react"
 import Papa from "papaparse"
-import { Download, Upload, X } from "lucide-react"
+import { Download, Loader2, Upload, X } from "lucide-react"
 import { useRouter } from "next/navigation"
 
-import { ActionButton } from "@/modules/admin/components"
 import Modal from "@/modules/common/components/modal"
 import { REVIEW_IMPORT_COLUMNS } from "@/lib/csv/review-import"
 
@@ -176,14 +175,14 @@ export default function ImportReviewsCsvModal() {
 
   return (
     <>
-      <ActionButton
+      <button
         type="button"
-        variant="secondary"
+        className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-100 px-4 py-2 text-sm font-bold text-gray-700 transition-all hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
         onClick={() => setIsOpen(true)}
-        icon={<Upload className="h-4 w-4" />}
       >
+        <Upload className="h-4 w-4" />
         Import Reviews CSV
-      </ActionButton>
+      </button>
 
       <Modal
         isOpen={isOpen}
@@ -222,14 +221,14 @@ export default function ImportReviewsCsvModal() {
                     Use the required headers exactly as provided.
                   </p>
                 </div>
-                <ActionButton
+                <button
                   type="button"
-                  variant="secondary"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-100 px-4 py-2 text-sm font-bold text-gray-700 transition-all hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
                   onClick={downloadTemplate}
-                  icon={<Download className="h-4 w-4" />}
                 >
+                  <Download className="h-4 w-4" />
                   Download Template
-                </ActionButton>
+                </button>
               </div>
             </div>
 
@@ -290,23 +289,23 @@ export default function ImportReviewsCsvModal() {
           </div>
 
           <div className="flex justify-end gap-3 border-t border-gray-100 bg-gray-50 px-6 py-4">
-            <ActionButton
+            <button
               type="button"
-              variant="secondary"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-100 px-4 py-2 text-sm font-bold text-gray-700 transition-all hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
               onClick={closeModal}
               disabled={status === "importing"}
             >
               Close
-            </ActionButton>
-            <ActionButton
+            </button>
+            <button
               type="button"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition-all hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
               onClick={handleImport}
-              isLoading={status === "importing"}
-              loadingText="Importing..."
               disabled={!selectedFile || status === "importing"}
             >
-              Start Import
-            </ActionButton>
+              {status === "importing" && <Loader2 className="h-4 w-4 animate-spin" />}
+              {status === "importing" ? "Importing..." : "Start Import"}
+            </button>
           </div>
         </div>
       </Modal>

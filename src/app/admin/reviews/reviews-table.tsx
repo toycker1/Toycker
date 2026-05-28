@@ -1,25 +1,98 @@
 "use client"
 
-import { useState } from "react"
-import { approveReview, rejectReview, deleteReview, type ReviewWithMedia } from "@/lib/actions/reviews"
-import { Star, Eye, Check, X, Trash2, Video, Mic, Image as ImageIcon } from "lucide-react"
-import { ActionButton, IconButton } from "@/modules/admin/components"
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import { approveReview, rejectReview, deleteReview, deleteReviews, type ReviewWithMedia } from "@/lib/actions/reviews"
+import { Star, Eye, Check, X, Trash2, Video, Mic, Image as ImageIcon, AlertTriangle, Loader2 } from "lucide-react"
 import { ProtectedAction } from "@/lib/permissions/components/protected-action"
 import { PERMISSIONS } from "@/lib/permissions"
 import clsx from "clsx"
 import { formatIST } from "@/lib/util/date"
 import { AdminTableWrapper } from "@modules/admin/components/admin-table-wrapper"
 import { buildPublicMediaUrl } from "@/lib/util/media-url"
+import Modal from "@modules/common/components/modal"
 
 type ReviewMedia = ReviewWithMedia["review_media"][number]
 type ReviewTab = "all" | "pending" | "approved" | "rejected" | "voice"
+type ReviewAction = "approve" | "reject" | "delete"
+type ReviewActionRequest = {
+    action: ReviewAction
+    review: ReviewWithMedia
+}
+type PendingReviewAction = ReviewActionRequest | null
+type ReviewActionStatus = "idle" | "submitting" | "refreshing"
+type BulkDeleteStatus = "idle" | "submitting" | "refreshing"
 
 const REVIEW_TABS: ReviewTab[] = ["all", "pending", "approved", "rejected", "voice"]
 
+const REVIEW_ACTION_STATUS: Record<Exclude<ReviewAction, "delete">, "approved" | "rejected"> = {
+    approve: "approved",
+    reject: "rejected",
+}
+
 export default function ReviewsTable({ reviews }: { reviews: ReviewWithMedia[] }) {
+    const router = useRouter()
     const [activeTab, setActiveTab] = useState<ReviewTab>("all")
     const [selectedReview, setSelectedReview] = useState<ReviewWithMedia | null>(null)
-    const [isProcessing, setIsProcessing] = useState(false)
+    const [actionStatus, setActionStatus] = useState<ReviewActionStatus>("idle")
+    const [pendingAction, setPendingAction] = useState<PendingReviewAction>(null)
+    const [inFlightAction, setInFlightAction] = useState<PendingReviewAction>(null)
+    const [actionError, setActionError] = useState<string | null>(null)
+    const [selectedReviewIds, setSelectedReviewIds] = useState<string[]>([])
+    const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false)
+    const [bulkDeleteStatus, setBulkDeleteStatus] = useState<BulkDeleteStatus>("idle")
+    const [bulkDeleteError, setBulkDeleteError] = useState<string | null>(null)
+    const hasProcessingAction = actionStatus !== "idle"
+    const hasProcessingBulkDelete = bulkDeleteStatus !== "idle"
+    const hasProcessingState = hasProcessingAction || hasProcessingBulkDelete
+
+    useEffect(() => {
+        if (!inFlightAction || actionStatus !== "refreshing") {
+            return
+        }
+
+        const refreshedReview = reviews.find(
+            (review) => review.id === inFlightAction.review.id
+        )
+        const actionIsVisible =
+            inFlightAction.action === "delete"
+                ? !refreshedReview
+                : refreshedReview?.approval_status === REVIEW_ACTION_STATUS[inFlightAction.action]
+
+        if (!actionIsVisible) {
+            return
+        }
+
+        setSelectedReview(null)
+        setPendingAction(null)
+        setInFlightAction(null)
+        setActionError(null)
+        setActionStatus("idle")
+    }, [actionStatus, inFlightAction, reviews])
+
+    const isActionProcessing = (action: ReviewAction, reviewId: string) =>
+        inFlightAction?.action === action &&
+        inFlightAction.review.id === reviewId &&
+        hasProcessingAction
+
+    useEffect(() => {
+        if (bulkDeleteStatus !== "refreshing") {
+            return
+        }
+
+        const remainingSelectedIds = selectedReviewIds.filter((reviewId) =>
+            reviews.some((review) => review.id === reviewId)
+        )
+
+        if (remainingSelectedIds.length > 0) {
+            return
+        }
+
+        setSelectedReviewIds([])
+        setIsBulkDeleteOpen(false)
+        setBulkDeleteError(null)
+        setBulkDeleteStatus("idle")
+    }, [bulkDeleteStatus, reviews, selectedReviewIds])
 
     const filteredReviews = reviews.filter((r) => {
         if (activeTab === "all") return true
@@ -36,20 +109,145 @@ export default function ReviewsTable({ reviews }: { reviews: ReviewWithMedia[] }
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     })
 
-    const handleAction = async (action: "approve" | "reject" | "delete", id: string) => {
-        if (!confirm(`Are you sure you want to ${action} this review ? `)) return
+    const sortedReviewIds = sortedReviews.map((review) => review.id)
+    const selectedCount = selectedReviewIds.length
+    const selectedVisibleCount = sortedReviewIds.filter((reviewId) =>
+        selectedReviewIds.includes(reviewId)
+    ).length
+    const allVisibleSelected =
+        sortedReviewIds.length > 0 && selectedVisibleCount === sortedReviewIds.length
 
-        setIsProcessing(true)
-        try {
-            if (action === "approve") await approveReview(id)
-            if (action === "reject") await rejectReview(id)
-            if (action === "delete") await deleteReview(id)
-            setSelectedReview(null) // Close modal if open
-        } catch (e) {
-            alert("Action failed")
-        } finally {
-            setIsProcessing(false)
+    const toggleReviewSelection = (reviewId: string) => {
+        if (hasProcessingState) {
+            return
         }
+
+        setSelectedReviewIds((current) =>
+            current.includes(reviewId)
+                ? current.filter((id) => id !== reviewId)
+                : [...current, reviewId]
+        )
+    }
+
+    const toggleVisibleSelection = () => {
+        if (hasProcessingState || sortedReviewIds.length === 0) {
+            return
+        }
+
+        setSelectedReviewIds((current) => {
+            if (allVisibleSelected) {
+                return current.filter((reviewId) => !sortedReviewIds.includes(reviewId))
+            }
+
+            return Array.from(new Set([...current, ...sortedReviewIds]))
+        })
+    }
+
+    const openBulkDeleteDialog = () => {
+        if (selectedCount === 0 || hasProcessingState) {
+            return
+        }
+
+        setBulkDeleteError(null)
+        setIsBulkDeleteOpen(true)
+    }
+
+    const closeBulkDeleteDialog = () => {
+        if (hasProcessingBulkDelete) {
+            return
+        }
+
+        setIsBulkDeleteOpen(false)
+        setBulkDeleteError(null)
+    }
+
+    const handleBulkDelete = async () => {
+        if (selectedReviewIds.length === 0) {
+            return
+        }
+
+        setBulkDeleteStatus("submitting")
+        setBulkDeleteError(null)
+
+        try {
+            const result = await deleteReviews(selectedReviewIds)
+
+            if (result?.error) {
+                throw new Error(result.error)
+            }
+
+            setBulkDeleteStatus("refreshing")
+            router.refresh()
+        } catch (error) {
+            console.error("Bulk review delete failed:", error)
+            setBulkDeleteError(
+                error instanceof Error
+                    ? error.message
+                    : "Failed to delete selected reviews."
+            )
+            setBulkDeleteStatus("idle")
+        }
+    }
+
+    const openActionDialog = (action: ReviewAction, review: ReviewWithMedia) => {
+        if (hasProcessingState) {
+            return
+        }
+
+        setActionError(null)
+        setPendingAction({ action, review })
+    }
+
+    const closeActionDialog = () => {
+        if (hasProcessingState) {
+            return
+        }
+
+        setPendingAction(null)
+        setActionError(null)
+    }
+
+    const handleAction = async () => {
+        if (!pendingAction) {
+            return
+        }
+
+        await runReviewAction(pendingAction)
+    }
+
+    const runReviewAction = async (reviewAction: ReviewActionRequest) => {
+        setActionStatus("submitting")
+        setInFlightAction(reviewAction)
+        setActionError(null)
+
+        try {
+            const result =
+                reviewAction.action === "approve"
+                    ? await approveReview(reviewAction.review.id)
+                    : reviewAction.action === "reject"
+                        ? await rejectReview(reviewAction.review.id)
+                        : await deleteReview(reviewAction.review.id)
+
+            if (result?.error) {
+                throw new Error(result.error)
+            }
+
+            setActionStatus("refreshing")
+            router.refresh()
+        } catch (error) {
+            console.error("Review action failed:", error)
+            setActionError(
+                error instanceof Error
+                    ? error.message
+                    : "Action failed. Please try again."
+            )
+            setInFlightAction(null)
+            setActionStatus("idle")
+        }
+    }
+
+    const runDetailAction = (action: Exclude<ReviewAction, "delete">, review: ReviewWithMedia) => {
+        void runReviewAction({ action, review })
     }
 
     return (
@@ -84,11 +282,50 @@ export default function ReviewsTable({ reviews }: { reviews: ReviewWithMedia[] }
                 })}
             </div>
 
+            {selectedCount > 0 && (
+                <div className="flex flex-col gap-3 border-b border-gray-200 bg-indigo-50/60 px-6 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm font-medium text-gray-700">
+                        {selectedCount} review{selectedCount === 1 ? "" : "s"} selected
+                    </p>
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-bold text-gray-700 transition-all hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
+                            disabled={hasProcessingState}
+                            onClick={() => setSelectedReviewIds([])}
+                        >
+                            Clear Selection
+                        </button>
+                        <ProtectedAction permission={PERMISSIONS.REVIEWS_DELETE} hideWhenDisabled>
+                            <button
+                                type="button"
+                                className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                disabled={hasProcessingState}
+                                onClick={openBulkDeleteDialog}
+                            >
+                                <Trash2 className="h-4 w-4" />
+                                Delete Selected
+                            </button>
+                        </ProtectedAction>
+                    </div>
+                </div>
+            )}
+
             {/* Table */}
             <AdminTableWrapper>
                 <table className="w-full text-left text-sm text-gray-600">
                     <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                         <tr>
+                            <th className="w-12 px-6 py-3 font-medium">
+                                <input
+                                    type="checkbox"
+                                    aria-label="Select all visible reviews"
+                                    checked={allVisibleSelected}
+                                    disabled={sortedReviewIds.length === 0 || hasProcessingState}
+                                    onChange={toggleVisibleSelection}
+                                    className="h-4 w-4 cursor-pointer rounded border-gray-300 text-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
+                                />
+                            </th>
                             <th className="px-6 py-3 font-medium">Product / Title</th>
                             <th className="px-6 py-3 font-medium">Reviewer</th>
                             <th className="px-6 py-3 font-medium">Rating</th>
@@ -99,13 +336,23 @@ export default function ReviewsTable({ reviews }: { reviews: ReviewWithMedia[] }
                     <tbody className="divide-y divide-gray-200">
                         {sortedReviews.length === 0 ? (
                             <tr>
-                                <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                                <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
                                     No reviews found.
                                 </td>
                             </tr>
                         ) : (
                             sortedReviews.map((review) => (
                                 <tr key={review.id} className="hover:bg-gray-50/50">
+                                    <td className="px-6 py-4 align-top">
+                                        <input
+                                            type="checkbox"
+                                            aria-label={`Select review ${review.title}`}
+                                            checked={selectedReviewIds.includes(review.id)}
+                                            disabled={hasProcessingState}
+                                            onChange={() => toggleReviewSelection(review.id)}
+                                            className="mt-1 h-4 w-4 cursor-pointer rounded border-gray-300 text-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
+                                        />
+                                    </td>
                                     <td className="px-6 py-4">
                                         <div className="flex flex-col">
                                             <span className="font-medium text-gray-900 line-clamp-1 max-w-xs">{review.product_name}</span>
@@ -192,30 +439,48 @@ export default function ReviewsTable({ reviews }: { reviews: ReviewWithMedia[] }
                                             </button>
                                             {review.approval_status === "pending" && (
                                                 <>
-                                                    <IconButton
-                                                        icon={Check}
-                                                        variant="success"
-                                                        isLoading={isProcessing}
-                                                        tooltip="Approve"
-                                                        onClick={() => handleAction("approve", review.id)}
-                                                    />
-                                                    <IconButton
-                                                        icon={X}
-                                                        variant="danger"
-                                                        isLoading={isProcessing}
-                                                        tooltip="Reject"
-                                                        onClick={() => handleAction("reject", review.id)}
-                                                    />
+                                                    <button
+                                                        type="button"
+                                                        disabled={isActionProcessing("approve", review.id)}
+                                                        title="Approve"
+                                                        className="rounded p-1.5 text-green-600 transition-colors hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                                        onClick={() => openActionDialog("approve", review)}
+                                                    >
+                                                        {isActionProcessing("approve", review.id) ? (
+                                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                                        ) : (
+                                                            <Check className="h-4 w-4" />
+                                                        )}
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        disabled={isActionProcessing("reject", review.id)}
+                                                        title="Reject"
+                                                        className="rounded p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                                                        onClick={() => openActionDialog("reject", review)}
+                                                    >
+                                                        {isActionProcessing("reject", review.id) ? (
+                                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                                        ) : (
+                                                            <X className="h-4 w-4" />
+                                                        )}
+                                                    </button>
                                                 </>
                                             )}
                                             <ProtectedAction permission={PERMISSIONS.REVIEWS_DELETE} hideWhenDisabled>
-                                                <IconButton
-                                                    icon={Trash2}
-                                                    variant="danger"
-                                                    isLoading={isProcessing}
-                                                    tooltip="Delete"
-                                                    onClick={() => handleAction("delete", review.id)}
-                                                />
+                                                <button
+                                                    type="button"
+                                                    disabled={isActionProcessing("delete", review.id)}
+                                                    title="Delete"
+                                                    className="rounded p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                                                    onClick={() => openActionDialog("delete", review)}
+                                                >
+                                                    {isActionProcessing("delete", review.id) ? (
+                                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                                    ) : (
+                                                        <Trash2 className="h-4 w-4" />
+                                                    )}
+                                                </button>
                                             </ProtectedAction>
                                         </div>
                                     </td>
@@ -305,43 +570,239 @@ export default function ReviewsTable({ reviews }: { reviews: ReviewWithMedia[] }
                             )}
                         </div >
 
+                        {actionError && !pendingAction && (
+                            <div className="border-t border-red-100 bg-red-50 px-6 py-3 text-sm font-medium text-red-700">
+                                {actionError}
+                            </div>
+                        )}
+
                         <div className="border-t border-gray-100 px-6 py-4 bg-gray-50 flex justify-end gap-3 shrink-0">
                             {selectedReview.approval_status === "pending" && (
                                 <>
-                                    <ActionButton
-                                        variant="secondary"
-                                        isLoading={isProcessing}
-                                        loadingText="Processing..."
-                                        onClick={() => handleAction("reject", selectedReview.id)}
-                                        className="text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200"
+                                    <button
+                                        type="button"
+                                        disabled={hasProcessingState}
+                                        onClick={() => runDetailAction("reject", selectedReview)}
+                                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-100 px-4 py-2 text-sm font-bold text-red-600 transition-all hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
                                     >
-                                        Reject
-                                    </ActionButton>
-                                    <ActionButton
-                                        variant="success"
-                                        isLoading={isProcessing}
-                                        loadingText="Processing..."
-                                        onClick={() => handleAction("approve", selectedReview.id)}
+                                        {isActionProcessing("reject", selectedReview.id) && <Loader2 className="h-4 w-4 animate-spin" />}
+                                        {isActionProcessing("reject", selectedReview.id)
+                                            ? actionStatus === "refreshing" ? "Updating list..." : "Processing..."
+                                            : "Reject"}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={hasProcessingState}
+                                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition-all hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                        onClick={() => runDetailAction("approve", selectedReview)}
                                     >
-                                        Approve & Publish
-                                    </ActionButton>
+                                        {isActionProcessing("approve", selectedReview.id) && <Loader2 className="h-4 w-4 animate-spin" />}
+                                        {isActionProcessing("approve", selectedReview.id)
+                                            ? actionStatus === "refreshing" ? "Updating list..." : "Processing..."
+                                            : "Approve & Publish"}
+                                    </button>
                                 </>
                             )}
                             <ProtectedAction permission={PERMISSIONS.REVIEWS_DELETE} hideWhenDisabled>
-                                <ActionButton
-                                    variant="secondary"
-                                    isLoading={isProcessing}
-                                    loadingText="Deleting..."
-                                    onClick={() => handleAction("delete", selectedReview.id)}
-                                    className="text-gray-600 hover:text-red-600 hover:bg-red-50"
+                                <button
+                                    type="button"
+                                    disabled={hasProcessingState}
+                                    onClick={() => openActionDialog("delete", selectedReview)}
+                                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-100 px-4 py-2 text-sm font-bold text-gray-600 transition-all hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
-                                    Delete
-                                </ActionButton>
+                                    {isActionProcessing("delete", selectedReview.id) && <Loader2 className="h-4 w-4 animate-spin" />}
+                                    {isActionProcessing("delete", selectedReview.id)
+                                        ? actionStatus === "refreshing" ? "Updating list..." : "Deleting..."
+                                        : "Delete"}
+                                </button>
                             </ProtectedAction>
                         </div>
                     </div >
                 </div >
             )}
+            <ReviewActionDialog
+                pendingAction={pendingAction}
+                actionStatus={actionStatus}
+                inFlightAction={inFlightAction}
+                errorMessage={actionError}
+                onClose={closeActionDialog}
+                onConfirm={handleAction}
+            />
+            <BulkDeleteReviewsDialog
+                isOpen={isBulkDeleteOpen}
+                selectedCount={selectedCount}
+                status={bulkDeleteStatus}
+                errorMessage={bulkDeleteError}
+                onClose={closeBulkDeleteDialog}
+                onConfirm={handleBulkDelete}
+            />
         </div >
+    )
+}
+
+function BulkDeleteReviewsDialog({
+    isOpen,
+    selectedCount,
+    status,
+    errorMessage,
+    onClose,
+    onConfirm,
+}: {
+    isOpen: boolean
+    selectedCount: number
+    status: BulkDeleteStatus
+    errorMessage: string | null
+    onClose: () => void
+    onConfirm: () => void
+}) {
+    const isProcessing = status !== "idle"
+    const loadingText = status === "refreshing" ? "Updating list..." : "Deleting..."
+
+    return (
+        <Modal isOpen={isOpen} close={onClose} size="small">
+            <div className="space-y-5">
+                <Modal.Title>
+                    <div className="flex items-center gap-2 text-red-600">
+                        <AlertTriangle className="h-6 w-6" />
+                        <span>Delete Selected Reviews</span>
+                    </div>
+                </Modal.Title>
+                <Modal.Description>
+                    <span className="leading-relaxed text-gray-600">
+                        Delete {selectedCount} selected review{selectedCount === 1 ? "" : "s"}? This will also delete attached review media records and cannot be undone.
+                    </span>
+                </Modal.Description>
+                {errorMessage && (
+                    <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+                        {errorMessage}
+                    </div>
+                )}
+                <Modal.Footer>
+                    <button
+                        type="button"
+                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-bold text-gray-700 transition-all hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
+                        onClick={onClose}
+                        disabled={isProcessing}
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        onClick={onConfirm}
+                        disabled={isProcessing}
+                    >
+                        {isProcessing && <Loader2 className="h-4 w-4 animate-spin" />}
+                        {isProcessing ? loadingText : "Delete Reviews"}
+                    </button>
+                </Modal.Footer>
+            </div>
+        </Modal>
+    )
+}
+
+function ReviewActionDialog({
+    pendingAction,
+    actionStatus,
+    inFlightAction,
+    errorMessage,
+    onClose,
+    onConfirm,
+}: {
+    pendingAction: PendingReviewAction
+    actionStatus: ReviewActionStatus
+    inFlightAction: PendingReviewAction
+    errorMessage: string | null
+    onClose: () => void
+    onConfirm: () => void
+}) {
+    if (!pendingAction) {
+        return null
+    }
+
+    const { action, review } = pendingAction
+    const isDelete = action === "delete"
+    const isProcessing =
+        inFlightAction?.action === action &&
+        inFlightAction.review.id === review.id &&
+        actionStatus !== "idle"
+    const title =
+        action === "approve"
+            ? "Approve Review"
+            : action === "reject"
+                ? "Reject Review"
+                : "Delete Review"
+    const confirmLabel =
+        action === "approve"
+            ? "Approve Review"
+            : action === "reject"
+                ? "Reject Review"
+                : "Delete Review"
+    const description =
+        action === "approve"
+            ? "This review will be published on the product page."
+            : action === "reject"
+                ? "This review will be marked as rejected and hidden from shoppers."
+                : "This review and its media records will be deleted. This action cannot be undone."
+    const loadingText =
+        actionStatus === "refreshing" ? "Updating list..." : "Processing..."
+
+    return (
+        <Modal isOpen={Boolean(pendingAction)} close={onClose} size="small">
+            <div className="space-y-5">
+                <Modal.Title>
+                    <div className={clsx("flex items-center gap-2", isDelete ? "text-red-600" : "text-gray-900")}>
+                        {isDelete ? (
+                            <AlertTriangle className="h-6 w-6" />
+                        ) : action === "approve" ? (
+                            <Check className="h-6 w-6 text-green-600" />
+                        ) : (
+                            <X className="h-6 w-6 text-red-600" />
+                        )}
+                        <span>{title}</span>
+                    </div>
+                </Modal.Title>
+                <Modal.Description>
+                    <span className="leading-relaxed text-gray-600">
+                        {description}
+                        <span className="mt-3 block rounded-lg bg-gray-50 px-3 py-2 text-gray-700">
+                            <span className="font-semibold text-gray-900">{review.title}</span>
+                            <span className="block text-xs text-gray-500">
+                                {review.product_name || "Unknown Product"} by {review.display_name || "Anonymous"}
+                            </span>
+                        </span>
+                    </span>
+                </Modal.Description>
+                {errorMessage && (
+                    <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+                        {errorMessage}
+                    </div>
+                )}
+                <Modal.Footer>
+                    <button
+                        type="button"
+                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-bold text-gray-700 transition-all hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
+                        onClick={onClose}
+                        disabled={isProcessing}
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        className={clsx(
+                            "inline-flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-all disabled:cursor-not-allowed disabled:opacity-50",
+                            action === "approve"
+                                ? "bg-green-600 hover:bg-green-700"
+                                : "bg-red-600 hover:bg-red-700"
+                        )}
+                        onClick={onConfirm}
+                        disabled={isProcessing}
+                    >
+                        {isProcessing && <Loader2 className="h-4 w-4 animate-spin" />}
+                        {isProcessing ? loadingText : confirmLabel}
+                    </button>
+                </Modal.Footer>
+            </div>
+        </Modal>
     )
 }
