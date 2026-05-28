@@ -20,6 +20,7 @@ import {
   AdminRole,
   StaffMember,
   RewardTransactionWithOrder,
+  PartialPaymentRule,
 } from "@/lib/supabase/types"
 import { revalidatePath, revalidateTag } from "next/cache"
 import { redirect } from "next/navigation"
@@ -37,6 +38,10 @@ import {
   validateNoSupabaseStorageMediaUrl,
 } from "@/lib/util/media-url"
 import { getOrderPricingMetadata } from "@/lib/util/order-pricing"
+import {
+  validatePartialPaymentRules,
+  type PartialPaymentRuleInput,
+} from "@/lib/util/partial-payment-rules"
 import {
   buildTrivaraOrderBookingPayload,
   extractTrivaraReferenceNumber,
@@ -2877,6 +2882,97 @@ export async function deleteCustomer(id: string) {
 }
 
 // --- Payment Methods ---
+const PARTIAL_PAYMENT_PROVIDER_ID = "pp_easebuzz_partial_payment"
+
+type PartialPaymentRuleFormInput = PartialPaymentRuleInput & {
+  payment_provider_id: string
+}
+
+const parseNullableNumber = (value: FormDataEntryValue | null): number | null => {
+  if (typeof value !== "string" || value.trim() === "") {
+    return null
+  }
+
+  const parsed = Number.parseFloat(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+const parsePartialPaymentRulesFromForm = (
+  providerId: string,
+  formData: FormData
+): PartialPaymentRuleFormInput[] => {
+  const ids = formData.getAll("partial_rule_id")
+  const minValues = formData.getAll("partial_rule_min_order_amount")
+  const maxValues = formData.getAll("partial_rule_max_order_amount")
+  const percentageValues = formData.getAll("partial_rule_advance_percentage")
+  const activeValues = formData.getAll("partial_rule_is_active")
+  const sortValues = formData.getAll("partial_rule_sort_order")
+
+  const parsedRules: Array<PartialPaymentRuleFormInput | null> = percentageValues
+    .map((value, index) => {
+      const minValue = parseNullableNumber(minValues[index] ?? null)
+      const maxValue = parseNullableNumber(maxValues[index] ?? null)
+      const percentage = parseNullableNumber(value)
+      const sortOrder = parseNullableNumber(sortValues[index] ?? null)
+      const idValue = ids[index]
+      const activeValue = activeValues[index]
+
+      if (percentage === null) {
+        return null
+      }
+
+      return {
+        id: typeof idValue === "string" && idValue.trim() ? idValue : `new-${index}`,
+        payment_provider_id: providerId,
+        min_order_amount: minValue ?? 0,
+        max_order_amount: maxValue,
+        advance_percentage: percentage,
+        is_active: activeValue === "true",
+        sort_order: sortOrder ?? index,
+      }
+    })
+
+  return parsedRules.filter(
+    (rule): rule is PartialPaymentRuleFormInput => rule !== null
+  )
+}
+
+async function savePartialPaymentRules(
+  providerId: string,
+  formData: FormData
+) {
+  const rules = parsePartialPaymentRulesFromForm(providerId, formData)
+  const validationError = validatePartialPaymentRules(rules)
+
+  if (validationError) {
+    throw new Error(validationError)
+  }
+
+  const supabase = await createClient()
+  const { error: deleteError } = await supabase
+    .from("partial_payment_rules")
+    .delete()
+    .eq("payment_provider_id", providerId)
+
+  if (deleteError) {
+    throw new Error(deleteError.message)
+  }
+
+  if (!rules.length) {
+    return
+  }
+
+  const rows = rules.map(({ id: _id, ...rule }) => rule)
+
+  const { error: insertError } = await supabase
+    .from("partial_payment_rules")
+    .insert(rows)
+
+  if (insertError) {
+    throw new Error(insertError.message)
+  }
+}
+
 export async function getAdminPaymentMethods() {
   await ensureAdmin()
   const supabase = await createClient()
@@ -2889,7 +2985,30 @@ export async function getAdminPaymentMethods() {
     console.error("Error fetching payment methods:", error)
     throw new Error(error.message || "Failed to fetch payment methods")
   }
-  return data as PaymentProvider[]
+  const methods = data as PaymentProvider[]
+  const partialMethod = methods.find((method) => method.id === PARTIAL_PAYMENT_PROVIDER_ID)
+
+  if (!partialMethod) {
+    return methods
+  }
+
+  const { data: rules, error: rulesError } = await supabase
+    .from("partial_payment_rules")
+    .select("*")
+    .eq("payment_provider_id", PARTIAL_PAYMENT_PROVIDER_ID)
+    .order("sort_order", { ascending: true })
+    .order("min_order_amount", { ascending: true })
+
+  if (rulesError) {
+    console.error("Error fetching partial payment rules:", rulesError)
+    return methods
+  }
+
+  return methods.map((method) =>
+    method.id === PARTIAL_PAYMENT_PROVIDER_ID
+      ? { ...method, partial_payment_rules: rules as PartialPaymentRule[] }
+      : method
+  )
 }
 
 export async function createPaymentMethod(formData: FormData) {
@@ -2900,7 +3019,7 @@ export async function createPaymentMethod(formData: FormData) {
   const partialPaymentPercentageRaw = parseFloat(
     formData.get("partial_payment_percentage") as string
   )
-  const isPartialPaymentMethod = id === "pp_easebuzz_partial_payment"
+  const isPartialPaymentMethod = id === PARTIAL_PAYMENT_PROVIDER_ID
 
   if (
     isPartialPaymentMethod &&
@@ -2930,7 +3049,12 @@ export async function createPaymentMethod(formData: FormData) {
     throw new Error(error.message || "Failed to create payment method")
   }
 
+  if (isPartialPaymentMethod) {
+    await savePartialPaymentRules(id, formData)
+  }
+
   revalidatePath("/admin/payments")
+  revalidatePath("/checkout")
   redirect("/admin/payments")
 }
 
@@ -2941,7 +3065,7 @@ export async function updatePaymentMethod(id: string, formData: FormData) {
   const partialPaymentPercentageRaw = parseFloat(
     formData.get("partial_payment_percentage") as string
   )
-  const isPartialPaymentMethod = id === "pp_easebuzz_partial_payment"
+  const isPartialPaymentMethod = id === PARTIAL_PAYMENT_PROVIDER_ID
 
   if (
     isPartialPaymentMethod &&
@@ -2972,8 +3096,13 @@ export async function updatePaymentMethod(id: string, formData: FormData) {
 
   if (error) throw new Error(error.message)
 
+  if (isPartialPaymentMethod) {
+    await savePartialPaymentRules(id, formData)
+  }
+
   revalidatePath("/admin/payments")
   revalidatePath(`/admin/payments/${id}`)
+  revalidatePath("/checkout")
   redirect("/admin/payments")
 }
 
@@ -2990,7 +3119,29 @@ export async function getAdminPaymentMethod(id: string) {
     console.error(`Error fetching payment provider ${id}:`, error)
     throw new Error(error.message || "Failed to fetch payment method")
   }
-  return data as PaymentProvider | null
+  if (!data) {
+    return null
+  }
+
+  if (id !== PARTIAL_PAYMENT_PROVIDER_ID) {
+    return data as PaymentProvider
+  }
+
+  const { data: rules, error: rulesError } = await supabase
+    .from("partial_payment_rules")
+    .select("*")
+    .eq("payment_provider_id", id)
+    .order("sort_order", { ascending: true })
+    .order("min_order_amount", { ascending: true })
+
+  if (rulesError) {
+    throw new Error(rulesError.message)
+  }
+
+  return {
+    ...(data as PaymentProvider),
+    partial_payment_rules: (rules ?? []) as PartialPaymentRule[],
+  }
 }
 
 export async function deletePaymentMethod(id: string) {

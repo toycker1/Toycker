@@ -4,7 +4,8 @@ import { updatePaymentMethod } from "@/lib/data/admin"
 import { PaymentProvider } from "@/lib/supabase/types"
 import AdminCard from "@modules/admin/components/admin-card"
 import { SubmitButton } from "@modules/admin/components/submit-button"
-import { CreditCard, Info, Percent, Settings, ShieldCheck, Activity } from "lucide-react"
+import { Activity, CreditCard, Info, Percent, Settings, ShieldCheck } from "lucide-react"
+import PartialPaymentRulesEditor from "./partial-payment-rules-editor"
 
 export default function PaymentProviderForm({ method }: { method: PaymentProvider }) {
     const updateAction = updatePaymentMethod.bind(null, method.id)
@@ -111,7 +112,7 @@ export default function PaymentProviderForm({ method }: { method: PaymentProvide
                         {isPartialPayment && (
                             <div className="space-y-2">
                                 <label htmlFor="partial_payment_percentage" className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-                                    Advance Payment Percentage
+                                    Fallback Advance Percentage
                                 </label>
                                 <div className="relative">
                                     <Percent className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
@@ -130,7 +131,7 @@ export default function PaymentProviderForm({ method }: { method: PaymentProvide
                                         %
                                     </div>
                                 </div>
-                                <p className="text-[10px] text-gray-400 font-medium italic">Used to calculate the advance amount for checkout partial payments.</p>
+                                <p className="text-[10px] text-gray-400 font-medium italic">Used only when no active range matches the order total.</p>
                             </div>
                         )}
 
@@ -157,6 +158,12 @@ export default function PaymentProviderForm({ method }: { method: PaymentProvide
                             </div>
                         </div>
                     </div>
+
+                    {isPartialPayment && (
+                        <PartialPaymentRulesEditor
+                            rules={method.partial_payment_rules ?? []}
+                        />
+                    )}
 
                     {/* Description - Full Width */}
                     <div className="md:col-span-2 space-y-2 pt-2">

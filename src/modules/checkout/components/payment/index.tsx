@@ -10,12 +10,14 @@ import {
   paymentInfoMap,
 } from "@lib/constants"
 import { calculatePartialPaymentSplit } from "@lib/util/cart-calculations"
+import { resolvePartialPaymentRule } from "@lib/util/partial-payment-rules"
 import { convertToLocale } from "@lib/util/money"
 import { Text } from "@modules/common/components/text"
 import ErrorMessage from "@modules/checkout/components/error-message"
 import PaymentContainer from "@modules/checkout/components/payment-container"
 import { useEffect, useMemo, useState } from "react"
 import { Cart } from "@/lib/supabase/types"
+import type { PartialPaymentRule } from "@/lib/supabase/types"
 import { useCheckout } from "../../context/checkout-context"
 
 const StripeCardContainer = dynamic(
@@ -33,6 +35,7 @@ const Payment = ({
     name: string
     description?: string | null
     partial_payment_percentage?: number | null
+    partial_payment_rules?: PartialPaymentRule[]
   }[]
 }) => {
   const { state, setPaymentMethod } = useCheckout()
@@ -73,12 +76,17 @@ const Payment = ({
     setPaymentMethod(method)
   }
 
-  const getPartialPaymentPreview = (percentage: number | null | undefined) => {
-    const normalizedPercentage =
-      typeof percentage === "number" && percentage > 0 && percentage < 100
-        ? percentage
-        : 20
+  const getPartialPaymentPreview = (
+    percentage: number | null | undefined,
+    rules: PartialPaymentRule[] | undefined
+  ) => {
     const total = Number(cart.total || 0)
+    const ruleMatchAmount = Number(cart.item_subtotal ?? cart.subtotal ?? total)
+    const { percentage: normalizedPercentage } = resolvePartialPaymentRule({
+      finalOrderAmount: ruleMatchAmount,
+      rules,
+      fallbackPercentage: percentage,
+    })
     const partialPaymentSplit = calculatePartialPaymentSplit(
       total,
       normalizedPercentage
@@ -154,7 +162,8 @@ const Payment = ({
                   >
                     {isEasebuzzPartialPayment(paymentMethod.id)
                       ? getPartialPaymentPreview(
-                          paymentMethod.partial_payment_percentage
+                          paymentMethod.partial_payment_percentage,
+                          paymentMethod.partial_payment_rules
                         )
                       : null}
                   </PaymentContainer>

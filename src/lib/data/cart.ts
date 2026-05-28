@@ -34,6 +34,10 @@ import {
   calculatePartialPaymentSplit,
   isFullOnlinePaymentProvider,
 } from "@/lib/util/cart-calculations"
+import {
+  resolvePartialPaymentRule,
+  type PartialPaymentRuleInput,
+} from "@/lib/util/partial-payment-rules"
 
 type CartWriteContext = {
   supabase:
@@ -1701,9 +1705,13 @@ export async function initiatePaymentSession(
     const txnid = `txn${Date.now()}`
     const expiresAt = new Date(Date.now() + 16 * 60 * 1000).toISOString()
     const fullOrderAmount = Number(cart.total || 0)
+    const partialPaymentRuleMatchAmount = Number(
+      cart.item_subtotal ?? cart.subtotal ?? fullOrderAmount
+    )
     let advancePercentage: number | null = null
     let payableAmount = fullOrderAmount
     let balanceAmount = 0
+    let resolvedPartialPaymentRule: PartialPaymentRuleInput | null = null
 
     if (data.provider_id === "pp_easebuzz_partial_payment") {
       const { data: providerConfig, error: providerError } = await supabase
@@ -1716,9 +1724,28 @@ export async function initiatePaymentSession(
         throw new Error(providerError.message)
       }
 
-      const configuredPercentage = Number(
+      const fallbackPercentage = Number(
         providerConfig?.partial_payment_percentage ?? 0
       )
+      const { data: ruleRows, error: rulesError } = await supabase
+        .from("partial_payment_rules")
+        .select("id, min_order_amount, max_order_amount, advance_percentage, is_active, sort_order")
+        .eq("payment_provider_id", data.provider_id)
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true })
+        .order("min_order_amount", { ascending: true })
+
+      if (rulesError) {
+        throw new Error(rulesError.message)
+      }
+
+      const resolvedRule = resolvePartialPaymentRule({
+        finalOrderAmount: partialPaymentRuleMatchAmount,
+        rules: (ruleRows ?? []) as PartialPaymentRuleInput[],
+        fallbackPercentage,
+      })
+      const configuredPercentage = resolvedRule.percentage
+      resolvedPartialPaymentRule = resolvedRule.rule
 
       if (
         !Number.isFinite(configuredPercentage) ||
@@ -1832,6 +1859,11 @@ export async function initiatePaymentSession(
       payment_type:
         data.provider_id === "pp_easebuzz_partial_payment" ? "partial" : "full",
       advance_percentage: advancePercentage,
+      partial_payment_rule_id: resolvedPartialPaymentRule?.id ?? null,
+      partial_payment_rule_min_order_amount:
+        resolvedPartialPaymentRule?.min_order_amount ?? null,
+      partial_payment_rule_max_order_amount:
+        resolvedPartialPaymentRule?.max_order_amount ?? null,
       advance_amount:
         data.provider_id === "pp_easebuzz_partial_payment"
           ? payableAmount

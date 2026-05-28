@@ -59,7 +59,9 @@ export default async function AdminPayments() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-semibold">
                     {method.id === "pp_easebuzz_partial_payment"
-                      ? `${method.partial_payment_percentage ?? 20}%`
+                      ? method.partial_payment_rules?.length
+                        ? `${method.partial_payment_rules.filter((rule) => rule.is_active).length} active rules`
+                        : `${method.partial_payment_percentage ?? 20}% fallback`
                       : "N/A"}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">

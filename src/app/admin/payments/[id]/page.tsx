@@ -19,7 +19,7 @@ export default async function EditPaymentMethod({ params }: { params: Promise<{ 
                 backHref="/admin/payments"
             />
 
-            <div className="max-w-4xl">
+            <div className="max-w-6xl">
                 <PaymentProviderForm method={method} />
             </div>
         </div>

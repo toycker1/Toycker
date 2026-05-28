@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { PaymentProvider } from "@/lib/supabase/types"
+import { PartialPaymentRule, PaymentProvider } from "@/lib/supabase/types"
 
 const ONLINE_GATEWAY_IDS = [
   "pp_payu_payu",
@@ -46,7 +46,7 @@ export const listCartPaymentMethods = async (_regionId: string) => {
     ]
   }
 
-  return (data as Pick<
+  const methods = (data as Pick<
     PaymentProvider,
     "id" | "name" | "description" | "partial_payment_percentage"
   >[]).map((method) => ({
@@ -55,4 +55,34 @@ export const listCartPaymentMethods = async (_regionId: string) => {
     description: method.description,
     partial_payment_percentage: method.partial_payment_percentage ?? null,
   }))
+
+  const partialPaymentMethod = methods.find(
+    (method) => method.id === "pp_easebuzz_partial_payment"
+  )
+
+  if (!partialPaymentMethod) {
+    return methods
+  }
+
+  const { data: rules, error: rulesError } = await supabase
+    .from("partial_payment_rules")
+    .select("id, payment_provider_id, min_order_amount, max_order_amount, advance_percentage, is_active, sort_order, created_at, updated_at")
+    .eq("payment_provider_id", "pp_easebuzz_partial_payment")
+    .eq("is_active", true)
+    .order("sort_order", { ascending: true })
+    .order("min_order_amount", { ascending: true })
+
+  if (rulesError) {
+    console.error("Error fetching partial payment rules:", rulesError.message)
+    return methods
+  }
+
+  return methods.map((method) =>
+    method.id === "pp_easebuzz_partial_payment"
+      ? {
+          ...method,
+          partial_payment_rules: (rules ?? []) as PartialPaymentRule[],
+        }
+      : method
+  )
 }
