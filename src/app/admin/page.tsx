@@ -58,7 +58,7 @@ export default async function AdminDashboard() {
       </div>
 
       <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-3">
-        <AdminCard title="Reports" className="lg:col-span-2">
+        <AdminCard title="Sales & Orders Report" className="flex flex-col lg:col-span-2" contentClassName="flex flex-1 flex-col">
           <ReportsChartLoader initialData={initialChartData} />
         </AdminCard>
 

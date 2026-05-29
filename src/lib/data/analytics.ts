@@ -15,6 +15,7 @@ export type TopProduct = {
 }
 
 const TOP_PRODUCTS_ORDER_SAMPLE_LIMIT = 100
+const CONFIRMED_REVENUE_STATUSES = ["order_placed", "accepted", "shipped", "delivered"] as const
 
 type OrderItemSummary = {
     product_id?: string | null
@@ -41,8 +42,7 @@ export async function getTopProducts(limit: number = 5): Promise<TopProduct[]> {
     const { data: orders, error } = await supabase
         .from("orders")
         .select("items")
-        .neq("status", "cancelled")
-        .neq("status", "failed")
+        .in("status", [...CONFIRMED_REVENUE_STATUSES])
         .order("created_at", { ascending: false })
         .limit(TOP_PRODUCTS_ORDER_SAMPLE_LIMIT)
 
@@ -150,8 +150,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
         .from("orders")
         .select("created_at, total_amount, id")
         .gte("created_at", startOfLastMonth.toISOString())
-        .neq("status", "cancelled")
-        .neq("status", "failed")
+        // Pending orders are not confirmed revenue yet.
+        .in("status", [...CONFIRMED_REVENUE_STATUSES])
 
     if (ordersError) {
         console.error("Error fetching stats:", ordersError)
@@ -222,7 +222,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 
     return {
         revenue: {
-            value: revenueCurrent, // in cents
+            value: revenueCurrent,
             change: revenueChange,
             trend: revenueChange > 0 ? 'up' : revenueChange < 0 ? 'down' : 'neutral'
         },
