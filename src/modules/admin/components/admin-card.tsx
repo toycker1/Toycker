@@ -6,9 +6,10 @@ type AdminCardProps = {
   title?: string
   footer?: React.ReactNode
   className?: string
+  contentClassName?: string
 }
 
-const AdminCard = ({ children, title, footer, className }: AdminCardProps) => {
+const AdminCard = ({ children, title, footer, className, contentClassName }: AdminCardProps) => {
   return (
     <div className={cn("bg-white rounded-xl border border-admin-border shadow-[0_1px_3px_0_rgba(0,0,0,0.08)] overflow-hidden", className)}>
       {title && (
@@ -16,7 +17,7 @@ const AdminCard = ({ children, title, footer, className }: AdminCardProps) => {
           <h3 className="text-[13px] font-semibold text-admin-text-primary">{title}</h3>
         </div>
       )}
-      <div className="p-5">
+      <div className={cn("p-5", contentClassName)}>
         {children}
       </div>
       {footer && (
